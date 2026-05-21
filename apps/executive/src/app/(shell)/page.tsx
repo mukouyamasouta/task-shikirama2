@@ -36,7 +36,7 @@ export default function DashboardPage() {
               <p className="text-[10px] text-text3 font-mono">{t.name}</p>
               <p className={`text-[22px] font-black font-mono ${c.text}`}>{t.rate}%</p>
               <div className="h-[5px] bg-bg3 rounded-[3px] overflow-hidden">
-                <div className={`h-full ${c.text.replace("text-", "bg-")}`} style={{ width: `${t.rate}%` }} />
+                <div className={`h-full ${c.barBg}`} style={{ width: `${t.rate}%` }} />
               </div>
               <p className="text-[10px] text-text3 mt-1">{t.members}名 ／ 上長: {t.leaderName}</p>
             </div>

@@ -21,7 +21,12 @@ packages/
 > - MANAGER = 上長
 > - EMPLOYEE = 従業員
 
-## セットアップ
+## 📘 セットアップガイド
+
+1. **[Supabase セットアップ](docs/SUPABASE_SETUP.md)** — DB を準備（15分）
+2. **[Vercel デプロイ](docs/VERCEL_DEPLOY.md)** — 役員アプリを本番公開（10分）
+
+## ローカル開発
 
 ```bash
 npm install
