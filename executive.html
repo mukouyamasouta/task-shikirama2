@@ -126,11 +126,12 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <aside class="sidebar">
   <div class="sb-logo"><div class="sb-brand">VEXUM</div><div class="sb-brand-sub">TASK MANAGEMENT SYSTEM</div></div>
   <div class="sb-role"><span class="sb-role-dot"></span><span class="sb-role-lbl">◆ EXECUTIVE / 幹部</span></div>
-  <div class="sb-user"><div class="sb-uname">木村 雅人</div><div class="sb-uemail">kimura@vexum.co.jp</div></div>
+  <div class="sb-user" id="sb-user" onclick="openSelfModal()" style="cursor:pointer" title="クリックでプロフィール編集"><div class="sb-uname" id="sb-uname">木村 雅人</div><div class="sb-uemail" id="sb-uemail">kimura@vexum.co.jp</div></div>
   <div class="sb-nav">
     <div class="sb-sec">幹部コンソール</div>
     <button class="sb-item active" onclick="swTab('users',this)"><span class="sb-icon">👤</span>アカウント管理</button>
     <button class="sb-item" onclick="swTab('send',this);initSendForm()"><span class="sb-icon">◎</span>チャート送信</button>
+    <button class="sb-item" onclick="swTab('tasks',this);renderSendHistory()"><span class="sb-icon">📋</span>タスク管理</button>
     <button class="sb-item" onclick="swTab('eval',this);renderTeamEval();renderMemberEval()"><span class="sb-icon">★</span>一覧・評価</button>
   </div>
   <div class="sb-footer">v2.4.1 © 2025 VEXUM Inc.</div>
@@ -156,7 +157,9 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- チャート送信 -->
 <div id="tc-send" class="tab-content">
-  <div class="sec-title">チャート送信 <span style="font-size:12px;font-weight:400;color:var(--text3)">チームリーダーにタスクを割り当て</span></div>
+  <div class="sec-title">チャート送信 <span style="font-size:12px;font-weight:400;color:var(--text3)">チームリーダーにタスクを割り当て</span>
+    <button class="f-submit" style="padding:8px 16px;font-size:12px;background:var(--cyan)" onclick="openTplManager()">🗂 テンプレート管理</button>
+  </div>
   <div id="send-success" style="display:none;align-items:center;gap:10px;background:#D1FAE5;border:1px solid #10B981;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#065F46;font-size:13px;font-weight:600">
     <span style="font-size:18px">✅</span><span id="send-success-msg">チャートを送信しました</span>
   </div>
@@ -171,11 +174,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
           </select>
         </div>
         <div class="fg"><label class="fl">テンプレート適用（任意）</label>
-          <select class="fs" onchange="applyTemplate(this.value)">
+          <select class="fs" id="tpl-select" onchange="applyTemplate(this.value)">
             <option value="">— 空白から作成 —</option>
-            <option value="A">営業チームA テンプレート</option>
-            <option value="B">開発チームB テンプレート</option>
-            <option value="C">マーケチームC テンプレート</option>
           </select>
         </div>
         <div class="fg"><label class="fl">中心目標（KGI）</label>
@@ -210,6 +210,15 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       </div>
     </div>
   </div>
+</div>
+
+<!-- タスク管理（送信履歴・進捗） -->
+<div id="tc-tasks" class="tab-content">
+  <div class="sec-title">タスク管理 <span style="font-size:12px;font-weight:400;color:var(--text3)">チャート送信の履歴・進捗・記入者を確認</span></div>
+  <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
+    <span style="font-size:14px">💡</span><span>送信したチャートの宛先・進捗率・誰がどのKPIを記入したかを一覧で確認できます。</span>
+  </div>
+  <div id="sendhist-container"></div>
 </div>
 
 <!-- 一覧・評価 -->
@@ -253,11 +262,41 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <div class="fg"><label class="fl">メールアドレス</label><input class="fi" id="acc-email" placeholder="yamada@vexum.co.jp"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="fg"><label class="fl">ロール</label><select class="fs" id="acc-role"><option value="メンバー">メンバー</option><option value="リーダー">リーダー</option></select></div>
+      <div class="fg"><label class="fl">ロール</label><select class="fs" id="acc-role"><option value="メンバー">メンバー</option><option value="リーダー">リーダー</option><option value="幹部">幹部</option><option value="管理者">管理者</option></select></div>
       <div class="fg"><label class="fl">所属チーム</label><select class="fs" id="acc-team"></select></div>
     </div>
-    <div class="fg"><label class="fl">KPI達成率（初期値 %）</label><input class="fi" id="acc-rate" type="number" min="0" max="100" placeholder="50"></div>
     <button class="f-submit" style="width:100%" onclick="submitAccount()">アカウントを作成</button>
+  </div>
+</div>
+
+<!-- アカウント編集モーダル -->
+<div id="accedit-modal" onclick="if(event.target===this)closeAccEdit()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:520px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div style="font-size:16px;font-weight:800">アカウント編集</div>
+      <button onclick="closeAccEdit()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <input type="hidden" id="accedit-key">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="fg"><label class="fl">氏名</label><input class="fi" id="accedit-name"></div>
+      <div class="fg"><label class="fl">メールアドレス</label><input class="fi" id="accedit-email"></div>
+    </div>
+    <div class="fg"><label class="fl">ロール</label><select class="fs" id="accedit-role"><option value="メンバー">メンバー</option><option value="リーダー">リーダー</option><option value="幹部">幹部</option><option value="管理者">管理者</option></select></div>
+    <button class="f-submit" style="width:100%" onclick="submitAccEdit()">変更を保存</button>
+  </div>
+</div>
+
+<!-- 自分のプロフィール編集モーダル -->
+<div id="self-modal" onclick="if(event.target===this)closeSelfModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:480px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div style="font-size:16px;font-weight:800">プロフィール編集</div>
+      <button onclick="closeSelfModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div class="fg"><label class="fl">氏名</label><input class="fi" id="self-name"></div>
+    <div class="fg"><label class="fl">メールアドレス</label><input class="fi" id="self-email"></div>
+    <div class="fg"><label class="fl">新しいパスワード（変更する場合のみ）</label><input class="fi" id="self-pw" type="password" placeholder="6文字以上"></div>
+    <button class="f-submit" style="width:100%" onclick="submitSelf()">変更を保存</button>
   </div>
 </div>
 
@@ -275,6 +314,34 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div class="fg"><label class="fl">チームリーダー（未所属メンバーから選択）</label><select class="fs" id="team-leader"></select></div>
     <div class="fg"><label class="fl">メンバー追加（複数選択可・任意）</label><select class="fs" id="team-members" multiple style="height:120px"></select></div>
     <button class="f-submit" style="width:100%" onclick="submitTeam()">チームを作成</button>
+  </div>
+</div>
+
+<!-- テンプレート管理モーダル -->
+<div id="tpl-modal" onclick="if(event.target===this)closeTplManager()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:560px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:16px;font-weight:800">テンプレート管理</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="f-submit" style="padding:7px 14px;font-size:12px" onclick="openTplCreate()">＋ 新規作成</button>
+        <button onclick="closeTplManager()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+      </div>
+    </div>
+    <div id="tpl-list"></div>
+  </div>
+</div>
+
+<!-- テンプレート作成モーダル -->
+<div id="tplcreate-modal" onclick="if(event.target===this)closeTplCreate()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:520px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:16px;font-weight:800">テンプレート作成</div>
+      <button onclick="closeTplCreate()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div class="fg"><label class="fl">テンプレート名</label><input class="fi" id="tplc-name" placeholder="例: 営業チーム標準テンプレート"></div>
+    <div class="fg"><label class="fl">中心目標（KGI）</label><input class="fi" id="tplc-center" placeholder="例: 四半期売上目標達成"></div>
+    <div class="fg"><label class="fl">サブ目標（CSF / 8項目）</label><div class="mnd-subs-wrap" id="tplc-subs"></div></div>
+    <button class="f-submit" style="width:100%" onclick="submitTpl()">テンプレートを作成</button>
   </div>
 </div>
 
@@ -377,13 +444,33 @@ const SP_MAP=[
 const EVAL_NAMES=['未評価','進行中','完了','要改善'];
 const RATINGS={};
 let _curMndKey='';
-function getAllMnd(){return {...MND,...EMP};}
+const EXTRA={};                 // 全画面プレビュー/一時表示用
+const TPL={};                   // Supabase由来のテンプレート（id→data）
+let SENDS=[];                   // チャート送信履歴
+const SEND={center:'',subs:Array(8).fill(''),acts:Array.from({length:8},()=>Array(8).fill(''))};
+// 9x9セル → {type, si, ai} のメタ情報
+const CELL_META=(function(){
+  const M=Array.from({length:9},()=>Array(9).fill(null));
+  M[4][4]={type:'center'};
+  SP_MAP.forEach(({cr,cc,oc,si})=>{
+    M[cr][cc]={type:'sub',si};M[oc[0]][oc[1]]={type:'sub',si};
+    let ai=0;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      if(dr===0&&dc===0)continue;
+      const r=oc[0]+dr,c=oc[1]+dc;
+      if(r>=0&&r<9&&c>=0&&c<9&&!M[r][c])M[r][c]={type:'action',si,ai};
+      ai++;
+    }
+  });
+  return M;
+})();
+function getAllMnd(){return {...MND,...EMP,...EXTRA};}
 function getRat(id){if(!RATINGS[id])RATINGS[id]={stars:0,comment:''};return RATINGS[id];}
 </script>
 
 <script>
 /* ========== UI ========== */
-const TITLES={users:['アカウント管理','幹部コンソール / アカウント管理'],send:['チャート送信','幹部コンソール / チャート送信'],eval:['一覧・評価','幹部コンソール / 一覧・評価']};
+const TITLES={users:['アカウント管理','幹部コンソール / アカウント管理'],send:['チャート送信','幹部コンソール / チャート送信'],tasks:['タスク管理','幹部コンソール / タスク管理'],eval:['一覧・評価','幹部コンソール / 一覧・評価']};
 function swTab(id,btn){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.getElementById('tc-'+id).classList.add('active');
@@ -418,7 +505,8 @@ function memRowHTML(key,m,col){
       <button class="card-btn" onclick="cancelDeleteMember()">取消</button>
     </div>`;
   }else{
-    actions=`<button class="card-btn" style="margin-left:8px;background:#FEE2E2;color:var(--red)" onclick="askDeleteMember('${key}')">🗑 削除</button>`;
+    actions=`<button class="card-btn" style="margin-left:8px" onclick="openAccEdit('${key}')">✎ 編集</button>
+      <button class="card-btn" style="margin-left:6px;background:#FEE2E2;color:var(--red)" onclick="askDeleteMember('${key}')">🗑 削除</button>`;
   }
   return `<div class="mem-row">
     <div class="mem-avatar" style="background:${col}">${ini}</div>
@@ -492,40 +580,87 @@ async function confirmDeleteMember(key){
 }
 
 /* ========== アカウント発行 ========== */
+function roleToEnumJP(jp){return jp==='管理者'?'admin':jp==='幹部'?'executive':jp==='リーダー'?'leader':'member';}
 function openAccModal(){
   const sel=document.getElementById('acc-team');
   if(sel)sel.innerHTML='<option value="">—（未所属）</option>'+Object.values(TEAMS).map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
-  ['acc-name','acc-email','acc-rate'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['acc-name','acc-email'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('acc-modal').style.display='flex';
 }
 function closeAccModal(){document.getElementById('acc-modal').style.display='none';}
-function makeId(name){
-  let base='m'+Date.now().toString(36);
-  return base;
-}
+function makeId(name){return 'm'+Date.now().toString(36);}
 async function submitAccount(){
   const name=(document.getElementById('acc-name')||{}).value.trim();
   const email=(document.getElementById('acc-email')||{}).value.trim();
   const role=(document.getElementById('acc-role')||{}).value;
-  const teamId=(document.getElementById('acc-team')||{}).value;   // チーム短縮キー('A')or''
-  const rate=parseInt((document.getElementById('acc-rate')||{}).value,10);
+  let teamId=(document.getElementById('acc-team')||{}).value;   // チーム短縮キー('A')or''
   if(!name){showToast('氏名を入力してください');return;}
   if(!email){showToast('メールアドレスを入力してください');return;}
-  const rateVal=isNaN(rate)?50:Math.max(0,Math.min(100,rate));
+  if(role==='幹部'||role==='管理者')teamId='';  // 管理職はチーム未所属
   const API=window.VexumAPI;
   let id;
   if(API&&API.ready){
-    const res=await API.createAccount({name,email,role:role||'メンバー',teamLetter:teamId||null,rate:rateVal});
+    const res=await API.createAccount({name,email,role:role||'メンバー',teamLetter:teamId||null,rate:50});
     if(res&&res.error){showToast('作成失敗: '+res.error);return;}
-    id=res.pid;   // Supabaseの実UUIDをキーに
+    id=res.pid;
   }else{
     id=makeId(name);
   }
-  MEMBERS[id]={pid:id,name,email:email||'—',role:role||'メンバー',roleEnum:(role==='リーダー'?'leader':'member'),team:teamId||'',rate:rateVal};
+  MEMBERS[id]={pid:id,name,email:email||'—',role:role||'メンバー',roleEnum:roleToEnumJP(role),team:teamId||'',rate:50};
   if(teamId&&TEAMS[teamId]&&!TEAMS[teamId].members.includes(id))TEAMS[teamId].members.push(id);
   closeAccModal();
   renderAccount();
   showToast(`${name} のアカウントを作成しました ✓`);
+}
+/* ===== アカウント編集 ===== */
+function openAccEdit(key){
+  const m=MEMBERS[key];if(!m)return;
+  document.getElementById('accedit-key').value=key;
+  document.getElementById('accedit-name').value=m.name||'';
+  document.getElementById('accedit-email').value=(m.email==='—'?'':m.email)||'';
+  document.getElementById('accedit-role').value=m.role||'メンバー';
+  document.getElementById('accedit-modal').style.display='flex';
+}
+function closeAccEdit(){document.getElementById('accedit-modal').style.display='none';}
+async function submitAccEdit(){
+  const key=document.getElementById('accedit-key').value;
+  const m=MEMBERS[key];if(!m){closeAccEdit();return;}
+  const name=document.getElementById('accedit-name').value.trim();
+  const email=document.getElementById('accedit-email').value.trim();
+  const role=document.getElementById('accedit-role').value;
+  if(!name){showToast('氏名を入力してください');return;}
+  const API=window.VexumAPI;
+  if(API&&API.ready&&m.pid){
+    const res=await API.updateAccount(m.pid,{name,email,role});
+    if(res&&res.error){showToast('更新失敗: '+res.error);return;}
+  }
+  m.name=name;m.email=email||'—';m.role=role;m.roleEnum=roleToEnumJP(role);
+  closeAccEdit();renderAccount();
+  showToast(`${name} を更新しました ✓`);
+}
+/* ===== 自分のプロフィール編集 ===== */
+function openSelfModal(){
+  document.getElementById('self-name').value=(document.getElementById('sb-uname')||{}).textContent||'';
+  document.getElementById('self-email').value=(document.getElementById('sb-uemail')||{}).textContent||'';
+  document.getElementById('self-pw').value='';
+  document.getElementById('self-modal').style.display='flex';
+}
+function closeSelfModal(){document.getElementById('self-modal').style.display='none';}
+async function submitSelf(){
+  const name=document.getElementById('self-name').value.trim();
+  const email=document.getElementById('self-email').value.trim();
+  const pw=document.getElementById('self-pw').value;
+  if(!name){showToast('氏名を入力してください');return;}
+  if(pw&&pw.length<6){showToast('パスワードは6文字以上');return;}
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const res=await API.updateSelf({name,email,password:pw||null});
+    if(res&&res.error){showToast('更新失敗: '+res.error);return;}
+  }
+  const un=document.getElementById('sb-uname');if(un)un.textContent=name;
+  const ue=document.getElementById('sb-uemail');if(ue)ue.textContent=email;
+  closeSelfModal();
+  showToast('プロフィールを更新しました ✓');
 }
 
 /* ========== チーム編成 ========== */
@@ -569,65 +704,190 @@ async function submitTeam(){
 
 /* ========== チャート送信 ========== */
 function initSendForm(){
+  populateTplSelect();
   const wrap=document.getElementById('send-subs-list');
-  if(!wrap||wrap.children.length>0)return;
-  let h='';
-  for(let i=1;i<=8;i++)h+=`<div class="mnd-sub-row"><span class="mnd-sub-num">${i}</span><input class="mnd-sub-input" id="ssub-${i}" placeholder="サブ目標 ${i}" oninput="updateSendPreview()"></div>`;
-  wrap.innerHTML=h;
-  updateSendPreview();
+  if(wrap&&wrap.children.length===0){
+    let h='';
+    for(let i=1;i<=8;i++)h+=`<div class="mnd-sub-row"><span class="mnd-sub-num">${i}</span><input class="mnd-sub-input" id="ssub-${i}" placeholder="サブ目標 ${i}" oninput="csfInput(${i},this.value)"></div>`;
+    wrap.innerHTML=h;
+  }
+  // KGI入力にハンドラ付与
+  const ci=document.getElementById('send-center');
+  if(ci&&!ci.dataset.bound){ci.dataset.bound='1';ci.addEventListener('input',()=>{SEND.center=ci.value;renderSendPreview();});}
+  syncSendInputs();
+  renderSendPreview();
+}
+function csfInput(i,val){SEND.subs[i-1]=val;renderSendPreview();}
+function syncSendInputs(){
+  const ci=document.getElementById('send-center');if(ci)ci.value=SEND.center;
+  for(let i=1;i<=8;i++){const el=document.getElementById('ssub-'+i);if(el)el.value=SEND.subs[i-1]||'';}
+}
+/* テンプレート一覧（組込3 + Supabase） */
+function allTemplates(){
+  const out={};
+  ['A','B','C'].forEach(k=>{if(MND[k])out[k]={name:MND[k].name+' テンプレート',center:MND[k].center,subs:MND[k].subs,acts:MND[k].acts,builtin:true};});
+  Object.keys(TPL).forEach(id=>{const t=TPL[id];out[id]={name:t.name,center:t.center,subs:t.subs,acts:t.acts,builtin:false};});
+  return out;
+}
+function populateTplSelect(){
+  const sel=document.getElementById('tpl-select');if(!sel)return;
+  const all=allTemplates();
+  sel.innerHTML='<option value="">— 空白から作成 —</option>'+Object.keys(all).map(k=>`<option value="${k}">${all[k].name}</option>`).join('');
 }
 function applyTemplate(key){
-  if(!key||!MND[key])return;
-  const d=MND[key];
-  const ci=document.getElementById('send-center');
-  if(ci){ci.value=d.center.replace(/\n/,' ');}
-  d.subs.forEach((s,i)=>{const el=document.getElementById(`ssub-${i+1}`);if(el)el.value=s;});
-  updateSendPreview();
+  if(!key)return;
+  const d=allTemplates()[key];if(!d)return;
+  SEND.center=(d.center||'').replace(/\n/,' ');
+  SEND.subs=Array.from({length:8},(_,i)=>(d.subs||[])[i]||'');
+  SEND.acts=Array.from({length:8},(_,i)=>Array.from({length:8},(_,j)=>((d.acts||[])[i]||[])[j]||''));
+  syncSendInputs();renderSendPreview();
+  showToast('テンプレートを反映しました ✓');
 }
-function updateSendPreview(){
+function renderSendPreview(){
   const grid=document.getElementById('send-preview');if(!grid)return;
-  const center=(document.getElementById('send-center')||{}).value||'';
-  const subs=Array.from({length:8},(_,i)=>(document.getElementById(`ssub-${i+1}`)||{}).value||'');
-  const G=Array.from({length:9},()=>Array(9).fill(null));
-  G[4][4]={t:'center'};
-  SP_MAP.forEach(({cr,cc,oc,si})=>{
-    G[cr][cc]={t:'sub',v:subs[si]};G[oc[0]][oc[1]]={t:'sub',v:subs[si]};
-    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
-      if(dr===0&&dc===0)continue;
-      const r2=oc[0]+dr,c2=oc[1]+dc;
-      if(r2>=0&&r2<9&&c2>=0&&c2<9&&!G[r2][c2])G[r2][c2]={t:'action'};
-    }
-  });
   let h='';
   for(let r=0;r<9;r++)for(let c=0;c<9;c++){
-    const cell=G[r][c];
-    let sty='min-height:20px;display:flex;align-items:center;justify-content:center;font-size:5px;text-align:center;padding:1px;word-break:break-all;line-height:1.2;';
+    const meta=CELL_META[r][c];
+    let sty='min-height:26px;display:flex;align-items:center;justify-content:center;font-size:6px;text-align:center;padding:1px;word-break:break-all;line-height:1.15;cursor:pointer;';
     if(c===2||c===5)sty+='border-right:2px solid #9CA3AF;';
     if(r===2||r===5)sty+='border-bottom:2px solid #9CA3AF;';
     let txt='';
-    if(cell?.t==='center'){sty+='background:#0D9488;color:#fff;font-weight:800;';txt=center.slice(0,5);}
-    else if(cell?.t==='sub'){sty+='background:#CCEDE9;color:#0D9488;font-weight:700;';txt=(cell.v||'').slice(0,4);}
-    else sty+='background:#F9FAFB;color:#9CA3AF;';
-    h+=`<div style="${sty}">${txt}</div>`;
+    if(meta&&meta.type==='center'){sty+='background:#0D9488;color:#fff;font-weight:800;';txt=(SEND.center||'').slice(0,6);}
+    else if(meta&&meta.type==='sub'){sty+='background:#CCEDE9;color:#0D9488;font-weight:700;';txt=(SEND.subs[meta.si]||'').slice(0,5);}
+    else if(meta&&meta.type==='action'){sty+='background:#F9FAFB;color:#4B5563;';txt=((SEND.acts[meta.si]||[])[meta.ai]||'').slice(0,5);}
+    else sty+='background:#fff;';
+    h+=`<div onclick="sendCellClick(${r},${c})" style="${sty}">${txt}</div>`;
   }
   grid.innerHTML=h;
 }
+function sendCellClick(r,c){
+  const meta=CELL_META[r][c];if(!meta)return;
+  let label,cur;
+  if(meta.type==='center'){label='KGI（中心目標）';cur=SEND.center;}
+  else if(meta.type==='sub'){label='CSF '+(meta.si+1);cur=SEND.subs[meta.si];}
+  else{label='KPI（CSF'+(meta.si+1)+' の施策'+(meta.ai+1)+'）';cur=(SEND.acts[meta.si]||[])[meta.ai];}
+  const v=prompt(label+' を入力',cur||'');
+  if(v===null)return;
+  if(meta.type==='center')SEND.center=v;
+  else if(meta.type==='sub')SEND.subs[meta.si]=v;
+  else{if(!SEND.acts[meta.si])SEND.acts[meta.si]=Array(8).fill('');SEND.acts[meta.si][meta.ai]=v;}
+  syncSendInputs();renderSendPreview();
+}
 function previewSendFull(){
-  const center=(document.getElementById('send-center')||{}).value||'（未入力）';
-  const subs=Array.from({length:8},(_,i)=>(document.getElementById(`ssub-${i+1}`)||{}).value||`サブ目標${i+1}`);
-  getAllMnd()['__sendprev__']={name:'送信プレビュー',team:'—',color:'#0D9488',bg:'#CCEDE9',center,subs,acts:subs.map(()=>Array(8).fill('—'))};
+  EXTRA['__sendprev__']={name:'送信プレビュー',team:'—',color:'#0D9488',bg:'#CCEDE9',
+    center:SEND.center||'（未入力）',
+    subs:Array.from({length:8},(_,i)=>SEND.subs[i]||('サブ目標'+(i+1))),
+    acts:Array.from({length:8},(_,i)=>Array.from({length:8},(_,j)=>(SEND.acts[i]||[])[j]||'—'))};
   openMandala('__sendprev__');
 }
-function sendChart(){
-  const center=(document.getElementById('send-center')||{}).value;
-  if(!center){showToast('中心目標を入力してください');return;}
+async function sendChart(){
+  if(!SEND.center){showToast('中心目標(KGI)を入力してください');return;}
   const toEl=document.getElementById('send-to');
-  const toName=toEl?toEl.options[toEl.selectedIndex].text:'リーダー';
-  const s=document.getElementById('send-success');
-  const st=document.getElementById('send-success-msg');
-  if(st)st.textContent=`「${center}」を ${toName.split('（')[0]} に送信しました`;
+  const toVal=toEl?toEl.value:'';
+  const toText=toEl?toEl.options[toEl.selectedIndex].text:'リーダー';
+  const toName=toText.split('（')[0];
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const toPid=MEMBERS[toVal]?MEMBERS[toVal].pid:null;
+    const res=await API.createSend({center:SEND.center,title:SEND.center,subs:SEND.subs,acts:SEND.acts,toName,toPid,toTeam:(MEMBERS[toVal]?MEMBERS[toVal].team:'')});
+    if(res&&res.error){showToast('送信失敗: '+res.error);return;}
+    if(res&&res.data)SENDS.unshift(res.data);
+  }else{
+    SENDS.unshift({id:'s'+Date.now(),center:SEND.center,subs:SEND.subs,acts:SEND.acts,to_name:toName,status:'sent',progress:0,sent_at:new Date().toISOString(),cell_status:{},edited_by:{}});
+  }
+  const s=document.getElementById('send-success'),st=document.getElementById('send-success-msg');
+  if(st)st.textContent=`「${SEND.center}」を ${toName} に送信しました`;
   if(s){s.style.display='flex';setTimeout(()=>{s.style.display='none';},5000);}
   showToast('チャートを送信しました ✓');
+  if(typeof renderSendHistory==='function')renderSendHistory();
+}
+/* ===== テンプレート管理 ===== */
+function openTplManager(){renderTplManager();document.getElementById('tpl-modal').style.display='flex';}
+function closeTplManager(){document.getElementById('tpl-modal').style.display='none';}
+function renderTplManager(){
+  const con=document.getElementById('tpl-list');if(!con)return;
+  const all=allTemplates();
+  let h='';
+  Object.keys(all).forEach(k=>{
+    const t=all[k];
+    h+=`<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">
+      <div style="flex:1"><div style="font-size:12px;font-weight:700">${t.name}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">KGI: ${(t.center||'').replace(/\n/,' ')||'—'}</div></div>
+      <button class="card-btn" onclick="previewTemplate('${k}')">🔍 詳細</button>
+      ${t.builtin?'<span style="font-size:9px;color:var(--text3);padding:0 6px">組込</span>':`<button class="card-btn" style="background:#FEE2E2;color:var(--red)" onclick="deleteTpl('${k}')">🗑</button>`}
+    </div>`;
+  });
+  con.innerHTML=h||'<div style="color:var(--text3);font-size:12px;text-align:center;padding:16px">テンプレートがありません</div>';
+}
+function previewTemplate(key){
+  const d=allTemplates()[key];if(!d)return;
+  EXTRA['__tplprev__']={name:d.name,team:'テンプレート',color:'#0D9488',bg:'#CCEDE9',
+    center:d.center||'（未設定）',
+    subs:Array.from({length:8},(_,i)=>(d.subs||[])[i]||('サブ目標'+(i+1))),
+    acts:Array.from({length:8},(_,i)=>Array.from({length:8},(_,j)=>((d.acts||[])[i]||[])[j]||'—'))};
+  openMandala('__tplprev__');
+}
+function openTplCreate(){
+  document.getElementById('tplc-name').value='';
+  document.getElementById('tplc-center').value='';
+  const wrap=document.getElementById('tplc-subs');
+  let h='';for(let i=1;i<=8;i++)h+=`<div class="mnd-sub-row"><span class="mnd-sub-num">${i}</span><input class="mnd-sub-input" id="tplc-sub-${i}" placeholder="CSF ${i}"></div>`;
+  wrap.innerHTML=h;
+  document.getElementById('tplcreate-modal').style.display='flex';
+}
+function closeTplCreate(){document.getElementById('tplcreate-modal').style.display='none';}
+async function submitTpl(){
+  const name=document.getElementById('tplc-name').value.trim();
+  const center=document.getElementById('tplc-center').value.trim();
+  if(!name){showToast('テンプレート名を入力してください');return;}
+  const subs=Array.from({length:8},(_,i)=>(document.getElementById('tplc-sub-'+(i+1))||{}).value||'');
+  const acts=subs.map(()=>Array(8).fill(''));
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const res=await API.createTemplate({name,center,subs,acts});
+    if(res&&res.error){showToast('作成失敗: '+res.error);return;}
+    if(res&&res.data)TPL[res.data.id]={name:res.data.name,center:res.data.center,subs:res.data.subs,acts:res.data.acts};
+  }else{
+    const id='t'+Date.now();TPL[id]={name,center,subs,acts};
+  }
+  closeTplCreate();populateTplSelect();renderTplManager();
+  showToast(`テンプレート「${name}」を作成しました ✓`);
+}
+async function deleteTpl(id){
+  const API=window.VexumAPI;
+  if(API&&API.ready){const res=await API.deleteTemplate(id);if(res&&res.error){showToast('削除失敗: '+res.error);return;}}
+  delete TPL[id];populateTplSelect();renderTplManager();
+  showToast('テンプレートを削除しました ✓');
+}
+/* ===== タスク管理（送信履歴・進捗・記入者） ===== */
+function renderSendHistory(){
+  const con=document.getElementById('sendhist-container');if(!con)return;
+  if(!SENDS.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">送信したチャートはまだありません。「チャート送信」から送信してください。</div></div>';return;}
+  let h='';
+  SENDS.forEach(s=>{
+    const prog=s.progress||0;
+    const editors=s.edited_by?Object.entries(s.edited_by):[];
+    const editorList=editors.length?editors.map(([k,v])=>`<span style="font-size:10px;background:var(--accent-l);color:var(--accent);padding:1px 7px;border-radius:10px;margin:2px">${v}</span>`).join(''):'<span style="font-size:10px;color:var(--text3)">まだ記入はありません</span>';
+    const stLbl={sent:'送信済み',in_progress:'進行中',done:'完了'}[s.status]||'送信済み';
+    const dt=(s.sent_at||'').slice(0,10);
+    h+=`<div class="card"><div class="card-hd">
+      <div><div class="card-title">${(s.center||'').replace(/\n/,' ')}</div>
+      <div class="card-sub">送信先: ${s.to_name||'—'} ／ 送信日: ${dt}</div></div>
+      <span class="chip ${s.status==='done'?'s-done':'s-wip'}">${stLbl}</span></div>
+      <div class="card-body">
+        <div class="pw" style="margin-bottom:10px"><div class="pt"><div class="pf" style="width:${prog}%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">${prog}%</div></div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">記入者（誰がどこを記入したか）</div>
+        <div style="display:flex;flex-wrap:wrap">${editorList}</div>
+        <div style="margin-top:10px;text-align:right"><button class="card-btn" onclick="viewSendChart('${s.id}')">🧿 内容・進捗を見る</button></div>
+      </div></div>`;
+  });
+  con.innerHTML=h;
+}
+function viewSendChart(id){
+  const s=SENDS.find(x=>String(x.id)===String(id));if(!s)return;
+  EXTRA['__sendview__']={name:(s.center||'').replace(/\n/,' '),team:'送信先: '+(s.to_name||'—'),color:'#0D9488',bg:'#CCEDE9',
+    center:s.center||'',subs:s.subs||[],acts:s.acts||[]};
+  openMandala('__sendview__');
 }
 
 /* ========== 曼荼羅モーダル ========== */
@@ -870,6 +1130,22 @@ renderAccount();
     if(typeof renderMemberEval==='function') renderMemberEval();
     console.log('[VEXUM] Supabaseデータを反映しました');
   }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:', e); });
+  // 自分のプロフィールをサイドバーに反映
+  API.currentProfile().then(function(p){
+    if(!p)return;
+    var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name;
+    var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email;
+  }).catch(function(){});
+  // テンプレート読込
+  API.loadTemplates().then(function(rows){
+    (rows||[]).forEach(function(t){ TPL[t.id]={name:t.name,center:t.center,subs:t.subs,acts:t.acts}; });
+    if(typeof populateTplSelect==='function')populateTplSelect();
+  }).catch(function(){});
+  // 送信履歴読込
+  API.loadSends().then(function(rows){
+    SENDS=rows||[];
+    if(typeof renderSendHistory==='function')renderSendHistory();
+  }).catch(function(){});
 })();
 </script>
 </body>

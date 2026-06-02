@@ -300,6 +300,101 @@
     return { data: t.data, uid: tid };
   }
 
+  // ===== アカウント編集（氏名・メール・ロール・所属） =====
+  async function updateAccount(pid, patch) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var up = {};
+    if (patch.name != null) up.full_name = patch.name;
+    if (patch.email != null) up.email = patch.email;
+    if (patch.role != null) up.role = roleToEnum(patch.role);
+    if (Object.keys(up).length) {
+      var r = await sb.from('profiles').update(up).eq('id', pid);
+      if (r.error) return { error: r.error.message };
+    }
+    return { ok: true };
+  }
+
+  // ===== 自分自身のプロフィール / 認証情報の更新 =====
+  async function updateSelf(patch) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var u = await sb.auth.getUser();
+    var uid = u && u.data && u.data.user && u.data.user.id;
+    if (!uid) return { error: '未ログイン' };
+    // profiles（氏名・メール）
+    var prof = {};
+    if (patch.name != null) prof.full_name = patch.name;
+    if (patch.email != null) prof.email = patch.email;
+    if (Object.keys(prof).length) {
+      var pr = await sb.from('profiles').update(prof).eq('auth_user_id', uid);
+      if (pr.error) return { error: pr.error.message };
+    }
+    // auth（メール・パスワード）
+    var authPatch = {};
+    if (patch.email != null) authPatch.email = patch.email;
+    if (patch.password) authPatch.password = patch.password;
+    if (Object.keys(authPatch).length) {
+      var ar = await sb.auth.updateUser(authPatch);
+      if (ar.error) return { error: ar.error.message };
+    }
+    return { ok: true };
+  }
+
+  // ===== テンプレート CRUD =====
+  async function loadTemplates() {
+    if (!sb) return [];
+    var r = await sb.from('chart_templates').select('*').order('created_at', { ascending: true });
+    if (r.error) { err('templates', r.error); return []; }
+    return r.data || [];
+  }
+  async function createTemplate(o) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var r = await sb.from('chart_templates').insert({
+      name: o.name, center: o.center || '', subs: o.subs || [], acts: o.acts || [],
+      color: o.color || '#0D9488', bg: o.bg || '#CCEDE9'
+    }).select().single();
+    if (r.error) return { error: r.error.message };
+    return { data: r.data };
+  }
+  async function deleteTemplate(id) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var r = await sb.from('chart_templates').delete().eq('id', id);
+    if (r.error) return { error: r.error.message };
+    return { ok: true };
+  }
+
+  // ===== 送信履歴 CRUD =====
+  async function loadSends() {
+    if (!sb) return [];
+    var r = await sb.from('chart_sends').select('*').order('sent_at', { ascending: false });
+    if (r.error) { err('sends', r.error); return []; }
+    return r.data || [];
+  }
+  async function createSend(o) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var me = await currentProfile();
+    var r = await sb.from('chart_sends').insert({
+      title: o.title || o.center, center: o.center || '', subs: o.subs || [], acts: o.acts || [],
+      to_team: o.toTeam || null, to_profile_id: o.toPid || null, to_name: o.toName || '',
+      status: 'sent', progress: 0,
+      sent_by: me ? me.id : null, sent_by_name: me ? me.full_name : ''
+    }).select().single();
+    if (r.error) return { error: r.error.message };
+    return { data: r.data };
+  }
+  async function updateSend(id, patch) {
+    if (!sb) return { error: 'Supabase未接続' };
+    patch.updated_at = new Date().toISOString();
+    var r = await sb.from('chart_sends').update(patch).eq('id', id);
+    if (r.error) return { error: r.error.message };
+    return { ok: true };
+  }
+  async function deleteSend(id) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var r = await sb.from('chart_sends').delete().eq('id', id);
+    if (r.error) return { error: r.error.message };
+    return { ok: true };
+  }
+
   // 現在ログイン中ユーザーの profile（role 判定・リダイレクト用）
   async function currentProfile() {
     if (!sb) return null;
@@ -319,8 +414,17 @@
     loadPersonalData: loadPersonalData,
     loadTokatsuData: loadTokatsuData,
     createAccount: createAccount,
+    updateAccount: updateAccount,
     deleteAccount: deleteAccount,
     createTeamRemote: createTeamRemote,
+    updateSelf: updateSelf,
+    loadTemplates: loadTemplates,
+    createTemplate: createTemplate,
+    deleteTemplate: deleteTemplate,
+    loadSends: loadSends,
+    createSend: createSend,
+    updateSend: updateSend,
+    deleteSend: deleteSend,
     currentProfile: currentProfile,
     TEAM_KEY: TEAM_KEY,
     MEMBER_KEY: MEMBER_KEY
