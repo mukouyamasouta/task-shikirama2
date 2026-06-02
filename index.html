@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VEXUM — ログイン</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Hiragino Sans','Noto Sans JP',sans-serif;background:#F4FAFB;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;color:#1A2E2C}
+.box{background:#fff;border:1px solid #B2DCDB;border-radius:14px;box-shadow:0 8px 30px rgba(13,148,136,.12);width:100%;max-width:380px;padding:28px}
+.brand{font-size:22px;font-weight:800;color:#0D9488;letter-spacing:.05em}
+.sub{font-size:10px;color:#9CA3AF;letter-spacing:.15em;margin:2px 0 20px}
+label{display:block;font-size:11px;font-weight:700;color:#6B7280;margin:12px 0 5px}
+input{width:100%;padding:10px 12px;border:1.5px solid #B2DCDB;border-radius:6px;font-size:14px;font-family:inherit;outline:none}
+input:focus{border-color:#0D9488}
+button{width:100%;margin-top:18px;padding:11px;background:#0D9488;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+button:disabled{opacity:.6}
+.msg{margin-top:12px;font-size:12px;min-height:16px}
+.msg.err{color:#EF4444}.msg.ok{color:#10B981}
+.demo{margin-top:18px;border-top:1px solid #E5E7EB;padding-top:14px;font-size:11px;color:#6B7280;line-height:1.7}
+.demo b{color:#0D9488}
+.warn{margin-top:14px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:9px 12px;font-size:11px;color:#92400E}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="brand">VEXUM</div>
+  <div class="sub">TASK MANAGEMENT SYSTEM</div>
+  <form id="login">
+    <label>メールアドレス</label>
+    <input id="email" type="email" placeholder="tanaka@vexum.co.jp" autocomplete="username">
+    <label>パスワード</label>
+    <input id="password" type="password" placeholder="••••••••" autocomplete="current-password">
+    <button id="btn" type="submit">ログイン</button>
+  </form>
+  <div class="msg" id="msg"></div>
+  <div class="warn" id="warn" style="display:none">Supabase未設定です。web/config.js を作成して URL と anonキーを設定してください。（未設定でも各画面は内蔵デモデータで動作します）</div>
+  <div class="demo">
+    <b>役割 → 遷移先</b><br>
+    admin → 統括画面 ／ executive → 幹部画面<br>
+    leader → リーダー画面 ／ member → 個人画面<br>
+    例: yamada（admin）, kimura（executive）, tanaka（leader）, nakamura（member）
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./config.js" onerror="this.dataset.miss=1"></script>
+<script src="./api.js"></script>
+<script>
+(function(){
+  var API = window.VexumAPI || {};
+  if(!API.ready){ document.getElementById('warn').style.display='block'; }
+  var DEST = { admin:'../design-D_統括.html', executive:'../design-D_幹部.html', leader:'../design-D_リーダー.html', member:'../design-D_個人.html' };
+  document.getElementById('login').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var msg=document.getElementById('msg'); msg.className='msg'; msg.textContent='';
+    if(!API.ready){ msg.className='msg err'; msg.textContent='Supabase未設定のためログインできません。'; return; }
+    var btn=document.getElementById('btn'); btn.disabled=true;
+    try{
+      var email=document.getElementById('email').value.trim();
+      var password=document.getElementById('password').value;
+      var res=await API.sb.auth.signInWithPassword({ email:email, password:password });
+      if(res.error){ throw res.error; }
+      var prof=await API.currentProfile();
+      var role=(prof&&prof.role)||'member';
+      msg.className='msg ok'; msg.textContent=(prof?prof.full_name:'')+' としてログインしました。遷移します…';
+      location.href = DEST[role] || DEST.member;
+    }catch(ex){
+      msg.className='msg err'; msg.textContent='ログイン失敗: '+(ex.message||ex);
+      btn.disabled=false;
+    }
+  });
+})();
+</script>
+</body>
+</html>
