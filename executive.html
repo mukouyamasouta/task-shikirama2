@@ -257,7 +257,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <div class="fg"><label class="fl">所属チーム</label><select class="fs" id="acc-team"></select></div>
     </div>
     <div class="fg"><label class="fl">KPI達成率（初期値 %）</label><input class="fi" id="acc-rate" type="number" min="0" max="100" placeholder="50"></div>
-    <button class="f-submit" style="width:100%" onclick="submitAccount()">招待メールを送信</button>
+    <button class="f-submit" style="width:100%" onclick="submitAccount()">アカウントを作成</button>
   </div>
 </div>
 
@@ -405,17 +405,45 @@ function showToast(msg){
 function rateColor(r){return r>=80?'var(--green)':r>=60?'var(--accent)':r>=40?'var(--amber)':'var(--red)';}
 
 /* ========== アカウント管理 ========== */
+let _pendingDel='';   // 2段階削除の保留キー
+function memRowHTML(key,m,col){
+  const ini=(m.name||'?').charAt(0);
+  const isLeader=m.role==='リーダー';
+  const badgeCls=(m.roleEnum==='admin'||m.roleEnum==='executive'||isLeader)?'b-leader':'b-member';
+  let actions;
+  if(_pendingDel===key){
+    actions=`<div style="display:flex;gap:6px;align-items:center;margin-left:8px">
+      <span style="font-size:10px;color:var(--red);font-weight:700">削除しますか？</span>
+      <button class="card-btn" style="background:var(--red);color:#fff" onclick="confirmDeleteMember('${key}')">削除する</button>
+      <button class="card-btn" onclick="cancelDeleteMember()">取消</button>
+    </div>`;
+  }else{
+    actions=`<button class="card-btn" style="margin-left:8px;background:#FEE2E2;color:var(--red)" onclick="askDeleteMember('${key}')">🗑 削除</button>`;
+  }
+  return `<div class="mem-row">
+    <div class="mem-avatar" style="background:${col}">${ini}</div>
+    <div style="flex:1;min-width:0">
+      <div class="mem-name">${m.name} <span class="badge ${badgeCls}">${m.role}</span></div>
+      <div class="mem-meta">${m.email}</div>
+    </div>
+    <div class="pw" style="min-width:110px">
+      <div class="pt"><div class="pf" style="width:${m.rate}%;background:${rateColor(m.rate)}"></div></div>
+      <div class="pp" style="color:${rateColor(m.rate)}">${m.rate}%</div>
+    </div>
+    ${actions}
+  </div>`;
+}
 function renderAccount(){
   const con=document.getElementById('account-container');if(!con)return;
-  let h=`<div style="margin-bottom:10px;font-size:11px;color:var(--text3)">チーム数: ${Object.keys(TEAMS).length}　メンバー総数: ${Object.keys(MEMBERS).length}名</div>`;
+  let h=`<div style="margin-bottom:10px;font-size:11px;color:var(--text3)">チーム数: ${Object.keys(TEAMS).length}　アカウント総数: ${Object.keys(MEMBERS).length}名</div>`;
   Object.values(TEAMS).forEach(t=>{
-    const mems=t.members.map(id=>MEMBERS[id]).filter(Boolean);
+    const keys=t.members.filter(k=>MEMBERS[k]);
     h+=`<div class="team-panel">
       <div class="team-panel-hd" onclick="togglePanel('panel-${t.id}')">
         <div style="width:12px;height:12px;border-radius:50%;background:${t.color};flex-shrink:0"></div>
         <div style="flex:1">
           <div style="font-size:13px;font-weight:700">${t.name}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:1px">リーダー: ${t.leaderName} ／ ${mems.length}名</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px">リーダー: ${t.leaderName} ／ ${keys.length}名</div>
         </div>
         <div class="pw" style="min-width:140px">
           <div class="pt"><div class="pf" style="width:${t.rate}%;background:${t.color}"></div></div>
@@ -424,28 +452,43 @@ function renderAccount(){
         <span style="font-size:10px;color:var(--text3);margin-left:10px">▼</span>
       </div>
       <div class="team-panel-body" id="panel-${t.id}">`;
-    mems.forEach(m=>{
-      const ini=m.name.charAt(0);
-      const isLeader=m.role==='リーダー';
-      h+=`<div class="mem-row">
-        <div class="mem-avatar" style="background:${t.color}">${ini}</div>
-        <div style="flex:1">
-          <div class="mem-name">${m.name} <span class="badge ${isLeader?'b-leader':'b-member'}">${m.role}</span></div>
-          <div class="mem-meta">${m.email}</div>
-        </div>
-        <div class="pw" style="min-width:120px">
-          <div class="pt"><div class="pf" style="width:${m.rate}%;background:${rateColor(m.rate)}"></div></div>
-          <div class="pp" style="color:${rateColor(m.rate)}">${m.rate}%</div>
-        </div>
-      </div>`;
-    });
+    keys.forEach(key=>{ h+=memRowHTML(key,MEMBERS[key],t.color); });
     h+=`</div></div>`;
   });
+  const freeKeys=Object.keys(MEMBERS).filter(k=>!MEMBERS[k].team);
+  if(freeKeys.length){
+    h+=`<div class="team-panel">
+      <div class="team-panel-hd" onclick="togglePanel('panel-free')">
+        <div style="width:12px;height:12px;border-radius:50%;background:var(--text3);flex-shrink:0"></div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:700">未所属アカウント</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:1px">チーム未割当 ／ ${freeKeys.length}名</div></div>
+        <span style="font-size:10px;color:var(--text3);margin-left:10px">▼</span>
+      </div>
+      <div class="team-panel-body" id="panel-free">`;
+    freeKeys.forEach(key=>{ h+=memRowHTML(key,MEMBERS[key],'#9CA3AF'); });
+    h+=`</div></div>`;
+  }
   con.innerHTML=h;
 }
 function togglePanel(id){
   const el=document.getElementById(id);
   if(el)el.style.display=el.style.display==='none'?'block':'none';
+}
+/* 2段階削除 */
+function askDeleteMember(key){_pendingDel=key;renderAccount();}
+function cancelDeleteMember(){_pendingDel='';renderAccount();}
+async function confirmDeleteMember(key){
+  const m=MEMBERS[key];if(!m){_pendingDel='';renderAccount();return;}
+  const API=window.VexumAPI;
+  if(API&&API.ready&&m.pid){
+    const res=await API.deleteAccount(m.pid);
+    if(res&&res.error){showToast('削除失敗: '+res.error);return;}
+  }
+  Object.values(TEAMS).forEach(t=>{const i=t.members.indexOf(key);if(i>=0)t.members.splice(i,1);});
+  delete MEMBERS[key];
+  _pendingDel='';
+  renderAccount();
+  showToast(`${m.name} を削除しました ✓`);
 }
 
 /* ========== アカウント発行 ========== */
@@ -460,20 +503,29 @@ function makeId(name){
   let base='m'+Date.now().toString(36);
   return base;
 }
-function submitAccount(){
+async function submitAccount(){
   const name=(document.getElementById('acc-name')||{}).value.trim();
   const email=(document.getElementById('acc-email')||{}).value.trim();
   const role=(document.getElementById('acc-role')||{}).value;
-  const teamId=(document.getElementById('acc-team')||{}).value;
+  const teamId=(document.getElementById('acc-team')||{}).value;   // チーム短縮キー('A')or''
   const rate=parseInt((document.getElementById('acc-rate')||{}).value,10);
   if(!name){showToast('氏名を入力してください');return;}
   if(!email){showToast('メールアドレスを入力してください');return;}
-  const id=makeId(name);
-  MEMBERS[id]={name,email:email||'—',role:role||'メンバー',team:teamId||'',rate:isNaN(rate)?50:Math.max(0,Math.min(100,rate))};
+  const rateVal=isNaN(rate)?50:Math.max(0,Math.min(100,rate));
+  const API=window.VexumAPI;
+  let id;
+  if(API&&API.ready){
+    const res=await API.createAccount({name,email,role:role||'メンバー',teamLetter:teamId||null,rate:rateVal});
+    if(res&&res.error){showToast('作成失敗: '+res.error);return;}
+    id=res.pid;   // Supabaseの実UUIDをキーに
+  }else{
+    id=makeId(name);
+  }
+  MEMBERS[id]={pid:id,name,email:email||'—',role:role||'メンバー',roleEnum:(role==='リーダー'?'leader':'member'),team:teamId||'',rate:rateVal};
   if(teamId&&TEAMS[teamId]&&!TEAMS[teamId].members.includes(id))TEAMS[teamId].members.push(id);
   closeAccModal();
   renderAccount();
-  showToast(`${name} のアカウントを発行しました ✓`);
+  showToast(`${name} のアカウントを作成しました ✓`);
 }
 
 /* ========== チーム編成 ========== */
@@ -481,7 +533,7 @@ function openTeamModal(){
   const free=Object.entries(MEMBERS).filter(([id,m])=>!m.team);
   const lead=document.getElementById('team-leader');
   const mems=document.getElementById('team-members');
-  const opts=Object.entries(MEMBERS).map(([id,m])=>`<option value="${id}">${m.name}（${m.team?TEAMS[m.team]?.name||m.team:'未所属'}）</option>`).join('');
+  const opts=Object.entries(MEMBERS).filter(([id,m])=>m.roleEnum!=='admin'&&m.roleEnum!=='executive').map(([id,m])=>`<option value="${id}">${m.name}（${m.team?TEAMS[m.team]?.name||m.team:'未所属'}）</option>`).join('');
   if(lead)lead.innerHTML='<option value="">—（後で設定）</option>'+opts;
   if(mems)mems.innerHTML=opts;
   document.getElementById('team-name').value='';
@@ -489,20 +541,27 @@ function openTeamModal(){
   document.getElementById('team-modal').style.display='flex';
 }
 function closeTeamModal(){document.getElementById('team-modal').style.display='none';}
-function submitTeam(){
+async function submitTeam(){
   const name=(document.getElementById('team-name')||{}).value.trim();
   const color=(document.getElementById('team-color')||{}).value||'#6366F1';
   const leaderId=(document.getElementById('team-leader')||{}).value;
   const memSel=document.getElementById('team-members');
   const picked=memSel?Array.from(memSel.selectedOptions).map(o=>o.value):[];
   if(!name){showToast('チーム名を入力してください');return;}
-  const tid='T'+Date.now().toString(36).toUpperCase();
   const memberIds=[...new Set([leaderId,...picked].filter(Boolean))];
-  // ロール・所属更新
+  let tid='T'+Date.now().toString(36).toUpperCase();
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const leaderPid=leaderId&&MEMBERS[leaderId]?MEMBERS[leaderId].pid:null;
+    const members=memberIds.map(id=>({pid:MEMBERS[id]?MEMBERS[id].pid:id,rate:MEMBERS[id]?MEMBERS[id].rate:50}));
+    const res=await API.createTeamRemote({name,color,leaderPid,members});
+    if(res&&res.error){showToast('作成失敗: '+res.error);return;}
+    if(res&&res.uid)tid=res.uid;
+  }
   memberIds.forEach(id=>{if(MEMBERS[id]){MEMBERS[id].team=tid;MEMBERS[id].role=(id===leaderId)?'リーダー':MEMBERS[id].role;}});
   const rates=memberIds.map(id=>MEMBERS[id]?.rate||0);
   const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):0;
-  TEAMS[tid]={id:tid,name,color,bg:'#F3F4F6',leader:leaderId||memberIds[0]||'',leaderName:leaderId&&MEMBERS[leaderId]?MEMBERS[leaderId].name:(memberIds[0]?MEMBERS[memberIds[0]].name:'—'),members:memberIds,rate:avg};
+  TEAMS[tid]={id:tid,uid:tid,name,color,bg:'#F3F4F6',leader:leaderId||memberIds[0]||'',leaderName:leaderId&&MEMBERS[leaderId]?MEMBERS[leaderId].name:(memberIds[0]?MEMBERS[memberIds[0]].name:'—'),members:memberIds,rate:avg};
   closeTeamModal();
   renderAccount();
   showToast(`${name} を作成しました ✓`);
@@ -748,6 +807,7 @@ function renderMemberEval(){
   const q=(document.getElementById('member-search')||{}).value||'';
   const tf=(document.getElementById('member-team-filter')||{}).value||'';
   const mems=Object.entries(MEMBERS).filter(([id,m])=>{
+    if(m.roleEnum==='admin'||m.roleEnum==='executive')return false;
     if(tf&&m.team!==tf)return false;
     if(q&&!m.name.includes(q))return false;
     return true;

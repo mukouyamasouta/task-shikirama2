@@ -59,6 +59,9 @@
 
   function byId(rows) { var m = {}; rows.forEach(function (r) { m[r.id] = r; }); return m; }
   function roleJP(r) { return r === 'leader' ? 'リーダー' : 'メンバー'; }
+  // 固定UUIDは短縮キー、それ以外（新規作成分）は生UUIDをキーに使う
+  function memKey(id) { return MEMBER_KEY[id] || id; }
+  function roleJPFull(r) { return r === 'admin' ? '管理者' : r === 'executive' ? '幹部' : r === 'leader' ? 'リーダー' : 'メンバー'; }
 
   // ===== 幹部(管理)画面 用アダプタ → {TEAMS, MEMBERS, MND, EMP} =====
   async function loadAdminData() {
@@ -73,17 +76,31 @@
       var key = TEAM_KEY[t.id]; if (!key) return;
       var mems = raw.team_members.filter(function (m) { return m.team_id === t.id; });
       TEAMS[key] = {
-        id: key, name: t.name, color: t.color, bg: t.bg,
-        leader: MEMBER_KEY[t.leader_id], leaderName: (prof[t.leader_id] || {}).full_name || '',
-        members: mems.map(function (m) { return MEMBER_KEY[m.profile_id]; }).filter(Boolean),
+        id: key, uid: t.id, name: t.name, color: t.color, bg: t.bg,
+        leader: memKey(t.leader_id), leaderName: (prof[t.leader_id] || {}).full_name || '',
+        members: mems.map(function (m) { return memKey(m.profile_id); }).filter(Boolean),
         rate: Math.round(mems.reduce(function (a, m) { return a + (m.achievement_rate || 0); }, 0) / (mems.length || 1))
       };
     });
 
+    // チーム所属の補助マップ
+    var tmByProfile = {};
+    raw.team_members.forEach(function (m) { tmByProfile[m.profile_id] = m; });
+
+    // MEMBERS は「全アカウント」を対象（未所属・新規作成分も含む）
     var MEMBERS = {};
-    raw.team_members.forEach(function (m) {
-      var key = MEMBER_KEY[m.profile_id], p = prof[m.profile_id]; if (!key || !p) return;
-      MEMBERS[key] = { name: p.full_name, email: p.email, role: roleJP(m.role_in_team), team: TEAM_KEY[m.team_id], rate: m.achievement_rate };
+    raw.profiles.forEach(function (p) {
+      var key = memKey(p.id);
+      var tm = tmByProfile[p.id];
+      MEMBERS[key] = {
+        pid: p.id,
+        name: p.full_name,
+        email: p.email,
+        role: (tm && tm.role_in_team === 'leader') ? 'リーダー' : roleJPFull(p.role),
+        roleEnum: p.role,
+        team: tm ? TEAM_KEY[tm.team_id] : '',
+        rate: tm ? (tm.achievement_rate || 0) : 50
+      };
     });
 
     var MND = {}, EMP = {};
@@ -230,6 +247,59 @@
     return { MND: d.MND, EMP: d.EMP };
   }
 
+  // ===== アカウント / チーム CRUD（幹部・管理者のみ: RLS is_admin_or_exec で保護） =====
+  function roleToEnum(jp) {
+    return jp === '管理者' ? 'admin' : jp === '幹部' ? 'executive' : jp === 'リーダー' ? 'leader' : 'member';
+  }
+  // チーム短縮キー('A') → 実UUID
+  function teamUuidOf(letter) {
+    var ids = Object.keys(TEAM_KEY).filter(function (id) { return TEAM_KEY[id] === letter; });
+    return ids[0] || null;
+  }
+  async function createAccount(o) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var ins = await sb.from('profiles').insert({
+      full_name: o.name, email: o.email, role: roleToEnum(o.role || 'メンバー'),
+      department: o.department || null, color: o.color || '#0D9488'
+    }).select().single();
+    if (ins.error) return { error: ins.error.message };
+    var pid = ins.data.id;
+    var teamUuid = o.teamUuid || (o.teamLetter ? teamUuidOf(o.teamLetter) : null);
+    if (teamUuid) {
+      var tmIns = await sb.from('team_members').insert({
+        team_id: teamUuid, profile_id: pid,
+        role_in_team: (o.role === 'リーダー') ? 'leader' : 'member',
+        achievement_rate: (o.rate != null ? o.rate : 50)
+      });
+      if (tmIns.error) return { error: tmIns.error.message };
+    }
+    return { data: ins.data, pid: pid };
+  }
+  async function deleteAccount(pid) {
+    if (!sb) return { error: 'Supabase未接続' };
+    // FK(NO ACTION) の依存行を先に削除（assigner/assignee/evaluator）
+    await sb.from('tasks').delete().eq('assignee_id', pid);
+    await sb.from('tasks').delete().eq('assigner_id', pid);
+    await sb.from('evaluations').delete().eq('evaluator_id', pid);
+    var del = await sb.from('profiles').delete().eq('id', pid); // 残りは cascade / set null
+    if (del.error) return { error: del.error.message };
+    return { ok: true };
+  }
+  async function createTeamRemote(o) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var t = await sb.from('teams').insert({
+      name: o.name, color: o.color || '#0D9488', bg: o.bg || '#F3F4F6',
+      leader_id: o.leaderPid || null
+    }).select().single();
+    if (t.error) return { error: t.error.message };
+    var tid = t.data.id;
+    var rows = (o.members || []).map(function (mm) {
+      return { team_id: tid, profile_id: mm.pid, role_in_team: (mm.pid === o.leaderPid ? 'leader' : 'member'), achievement_rate: (mm.rate != null ? mm.rate : 50) };
+    });
+    if (rows.length) { var r = await sb.from('team_members').insert(rows); if (r.error) return { error: r.error.message }; }
+    return { data: t.data, uid: tid };
+  }
+
   // 現在ログイン中ユーザーの profile（role 判定・リダイレクト用）
   async function currentProfile() {
     if (!sb) return null;
@@ -248,6 +318,9 @@
     loadLeaderData: loadLeaderData,
     loadPersonalData: loadPersonalData,
     loadTokatsuData: loadTokatsuData,
+    createAccount: createAccount,
+    deleteAccount: deleteAccount,
+    createTeamRemote: createTeamRemote,
     currentProfile: currentProfile,
     TEAM_KEY: TEAM_KEY,
     MEMBER_KEY: MEMBER_KEY
