@@ -1,17 +1,26 @@
-node_modules
-.next
-out
-dist
+# 個人書類
+*.pdf
+*.jpg
+*.jpeg
+*.png
+*.qta
+*.docx
+画像/
+
+# Node.js
+node_modules/
+.next/
+.turbo/
+dist/
+build/
+
+# 環境変数
 .env
 .env.local
 .env*.local
-.DS_Store
-*.log
-.turbo
-.vercel
-coverage
-prisma/migrations/dev.db*
 
-# generated
-**/node_modules
-**/.next
+# OS
+.DS_Store
+
+# Claude Code
+.claude/
