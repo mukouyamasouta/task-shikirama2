@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VEXUM — Design D: 幹部画面</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --sb:#fff;--sb-w:240px;--sb-hover:rgba(13,148,136,.06);
+  --sb-active-bg:rgba(13,148,136,.10);--sb-active:#0D9488;--sb-border:#DAEEE9;
+  --content:#F4FAFB;--card:#fff;--border:#B2DCDB;--shadow:0 2px 12px rgba(13,148,136,.10);
+  --accent:#0D9488;--accent-l:#DAEEE9;--pink:#EC4899;--green:#10B981;
+  --amber:#F59E0B;--red:#EF4444;--cyan:#06B6D4;
+  --text:#1A2E2C;--text2:#6B7280;--text3:#9CA3AF;--r:10px;--r-sm:6px;
+}
+body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:flex;min-height:100vh;font-size:14px}
+.sidebar{width:var(--sb-w);min-height:100vh;background:var(--sb);display:flex;flex-direction:column;position:fixed;left:0;top:0;z-index:100;border-right:1px solid var(--sb-border)}
+.sb-logo{padding:18px 16px 14px;border-bottom:1px solid var(--sb-border)}
+.sb-brand{font-size:16px;font-weight:800;color:var(--accent);letter-spacing:.05em}
+.sb-brand-sub{font-size:9px;color:var(--text3);letter-spacing:.15em;margin-top:2px}
+.sb-role{margin:10px 10px 4px;background:rgba(13,148,136,.10);border:1px solid rgba(13,148,136,.20);border-radius:20px;padding:5px 10px;display:flex;align-items:center;gap:6px}
+.sb-role-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.sb-role-lbl{font-size:10px;font-weight:600;color:var(--accent);letter-spacing:.08em}
+.sb-user{padding:6px 16px 12px;border-bottom:1px solid var(--sb-border)}
+.sb-uname{font-size:12px;font-weight:600;color:var(--text)}
+.sb-uemail{font-size:10px;color:var(--text2);margin-top:2px}
+.sb-nav{padding:8px 0;flex:1;overflow-y:auto;scrollbar-width:none}
+.sb-nav::-webkit-scrollbar{display:none}
+.sb-sec{font-size:9px;font-weight:700;letter-spacing:.15em;color:var(--text3);padding:0 14px;margin:10px 0 3px;text-transform:uppercase}
+.sb-item{display:flex;align-items:center;gap:9px;padding:8px 14px;cursor:pointer;color:var(--text2);font-size:12.5px;font-weight:500;transition:background .12s;position:relative;border:none;background:none;width:100%;text-align:left;font-family:inherit}
+.sb-item:hover{background:var(--sb-hover);color:var(--text)}
+.sb-item.active{background:var(--sb-active-bg);color:var(--sb-active)}
+.sb-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);border-radius:0 2px 2px 0}
+.sb-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.sb-footer{padding:10px 14px;border-top:1px solid var(--sb-border);font-size:10px;color:var(--text3)}
+.main{margin-left:var(--sb-w);flex:1;display:flex;flex-direction:column;background:var(--content)}
+.topbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:15px;font-weight:700}
+.topbar-path{font-size:10px;color:var(--text3);margin-top:1px}
+.topbar-actions{display:flex;gap:8px;align-items:center}
+.tb-icon{width:32px;height:32px;border-radius:50%;background:var(--accent-l);color:var(--accent);border:none;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.content{padding:24px;flex:1}
+.tab-content{display:none}.tab-content.active{display:block}
+.card{background:var(--card);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px}
+.card-hd{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.card-title{font-size:13px;font-weight:700}
+.card-sub{font-size:10px;color:var(--text3);margin-top:1px}
+.card-btn{font-size:11px;color:var(--accent);font-weight:600;background:var(--accent-l);padding:4px 10px;border-radius:5px;border:none;cursor:pointer;font-family:inherit}
+.card-body{padding:14px 18px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.pw{display:flex;align-items:center;gap:8px}
+.pt{flex:1;height:6px;background:#F3F4F6;border-radius:3px;overflow:hidden}
+.pf{height:100%;border-radius:3px}
+.pp{font-size:11px;font-weight:700;width:32px;text-align:right}
+.sec-title{font-size:18px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+/* account */
+.team-panel{background:var(--card);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.team-panel-hd{padding:14px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
+.team-panel-hd:hover{background:#FAFAFA}
+.team-panel-body{display:block}
+.mem-row{display:flex;align-items:center;gap:10px;padding:11px 18px;border-bottom:1px solid #F3F4F6}
+.mem-row:last-child{border-bottom:none}
+.mem-avatar{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
+.mem-name{font-size:12px;font-weight:600;flex:1}
+.mem-meta{font-size:10px;color:var(--text3)}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.b-leader{background:rgba(13,148,136,.12);color:var(--accent)}
+.b-member{background:rgba(16,185,129,.12);color:var(--green)}
+/* send */
+.send-card{background:var(--card);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--shadow);padding:20px}
+.mnd-subs-wrap{border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;margin-bottom:14px}
+.mnd-sub-row{display:grid;grid-template-columns:34px 1fr;border-bottom:1px solid var(--border)}
+.mnd-sub-row:last-child{border-bottom:none}
+.mnd-sub-num{background:var(--accent-l);color:var(--accent);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.mnd-sub-input{border:none;outline:none;padding:8px 10px;font-size:12px;font-family:inherit;width:100%;color:var(--text);background:transparent}
+.mnd-preview-wrap{display:grid;grid-template-columns:repeat(9,1fr);gap:1px;background:#D1D5DB;border-radius:4px;overflow:hidden}
+.fg{margin-bottom:16px}
+.fl{display:block;font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;letter-spacing:.04em}
+.fi,.fs{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--text);background:var(--card);outline:none;transition:border .15s}
+.fi:focus,.fs:focus{border-color:var(--accent)}
+.f-submit{padding:10px 24px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+/* eval */
+.eval-switch{display:flex;gap:6px;margin-bottom:20px}
+.esw{padding:7px 18px;border-radius:8px;font-size:12px;font-weight:600;border:1.5px solid var(--border);background:var(--card);color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s}
+.esw.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.epane{display:none}.epane.active{display:block}
+/* star */
+.star{font-size:22px;cursor:pointer;color:#D1D5DB;line-height:1;transition:color .1s;user-select:none}
+.star.on{color:var(--amber)}
+/* eval card */
+.eval-card{background:var(--card);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--shadow);padding:18px;margin-bottom:14px}
+.eval-card-top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.eval-avatar{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0}
+/* search */
+.search-row{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.search-in{flex:1;min-width:180px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:12px;font-family:inherit;outline:none;color:var(--text)}
+.search-in:focus{border-color:var(--accent)}
+/* toast */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1A2E2C;color:#fff;padding:10px 22px;border-radius:24px;font-size:12px;font-weight:600;z-index:10000;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+/* ===== レスポンシブ（iOS/Android = 上部タブ） ===== */
+@media(max-width:768px){
+  body{flex-direction:column}
+  .sidebar{position:sticky;top:0;width:100%;min-height:0;height:auto;border-right:none;border-bottom:1px solid var(--sb-border);flex-direction:column;z-index:200}
+  .sb-logo{display:flex;align-items:center;gap:10px;padding:9px 14px}
+  .sb-brand-sub,.sb-role,.sb-user,.sb-footer,.sb-sec,.sb-team{display:none}
+  .sb-nav{display:flex;flex-direction:row;flex-wrap:wrap;overflow:visible;padding:6px 8px;gap:6px;flex:none}
+  .sb-nav::-webkit-scrollbar{display:none}
+  .sb-item{flex:0 0 auto;width:auto;flex-direction:row;align-items:center;gap:6px;padding:10px 14px;font-size:12px;border-bottom:3px solid transparent;white-space:nowrap}
+  .sb-item .sb-icon{font-size:15px}
+  .sb-item.active{background:var(--sb-active-bg);border-bottom-color:var(--accent)}
+  .sb-item.active::before{display:none}
+  .sb-badge{position:static;margin:0 0 0 2px}
+  .main{margin-left:0}
+  .topbar{position:static}
+  .content{padding:14px}
+  .g2,.g3,.g4,.fr{grid-template-columns:1fr}
+  [style*="240px 1fr"],[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr !important}
+  .sec-title{font-size:16px}
+}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="sb-logo"><div class="sb-brand">VEXUM</div><div class="sb-brand-sub">TASK MANAGEMENT SYSTEM</div></div>
+  <div class="sb-role"><span class="sb-role-dot"></span><span class="sb-role-lbl">◆ EXECUTIVE / 幹部</span></div>
+  <div class="sb-user"><div class="sb-uname">木村 雅人</div><div class="sb-uemail">kimura@vexum.co.jp</div></div>
+  <div class="sb-nav">
+    <div class="sb-sec">幹部コンソール</div>
+    <button class="sb-item active" onclick="swTab('users',this)"><span class="sb-icon">👤</span>アカウント管理</button>
+    <button class="sb-item" onclick="swTab('send',this);initSendForm()"><span class="sb-icon">◎</span>チャート送信</button>
+    <button class="sb-item" onclick="swTab('eval',this);renderTeamEval();renderMemberEval()"><span class="sb-icon">★</span>一覧・評価</button>
+  </div>
+  <div class="sb-footer">v2.4.1 © 2025 VEXUM Inc.</div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div><div class="topbar-title" id="tb-title">アカウント管理</div><div class="topbar-path" id="tb-path">幹部コンソール / アカウント管理</div></div>
+    <div class="topbar-actions"><button class="tb-icon">🔔</button><button class="tb-icon">⚙</button></div>
+  </div>
+  <div class="content">
+
+<!-- アカウント管理 -->
+<div id="tc-users" class="tab-content active">
+  <div class="sec-title">アカウント管理
+    <div style="display:flex;gap:8px">
+      <button class="f-submit" style="padding:8px 16px;font-size:12px" onclick="openAccModal()">＋ アカウント発行</button>
+      <button class="f-submit" style="padding:8px 16px;font-size:12px;background:var(--cyan)" onclick="openTeamModal()">＋ チーム編成</button>
+    </div>
+  </div>
+  <div id="account-container"></div>
+</div>
+
+<!-- チャート送信 -->
+<div id="tc-send" class="tab-content">
+  <div class="sec-title">チャート送信 <span style="font-size:12px;font-weight:400;color:var(--text3)">チームリーダーにタスクを割り当て</span></div>
+  <div id="send-success" style="display:none;align-items:center;gap:10px;background:#D1FAE5;border:1px solid #10B981;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#065F46;font-size:13px;font-weight:600">
+    <span style="font-size:18px">✅</span><span id="send-success-msg">チャートを送信しました</span>
+  </div>
+  <div class="g2">
+    <div>
+      <div class="send-card">
+        <div class="fg"><label class="fl">送信先（チームリーダー）</label>
+          <select class="fs" id="send-to">
+            <option value="tanaka">田中 花子（営業チームA · リーダー）</option>
+            <option value="suzuki">鈴木 一郎（開発チームB · リーダー）</option>
+            <option value="sato">佐藤 美咲（マーケチームC · リーダー）</option>
+          </select>
+        </div>
+        <div class="fg"><label class="fl">テンプレート適用（任意）</label>
+          <select class="fs" onchange="applyTemplate(this.value)">
+            <option value="">— 空白から作成 —</option>
+            <option value="A">営業チームA テンプレート</option>
+            <option value="B">開発チームB テンプレート</option>
+            <option value="C">マーケチームC テンプレート</option>
+          </select>
+        </div>
+        <div class="fg"><label class="fl">中心目標（KGI）</label>
+          <input class="fi" id="send-center" placeholder="例: Q3チーム売上 ¥50M達成" oninput="updateSendPreview()">
+        </div>
+        <div class="fg"><label class="fl">サブ目標（CSF / 8項目）</label>
+          <div class="mnd-subs-wrap" id="send-subs-list"></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="f-submit" style="flex:1;background:var(--text3)" onclick="previewSendFull()">🔍 全画面プレビュー</button>
+          <button class="f-submit" style="flex:1" onclick="sendChart()">✈ 送信する</button>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-hd"><div class="card-title">チャートプレビュー</div><span style="font-size:10px;color:var(--text3)">リアルタイム更新</span></div>
+        <div class="card-body">
+          <div id="send-preview" class="mnd-preview-wrap" style="margin-bottom:10px"></div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text2);margin-bottom:14px">
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--accent);display:inline-block"></span>中心目標</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--accent-l);border:1px solid var(--accent);display:inline-block"></span>サブ目標</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#F9FAFB;border:1px solid #D1D5DB;display:inline-block"></span>アクション</span>
+          </div>
+          <div style="padding:10px;background:var(--accent-l);border-radius:6px;font-size:11px;color:var(--text2);line-height:1.6">
+            <strong style="color:var(--accent)">使い方</strong><br>
+            ① テンプレートを適用するか目標・サブ目標を手動入力<br>
+            ② 「全画面プレビュー」で確認<br>
+            ③ 「送信する」でリーダーに固定タスクとして付与
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 一覧・評価 -->
+<div id="tc-eval" class="tab-content">
+  <div class="sec-title">一覧・評価
+    <button class="card-btn" style="padding:6px 14px;font-size:11px" onclick="downloadAllCSV()">⬇ 全件CSV</button>
+  </div>
+  <div class="eval-switch">
+    <button class="esw active" onclick="swEval('team',this)">🏢 チーム評価</button>
+    <button class="esw" onclick="swEval('member',this)">👤 個人評価</button>
+  </div>
+  <div id="ep-team" class="epane active">
+    <div id="team-eval-container"></div>
+  </div>
+  <div id="ep-member" class="epane">
+    <div class="search-row">
+      <input class="search-in" id="member-search" placeholder="🔍 メンバー名で検索…" oninput="renderMemberEval()">
+      <select class="fs" id="member-team-filter" style="width:auto;min-width:150px" onchange="renderMemberEval()">
+        <option value="">全チーム</option>
+        <option value="A">営業チームA</option>
+        <option value="B">開発チームB</option>
+        <option value="C">マーケチームC</option>
+      </select>
+    </div>
+    <div id="member-eval-container"></div>
+  </div>
+</div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- アカウント発行モーダル -->
+<div id="acc-modal" onclick="if(event.target===this)closeAccModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:520px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div style="font-size:16px;font-weight:800">アカウント発行</div>
+      <button onclick="closeAccModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="fg"><label class="fl">氏名</label><input class="fi" id="acc-name" placeholder="山田 太郎"></div>
+      <div class="fg"><label class="fl">メールアドレス</label><input class="fi" id="acc-email" placeholder="yamada@vexum.co.jp"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="fg"><label class="fl">ロール</label><select class="fs" id="acc-role"><option value="メンバー">メンバー</option><option value="リーダー">リーダー</option></select></div>
+      <div class="fg"><label class="fl">所属チーム</label><select class="fs" id="acc-team"></select></div>
+    </div>
+    <div class="fg"><label class="fl">KPI達成率（初期値 %）</label><input class="fi" id="acc-rate" type="number" min="0" max="100" placeholder="50"></div>
+    <button class="f-submit" style="width:100%" onclick="submitAccount()">招待メールを送信</button>
+  </div>
+</div>
+
+<!-- チーム編成モーダル -->
+<div id="team-modal" onclick="if(event.target===this)closeTeamModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:520px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div style="font-size:16px;font-weight:800">チーム編成</div>
+      <button onclick="closeTeamModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px">
+      <div class="fg"><label class="fl">チーム名</label><input class="fi" id="team-name" placeholder="営業チーム D"></div>
+      <div class="fg"><label class="fl">カラー</label><input class="fi" id="team-color" type="color" value="#6366F1" style="height:42px;padding:4px"></div>
+    </div>
+    <div class="fg"><label class="fl">チームリーダー（未所属メンバーから選択）</label><select class="fs" id="team-leader"></select></div>
+    <div class="fg"><label class="fl">メンバー追加（複数選択可・任意）</label><select class="fs" id="team-members" multiple style="height:120px"></select></div>
+    <button class="f-submit" style="width:100%" onclick="submitTeam()">チームを作成</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 曼荼羅モーダル -->
+<div id="mandala-modal" onclick="if(event.target===this)closeMandala()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:860px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+      <div>
+        <div id="mandala-title" style="font-size:16px;font-weight:800;color:#1a1a2e;margin-bottom:3px">曼荼羅チャート</div>
+        <div style="font-size:10px;color:#9ca3af">中心：目標　第2層：サブ目標（8項目）　外周：アクション項目（各8項目）</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="downloadCSVFromModal()" style="padding:5px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">⬇ CSV</button>
+        <button onclick="closeMandala()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#9ca3af;line-height:1;padding-left:8px">✕</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap">
+      <span style="display:flex;align-items:center;gap:5px;font-size:10px;color:#6b7280"><span id="mleg-c" style="width:14px;height:14px;border-radius:2px;display:inline-block;flex-shrink:0"></span>中心目標</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:10px;color:#6b7280"><span id="mleg-s" style="width:14px;height:14px;border-radius:2px;border:2px solid;display:inline-block;flex-shrink:0"></span>サブ目標</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:10px;color:#6b7280"><span style="width:14px;height:14px;border-radius:2px;background:#f3f4f6;border:1px solid #e5e7eb;display:inline-block;flex-shrink:0"></span>アクション項目</span>
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <div id="mandala-grid" style="display:grid;grid-template-columns:repeat(9,minmax(60px,1fr));gap:2px;min-width:560px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ========== データ ========== */
+const TEAMS={
+  A:{id:'A',name:'営業チームA',color:'#0D9488',bg:'#CCEDE9',leader:'tanaka',leaderName:'田中 花子',members:['tanaka','nakamura','ito','kobayashi'],rate:82},
+  B:{id:'B',name:'開発チームB',color:'#EC4899',bg:'#FDF2F8',leader:'suzuki',leaderName:'鈴木 一郎',members:['suzuki','yamamoto','kato'],rate:61},
+  C:{id:'C',name:'マーケチームC',color:'#F59E0B',bg:'#FFFBEB',leader:'sato',leaderName:'佐藤 美咲',members:['sato','matsuda','inoue'],rate:55}
+};
+const MEMBERS={
+  tanaka:{name:'田中 花子',email:'tanaka@vexum.co.jp',role:'リーダー',team:'A',rate:94},
+  nakamura:{name:'中村 健太',email:'nakamura@vexum.co.jp',role:'メンバー',team:'A',rate:72},
+  ito:{name:'伊藤 さくら',email:'ito@vexum.co.jp',role:'メンバー',team:'A',rate:68},
+  kobayashi:{name:'小林 大輔',email:'kobayashi@vexum.co.jp',role:'メンバー',team:'A',rate:75},
+  suzuki:{name:'鈴木 一郎',email:'suzuki@vexum.co.jp',role:'リーダー',team:'B',rate:88},
+  yamamoto:{name:'山本 浩二',email:'yamamoto@vexum.co.jp',role:'メンバー',team:'B',rate:55},
+  kato:{name:'加藤 洋平',email:'kato@vexum.co.jp',role:'メンバー',team:'B',rate:63},
+  sato:{name:'佐藤 美咲',email:'sato@vexum.co.jp',role:'リーダー',team:'C',rate:81},
+  matsuda:{name:'松田 奈緒',email:'matsuda@vexum.co.jp',role:'メンバー',team:'C',rate:59},
+  inoue:{name:'井上 大樹',email:'inoue@vexum.co.jp',role:'メンバー',team:'C',rate:48}
+};
+/* チーム曼荼羅 */
+const MND={
+  A:{color:'#0D9488',bg:'#CCEDE9',name:'営業チームA',team:'営業チームA',center:'売上\n¥50M達成',
+    subs:['新規顧客獲得','アップセル強化','受注単価向上','訪問件数増加','提案書品質向上','顧客フォロー強化','CRM活用','スキルアップ'],
+    acts:[['月10件訪問','DM送付','紹介依頼','展示会参加','電話営業','LP制作','リスト整備','商談分析'],['定期MTG実施','提案強化','事例共有','ニーズ調査','価格交渉','フォロー電話','勉強会開催','ROI提示'],['高単価商品PR','オプション提案','競合比較表','価値訴求','割引抑制','実績強調','差別化','単価目標設定'],['日報記録','件数KPI設定','効率ルート','移動削減','オンライン活用','訪問計画','優先顧客選定','週次振返り'],['テンプレ整備','デザイン統一','実績追加','競合分析追記','社内レビュー','動画版作成','多言語化','A/Bテスト'],['週次連絡','アンケート送付','誕生日メール','定期勉強会','課題ヒアリング','SNS交流','御礼訪問','メルマガ配信'],['入力徹底','データ分析','アラート設定','共有促進','履歴活用','予実管理','連携強化','定期クリーニング'],['資格取得支援','外部研修参加','社内勉強会','読書推奨','ロープレ実施','メンター制度','成功事例共有','フィードバック']]},
+  B:{color:'#EC4899',bg:'#FDF2F8',name:'開発チームB',team:'開発チームB',center:'製品品質\n向上',
+    subs:['バグ解決率向上','テストカバレッジ','コードレビュー徹底','CI/CD整備','ドキュメント整備','パフォーマンス改善','セキュリティ強化','UX改善'],
+    acts:[['優先度分類','即日対応体制','根本原因分析','再発防止策','バグDB構築','週次レビュー','自動検知導入','報告フロー整備'],['単体テスト実施','結合テスト計画','E2Eテスト導入','カバレッジ計測','自動テスト化','テストケース整備','品質ゲート設定','継続モニタリング'],['レビュー基準作成','ペアプログラミング','チェックリスト','ツール導入','指摘コメント統一','フィードバック強化','定期勉強会','品質基準明確化'],['パイプライン構築','自動デプロイ','ステージング環境','ロールバック設定','通知設定','テスト自動化','デプロイ頻度向上','監視強化'],['API仕様書作成','内部設計書更新','README整備','変更ログ管理','図解化','ナレッジベース','オンボーディング','定期見直し'],['ボトルネック特定','N+1問題解消','キャッシュ最適化','DB最適化','負荷テスト実施','CDN活用','コード最適化','応答速度計測'],['脆弱性スキャン','認証強化','暗号化実装','OWASP対応','ログ監視','侵入テスト','セキュリティ研修','インシデント対応'],['ユーザーテスト','UI改善計画','アクセシビリティ','エラーメッセージ','導線改善','レスポンシブ化','フォーム最適化','フィードバック収集']]},
+  C:{color:'#F59E0B',bg:'#FFFBEB',name:'マーケチームC',team:'マーケチームC',center:'ブランド\n認知拡大',
+    subs:['SNSフォロワー増加','メディア掲載拡大','コンテンツ制作','SEO強化','広告効果最大化','イベント開催','パートナー連携','データ分析強化'],
+    acts:[['投稿頻度向上','エンゲージメント施策','インフルエンサー活用','ハッシュタグ最適化','動画コンテンツ','ライブ配信','フォロワー分析','キャンペーン実施'],['プレスリリース','メディアリスト整備','記者会見開催','独自調査発表','専門家コメント','業界誌寄稿','テレビ出演','ポッドキャスト'],['記事制作','ホワイトペーパー','事例インタビュー','動画制作','ポッドキャスト','インフォグラフィック','メールマガジン','ウェビナー'],['キーワード調査','ページ最適化','被リンク獲得','サイト速度改善','構造化データ','コンテンツSEO','内部リンク最適化','モバイル最適化'],['ターゲット設定','A/Bテスト実施','リターゲティング','クリエイティブ改善','予算最適化','ROI計測','媒体比較','コンバージョン改善'],['ウェビナー開催','展示会出展','勉強会主催','懇親会企画','オンラインセミナー','ユーザー会','社内見学会','共催イベント'],['代理店開拓','コラボ企画','アライアンス構築','共同PR実施','クロスセル','紹介制度','エコシステム','相互送客'],['GA4設定','ダッシュボード整備','週次レポート','KPI追跡','A/Bテスト分析','顧客分析','競合分析','予実管理']]}
+};
+/* 個人曼荼羅 */
+const EMP={
+  tanaka:{name:'田中 花子',team:'営業チームA',role:'リーダー',color:'#0D9488',bg:'#CCEDE9',center:'個人売上\nQ2達成',
+    subs:['新規顧客8社','受注率40%','提案品質向上','訪問20件/月','商談力強化','資料整備','社内連携','自己研鑽'],
+    acts:[['週2件アポ','テレアポ100件','紹介依頼','SNS営業','展示会参加','メール営業','リスト整備','商談記録'],['ヒアリング強化','提案精度UP','フォロー徹底','競合分析','価値訴求','事例活用','価格交渉','クロージング'],['テンプレ整備','デザイン改善','数値強化','競合比較追記','動画版制作','社内レビュー','A/Bテスト','多言語化'],['効率ルート確立','オンライン活用','訪問計画立案','優先顧客選定','週次振返り','日報記録','移動時間削減','目標進捗管理'],['ロープレ実施','外部研修参加','メンター活用','事例研究','FB取得','スキル棚卸','資格取得','弱点改善'],['資料DB整備','テンプレ共有','更新ルール制定','バージョン管理','アクセス共有','定期見直し','フォルダ整理','命名規則統一'],['週次報告','定期MTG','情報共有徹底','協力依頼','クロスセル活用','他部署連携','連絡ルール策定','共有ツール活用'],['資格取得','ビジネス書','勉強会参加','ポッドキャスト','英語学習','業界動向調査','メンタリング','振返り日記']]},
+  nakamura:{name:'中村 健太',team:'営業チームA',role:'メンバー',color:'#0D9488',bg:'#CCEDE9',center:'Q3個人売上\n¥15M達成',
+    subs:['新規顧客10社','訪問件数30件','受注率35%','単価向上','提案力UP','顧客フォロー強化','スキルアップ','健康管理'],
+    acts:[['週3件アポ','テレアポ実施','紹介依頼活用','展示会参加','SNS営業','メール営業','リスト管理','商談記録'],['訪問計画立案','優先顧客選定','効率ルート確立','週次振返り','日報記録','移動削減','オンライン活用','目標進捗管理'],['ヒアリング強化','事例活用提示','競合分析徹底','価値訴求強化','クロージング技術','価格交渉','提案精度向上','フォロー徹底'],['高単価商品PR','オプション提案','競合比較表作成','実績強調','差別化訴求','割引抑制','付加価値提示','単価目標設定'],['テンプレ整備','デザイン改善','実績追加','社内レビュー実施','動画版制作','A/Bテスト','競合比較追記','多言語化対応'],['週次連絡実施','アンケート送付','定期勉強会','御礼訪問','課題ヒアリング','メルマガ配信','SNS交流','誕生日メール'],['資格取得支援','外部研修参加','社内勉強会','読書推進','ロープレ実施','メンター活用','事例研究','FB取得'],['睡眠7時間確保','運動週3回','食事管理','ストレス管理','定時退社励行','休暇取得','趣味時間確保','家族時間']]},
+  ito:{name:'伊藤 さくら',team:'営業チームA',role:'メンバー',color:'#06B6D4',bg:'#CFFAFE',center:'新規開拓\n月8件達成',
+    subs:['テレアポ強化','SNS営業','紹介依頼','展示会出展','提案書改善','フォロー徹底','CRM入力','スキル向上'],
+    acts:[['日100件コール','スクリプト改善','録音分析','時間帯最適化','トークレベルUP','トレーニング','成功事例学習','共有MTG'],['LinkedIn活用','Twitter発信','コンテンツ投稿','DM送付','フォロー増加','プロフィール最適','エンゲージ率UP','反応分析'],['既存顧客紹介','パートナー連携','勉強会参加','コミュニティ活動','OBネット活用','紹介インセンティブ','感謝訪問','推薦状作成'],['ターゲット業界特定','ブース運営','名刺200枚','フォローメール','展示会レポ','商談設定率UP','費用対効果計測','次回計画'],['構成見直し','デザイン改善','実績追加','動画版制作','A/Bテスト','顧客視点確認','競合比較','更新サイクル'],['3日以内連絡','定期連絡ルール','アンケート実施','困りごとヒア','情報提供継続','御礼訪問','誕生日連絡','年次振返り'],['案件全入力','活動日報記録','商談メモ共有','タグ付け統一','予実確認','データ活用','アラート活用','週次整理'],['業界書読書','外部セミナー','社内勉強会','ロープレ月4','資格取得','メンター活用','成功事例研究','フィードバック活用']]},
+  kobayashi:{name:'小林 大輔',team:'営業チームA',role:'メンバー',color:'#6366F1',bg:'#EEF2FF',center:'既存顧客\nアップセル',
+    subs:['リピート率80%','追加提案強化','顧客満足向上','単価UP','関係深耕','課題発掘','社内連携','自己研鑽'],
+    acts:[['月次連絡実施','フォロー訪問','情報提供','勉強会招待','定期ランチ','アンケート実施','感謝メール','誕生日連絡'],['ニーズヒア強化','上位モデル提案','オプション提示','ROI説明','事例紹介','比較表作成','決裁者同席','追加商談設定'],['課題解決型提案','レスポンス改善','問題即日対応','定期報告','改善提案','品質チェック','サポート強化','期待値管理'],['高付加価値商品','バンドル提案','長期契約促進','価値再訴求','競合比較','優先サポート','専任担当','特別価格交渉'],['決裁者とのRel','部門横断接触','担当者サポート','社内推薦者作成','複数窓口確保','定期経営報告','業界情報提供','共同企画'],['現状ヒア','将来計画確認','課題特定','解決策仮説','提案機会創出','潜在ニーズ発掘','競合状況確認','改善点洗出'],['他部署情報収集','共同提案','SA連携','SE同行','PM連携','事例横展開','情報共有MTG','クロスセル'],['営業手法研究','先輩同行','勉強会参加','成功事例分析','業界動向調査','資格取得','ロープレ','読書']]},
+  suzuki:{name:'鈴木 一郎',team:'開発チームB',role:'リーダー',color:'#EC4899',bg:'#FDF2F8',center:'製品品質\n向上目標',
+    subs:['バグ0件/週','テスト自動化','コードレビュー徹底','CI/CD整備','ドキュメント整備','パフォーマンス改善','セキュリティ強化','UX改善'],
+    acts:[['原因分析徹底','即日対応体制','再発防止策','バグDB構築','週次レビュー','自動検知導入','報告フロー整備','優先度管理'],['単体テスト実施','結合テスト計画','E2Eテスト導入','カバレッジ計測','テスト自動化','テストケース整備','品質ゲート設定','継続モニタリング'],['レビュー基準作成','ペアプログラミング','チェックリスト','ツール導入','コメント統一','FB強化','定期勉強会','品質基準明確化'],['パイプライン構築','自動デプロイ','ステージング環境','ロールバック設定','通知設定','テスト自動化','デプロイ頻度向上','監視強化'],['API仕様書作成','設計書更新','README整備','変更ログ管理','図解化','KB構築','オンボーディング','定期見直し'],['ボトルネック特定','N+1問題解消','キャッシュ最適化','DB最適化','負荷テスト実施','CDN活用','コード最適化','応答速度計測'],['脆弱性スキャン','認証強化','暗号化実装','OWASP対応','ログ監視','侵入テスト実施','セキュリティ研修','インシデント対応'],['UXテスト実施','UI改善計画','アクセシビリティ','エラーメッセージ改善','導線改善','レスポンシブ化','フォーム最適化','FB収集']]},
+  yamamoto:{name:'山本 浩二',team:'開発チームB',role:'メンバー',color:'#EC4899',bg:'#FDF2F8',center:'インフラ\n安定化',
+    subs:['可用性99.9%','デプロイ自動化','監視強化','コスト最適化','障害対応速化','ドキュメント化','セキュリティ','スキルアップ'],
+    acts:[['冗長化構成','ロードバランサー','自動フェイルオーバー','死活監視強化','障害訓練実施','SLA設定','復旧手順整備','月次レビュー'],['CI/CDパイプライン','Terraform導入','Ansibleスクリプト','デプロイテスト','ロールバック自動化','デプロイ頻度向上','承認フロー','ドキュメント整備'],['Datadog導入','アラート設定','ダッシュボード整備','ログ集中管理','トレーシング','異常検知AI','通知ルール','週次レポート'],['リソース最適化','スポットインスタンス','リザーブド活用','不要リソース削除','コスト見える化','予算管理','最適サイズ選定','月次分析'],['インシデント対応','手順書整備','エスカレーションフロー','事後レビュー','訓練実施','連絡体制確立','ツール準備','対応時間計測'],['構成図更新','手順書整備','変更ログ管理','ランブック作成','オンボーディング','定期見直し','Wiki整備','レビュー体制'],['IAM最適化','ネットワーク分離','脆弱性スキャン','暗号化強化','アクセスログ監視','侵入テスト','コンプライアンス','研修実施'],['AWS認定取得','技術書読書','社内勉強会','カンファレンス','OSSコントリビュート','ハンズオン','ブログ執筆','メンタリング']]},
+  kato:{name:'加藤 洋平',team:'開発チームB',role:'メンバー',color:'#8B5CF6',bg:'#F5F3FF',center:'フロントエンド\n品質向上',
+    subs:['バグ削減50%','テスト網羅率80%','パフォーマンス改善','アクセシビリティ','コンポーネント整備','ドキュメント化','コードレビュー','スキルアップ'],
+    acts:[['ESLint強化','型安全実装','コードレビュー強化','ユニットテスト','E2Eテスト','Storybook導入','静的解析CI','バグトラッキング'],['Jest網羅率計測','RTL実装','E2Eシナリオ作成','スナップショット','カバレッジレポート','品質ゲート','テスト設計','定期見直し'],['LCP改善','FID改善','CLS改善','バンドルサイズ削減','遅延読み込み','キャッシュ最適化','CDN活用','パフォーマンス計測'],['WCAG対応','スクリーンリーダー','カラーコントラスト','キーボード操作','フォームラベル','alt属性','フォーカス管理','ツール導入'],['デザインシステム','再利用コンポーネント','API境界明確化','Props設計','state管理統一','命名規則','フォルダ構成','依存関係整理'],['Storybook整備','コンポーネントドキュメント','使い方例','変更履歴','型定義説明','レビューコメント','Wiki更新','オンボーディング'],['レビュー基準策定','コメント丁寧化','改善提案','知識共有','ペアプログラミング','フィードバック文化','定期MTG','Good First Issue'],['React最新動向','TypeScript深化','デザイン理解','UX学習','パフォーマンス専門書','勉強会登壇','OSS貢献','メンタリング']]},
+  sato:{name:'佐藤 美咲',team:'マーケチームC',role:'リーダー',color:'#F59E0B',bg:'#FFFBEB',center:'リード\n獲得100件',
+    subs:['SNSフォロワー増','メディア露出拡大','コンテンツ制作','SEO強化','広告運用','イベント企画','パートナー開拓','データ分析'],
+    acts:[['投稿頻度向上','エンゲージ施策','インフルエンサー活用','タグ最適化','動画制作','ライブ配信','フォロワー分析','CP実施'],['PR送付','メディアリスト整備','プレス会見','調査発表','専門家取材','業界誌寄稿','テレビ出演','ポッドキャスト'],['週2記事','WP作成','事例取材','動画週1','ポッドキャスト収録','インフォグラフィック','メルマガ','ウェビナー'],['KW調査','ページ最適化','被リンク獲得','速度改善','構造化データ設定','コンテンツSEO','内部リンク','モバイル最適'],['ターゲット設定','A/Bテスト実施','リターゲティング','クリエイティブ改善','予算最適','ROI計測','媒体比較','CV改善'],['ウェビナー開催','展示会出展','勉強会主催','懇親会企画','セミナー','ユーザー会開催','社内見学会','共催イベント'],['代理店開拓','コラボ企画立案','アライアンス構築','共同PR実施','クロスセル','紹介制度構築','エコシステム','相互送客'],['GA4設定','DB整備','週次レポート','KPI追跡','A/Bテスト分析','顧客分析','競合分析実施','予実管理']]},
+  matsuda:{name:'松田 奈緒',team:'マーケチームC',role:'メンバー',color:'#F59E0B',bg:'#FFFBEB',center:'SNSフォロワー\n5000人達成',
+    subs:['投稿品質向上','エンゲージ率UP','動画コンテンツ強化','ハッシュタグ戦略','コラボ企画','ストーリーズ活用','分析・改善','ブランド統一'],
+    acts:[['週5投稿実施','デザイン統一','コピー改善','カルーセル活用','ビジュアル強化','テンプレ作成','フィードバック取得','A/Bテスト'],['コメント返信100%','いいね返し','アンケート活用','質問BOX','ライブ配信','DM対応','ファンコミュ育成','エンゲージ計測'],['動画週3本','Reels作成','ショート動画','編集スキルUP','BGM選定','字幕追加','サムネ最適化','動画分析'],['業界タグ調査','ニッチタグ活用','トレンドタグ','地域タグ','ブランドタグ作成','タグテスト','効果計測','定期見直し'],['インフルエンサー起用','相互PR','コラボコンテンツ','企画立案','スケジュール調整','契約確認','レポート作成','関係継続'],['毎日ストーリーズ','アンケート機能','カウントダウン','お知らせ機能','ハイライト整理','リンクスタンプ','シェア促進','保存数計測'],['週次インサイト確認','改善点洗出','トップ投稿分析','競合分析','月次レポート','施策立案','効果検証','改善実装'],['ブランドガイドライン','カラー統一','フォント統一','トーン&マナー','世界観統一','チェック体制','定期見直し','展開管理']]},
+  inoue:{name:'井上 大樹',team:'マーケチームC',role:'メンバー',color:'#10B981',bg:'#ECFDF5',center:'SEO流入\n月10000PV',
+    subs:['記事本数確保','キーワード戦略','内部リンク最適化','被リンク獲得','ページ速度改善','構造化データ','競合分析','コンテンツSEO'],
+    acts:[['週4記事執筆','外部ライター管理','テーマ選定','品質チェック','SEO確認','公開スケジュール','リライト計画','古記事更新'],['KW調査ツール活用','ボリューム確認','難易度評価','ニッチKW発掘','サジェスト活用','競合KW分析','クラスタリング','優先度付け'],['内部リンク設計','アンカーテキスト最適','孤立ページ解消','サイロ構造','クラスタ内部リンク','ナビゲーション改善','パンくず整備','リンク監査'],['被リンク調査','競合リンク分析','プレスリリース','コンテンツ拡散','業界メディア寄稿','インタビュー受付','ツールリスト掲載','NPO連携'],['サーバー最適化','画像圧縮','レイジーロード','キャッシュ設定','CDN活用','Core Web Vitals改善','モバイル最適化','計測ツール設定'],['JSON-LD実装','パンくずスキーマ','FAQスキーマ','記事スキーマ','組織スキーマ','検証ツール活用','エラー修正','定期監査'],['競合記事分析','ギャップ特定','上位記事研究','差別化ポイント','情報更新速度','独自データ活用','専門性訴求','EEAT強化'],['検索意図分析','ユーザーファースト','構成改善','読みやすさUP','図解活用','動画埋込','引用活用','CTA最適化']]
+  }
+};
+const SP_MAP=[
+  {cr:3,cc:3,oc:[1,1],si:0},{cr:3,cc:4,oc:[1,4],si:1},{cr:3,cc:5,oc:[1,7],si:2},
+  {cr:4,cc:3,oc:[4,1],si:3},{cr:4,cc:5,oc:[4,7],si:4},
+  {cr:5,cc:3,oc:[7,1],si:5},{cr:5,cc:4,oc:[7,4],si:6},{cr:5,cc:5,oc:[7,7],si:7}
+];
+const EVAL_NAMES=['未評価','進行中','完了','要改善'];
+const RATINGS={};
+let _curMndKey='';
+function getAllMnd(){return {...MND,...EMP};}
+function getRat(id){if(!RATINGS[id])RATINGS[id]={stars:0,comment:''};return RATINGS[id];}
+</script>
+
+<script>
+/* ========== UI ========== */
+const TITLES={users:['アカウント管理','幹部コンソール / アカウント管理'],send:['チャート送信','幹部コンソール / チャート送信'],eval:['一覧・評価','幹部コンソール / 一覧・評価']};
+function swTab(id,btn){
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tc-'+id).classList.add('active');
+  document.querySelectorAll('.sb-item').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-path').textContent=TITLES[id][1];}
+}
+function swEval(pane,btn){
+  document.querySelectorAll('.epane').forEach(el=>el.classList.remove('active'));
+  document.getElementById('ep-'+pane).classList.add('active');
+  document.querySelectorAll('.esw').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+}
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+function rateColor(r){return r>=80?'var(--green)':r>=60?'var(--accent)':r>=40?'var(--amber)':'var(--red)';}
+
+/* ========== アカウント管理 ========== */
+function renderAccount(){
+  const con=document.getElementById('account-container');if(!con)return;
+  let h=`<div style="margin-bottom:10px;font-size:11px;color:var(--text3)">チーム数: ${Object.keys(TEAMS).length}　メンバー総数: ${Object.keys(MEMBERS).length}名</div>`;
+  Object.values(TEAMS).forEach(t=>{
+    const mems=t.members.map(id=>MEMBERS[id]).filter(Boolean);
+    h+=`<div class="team-panel">
+      <div class="team-panel-hd" onclick="togglePanel('panel-${t.id}')">
+        <div style="width:12px;height:12px;border-radius:50%;background:${t.color};flex-shrink:0"></div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">${t.name}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px">リーダー: ${t.leaderName} ／ ${mems.length}名</div>
+        </div>
+        <div class="pw" style="min-width:140px">
+          <div class="pt"><div class="pf" style="width:${t.rate}%;background:${t.color}"></div></div>
+          <div class="pp" style="color:${t.color}">${t.rate}%</div>
+        </div>
+        <span style="font-size:10px;color:var(--text3);margin-left:10px">▼</span>
+      </div>
+      <div class="team-panel-body" id="panel-${t.id}">`;
+    mems.forEach(m=>{
+      const ini=m.name.charAt(0);
+      const isLeader=m.role==='リーダー';
+      h+=`<div class="mem-row">
+        <div class="mem-avatar" style="background:${t.color}">${ini}</div>
+        <div style="flex:1">
+          <div class="mem-name">${m.name} <span class="badge ${isLeader?'b-leader':'b-member'}">${m.role}</span></div>
+          <div class="mem-meta">${m.email}</div>
+        </div>
+        <div class="pw" style="min-width:120px">
+          <div class="pt"><div class="pf" style="width:${m.rate}%;background:${rateColor(m.rate)}"></div></div>
+          <div class="pp" style="color:${rateColor(m.rate)}">${m.rate}%</div>
+        </div>
+      </div>`;
+    });
+    h+=`</div></div>`;
+  });
+  con.innerHTML=h;
+}
+function togglePanel(id){
+  const el=document.getElementById(id);
+  if(el)el.style.display=el.style.display==='none'?'block':'none';
+}
+
+/* ========== アカウント発行 ========== */
+function openAccModal(){
+  const sel=document.getElementById('acc-team');
+  if(sel)sel.innerHTML='<option value="">—（未所属）</option>'+Object.values(TEAMS).map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  ['acc-name','acc-email','acc-rate'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('acc-modal').style.display='flex';
+}
+function closeAccModal(){document.getElementById('acc-modal').style.display='none';}
+function makeId(name){
+  let base='m'+Date.now().toString(36);
+  return base;
+}
+function submitAccount(){
+  const name=(document.getElementById('acc-name')||{}).value.trim();
+  const email=(document.getElementById('acc-email')||{}).value.trim();
+  const role=(document.getElementById('acc-role')||{}).value;
+  const teamId=(document.getElementById('acc-team')||{}).value;
+  const rate=parseInt((document.getElementById('acc-rate')||{}).value,10);
+  if(!name){showToast('氏名を入力してください');return;}
+  if(!email){showToast('メールアドレスを入力してください');return;}
+  const id=makeId(name);
+  MEMBERS[id]={name,email:email||'—',role:role||'メンバー',team:teamId||'',rate:isNaN(rate)?50:Math.max(0,Math.min(100,rate))};
+  if(teamId&&TEAMS[teamId]&&!TEAMS[teamId].members.includes(id))TEAMS[teamId].members.push(id);
+  closeAccModal();
+  renderAccount();
+  showToast(`${name} のアカウントを発行しました ✓`);
+}
+
+/* ========== チーム編成 ========== */
+function openTeamModal(){
+  const free=Object.entries(MEMBERS).filter(([id,m])=>!m.team);
+  const lead=document.getElementById('team-leader');
+  const mems=document.getElementById('team-members');
+  const opts=Object.entries(MEMBERS).map(([id,m])=>`<option value="${id}">${m.name}（${m.team?TEAMS[m.team]?.name||m.team:'未所属'}）</option>`).join('');
+  if(lead)lead.innerHTML='<option value="">—（後で設定）</option>'+opts;
+  if(mems)mems.innerHTML=opts;
+  document.getElementById('team-name').value='';
+  document.getElementById('team-color').value='#6366F1';
+  document.getElementById('team-modal').style.display='flex';
+}
+function closeTeamModal(){document.getElementById('team-modal').style.display='none';}
+function submitTeam(){
+  const name=(document.getElementById('team-name')||{}).value.trim();
+  const color=(document.getElementById('team-color')||{}).value||'#6366F1';
+  const leaderId=(document.getElementById('team-leader')||{}).value;
+  const memSel=document.getElementById('team-members');
+  const picked=memSel?Array.from(memSel.selectedOptions).map(o=>o.value):[];
+  if(!name){showToast('チーム名を入力してください');return;}
+  const tid='T'+Date.now().toString(36).toUpperCase();
+  const memberIds=[...new Set([leaderId,...picked].filter(Boolean))];
+  // ロール・所属更新
+  memberIds.forEach(id=>{if(MEMBERS[id]){MEMBERS[id].team=tid;MEMBERS[id].role=(id===leaderId)?'リーダー':MEMBERS[id].role;}});
+  const rates=memberIds.map(id=>MEMBERS[id]?.rate||0);
+  const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):0;
+  TEAMS[tid]={id:tid,name,color,bg:'#F3F4F6',leader:leaderId||memberIds[0]||'',leaderName:leaderId&&MEMBERS[leaderId]?MEMBERS[leaderId].name:(memberIds[0]?MEMBERS[memberIds[0]].name:'—'),members:memberIds,rate:avg};
+  closeTeamModal();
+  renderAccount();
+  showToast(`${name} を作成しました ✓`);
+}
+
+/* ========== チャート送信 ========== */
+function initSendForm(){
+  const wrap=document.getElementById('send-subs-list');
+  if(!wrap||wrap.children.length>0)return;
+  let h='';
+  for(let i=1;i<=8;i++)h+=`<div class="mnd-sub-row"><span class="mnd-sub-num">${i}</span><input class="mnd-sub-input" id="ssub-${i}" placeholder="サブ目標 ${i}" oninput="updateSendPreview()"></div>`;
+  wrap.innerHTML=h;
+  updateSendPreview();
+}
+function applyTemplate(key){
+  if(!key||!MND[key])return;
+  const d=MND[key];
+  const ci=document.getElementById('send-center');
+  if(ci){ci.value=d.center.replace(/\n/,' ');}
+  d.subs.forEach((s,i)=>{const el=document.getElementById(`ssub-${i+1}`);if(el)el.value=s;});
+  updateSendPreview();
+}
+function updateSendPreview(){
+  const grid=document.getElementById('send-preview');if(!grid)return;
+  const center=(document.getElementById('send-center')||{}).value||'';
+  const subs=Array.from({length:8},(_,i)=>(document.getElementById(`ssub-${i+1}`)||{}).value||'');
+  const G=Array.from({length:9},()=>Array(9).fill(null));
+  G[4][4]={t:'center'};
+  SP_MAP.forEach(({cr,cc,oc,si})=>{
+    G[cr][cc]={t:'sub',v:subs[si]};G[oc[0]][oc[1]]={t:'sub',v:subs[si]};
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      if(dr===0&&dc===0)continue;
+      const r2=oc[0]+dr,c2=oc[1]+dc;
+      if(r2>=0&&r2<9&&c2>=0&&c2<9&&!G[r2][c2])G[r2][c2]={t:'action'};
+    }
+  });
+  let h='';
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const cell=G[r][c];
+    let sty='min-height:20px;display:flex;align-items:center;justify-content:center;font-size:5px;text-align:center;padding:1px;word-break:break-all;line-height:1.2;';
+    if(c===2||c===5)sty+='border-right:2px solid #9CA3AF;';
+    if(r===2||r===5)sty+='border-bottom:2px solid #9CA3AF;';
+    let txt='';
+    if(cell?.t==='center'){sty+='background:#0D9488;color:#fff;font-weight:800;';txt=center.slice(0,5);}
+    else if(cell?.t==='sub'){sty+='background:#CCEDE9;color:#0D9488;font-weight:700;';txt=(cell.v||'').slice(0,4);}
+    else sty+='background:#F9FAFB;color:#9CA3AF;';
+    h+=`<div style="${sty}">${txt}</div>`;
+  }
+  grid.innerHTML=h;
+}
+function previewSendFull(){
+  const center=(document.getElementById('send-center')||{}).value||'（未入力）';
+  const subs=Array.from({length:8},(_,i)=>(document.getElementById(`ssub-${i+1}`)||{}).value||`サブ目標${i+1}`);
+  getAllMnd()['__sendprev__']={name:'送信プレビュー',team:'—',color:'#0D9488',bg:'#CCEDE9',center,subs,acts:subs.map(()=>Array(8).fill('—'))};
+  openMandala('__sendprev__');
+}
+function sendChart(){
+  const center=(document.getElementById('send-center')||{}).value;
+  if(!center){showToast('中心目標を入力してください');return;}
+  const toEl=document.getElementById('send-to');
+  const toName=toEl?toEl.options[toEl.selectedIndex].text:'リーダー';
+  const s=document.getElementById('send-success');
+  const st=document.getElementById('send-success-msg');
+  if(st)st.textContent=`「${center}」を ${toName.split('（')[0]} に送信しました`;
+  if(s){s.style.display='flex';setTimeout(()=>{s.style.display='none';},5000);}
+  showToast('チャートを送信しました ✓');
+}
+
+/* ========== 曼荼羅モーダル ========== */
+function buildMndGrid(k){
+  const d=getAllMnd()[k];if(!d)return null;
+  const G=Array.from({length:9},()=>Array(9).fill(null));
+  G[4][4]={t:'center',tx:d.center};
+  SP_MAP.forEach(({cr,cc,oc,si})=>{
+    G[cr][cc]={t:'sub',tx:d.subs[si]};
+    G[oc[0]][oc[1]]={t:'sub',tx:d.subs[si]};
+    let ai=0;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      if(dr===0&&dc===0)continue;
+      const r=oc[0]+dr,c=oc[1]+dc;
+      if(r>=0&&r<9&&c>=0&&c<9&&!G[r][c])G[r][c]={t:'action',tx:(d.acts[si]||[])[ai]||''};
+      ai++;
+    }
+  });
+  return G;
+}
+function openMandala(k){
+  const d=getAllMnd()[k];if(!d)return;
+  _curMndKey=k;
+  document.getElementById('mandala-title').textContent=d.name+' — 曼荼羅チャート';
+  const lc=document.getElementById('mleg-c'),ls=document.getElementById('mleg-s');
+  if(lc)lc.style.background=d.color;
+  if(ls){ls.style.background=d.bg;ls.style.borderColor=d.color;}
+  const G=buildMndGrid(k);
+  let h='';
+  for(let r=0;r<9;r++){
+    for(let c=0;c<9;c++){
+      const cell=G[r][c];
+      let sty='min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:9.5px;line-height:1.35;padding:4px 3px;border-radius:3px;word-break:break-all;box-sizing:border-box;';
+      if(c===2||c===5)sty+='border-right:3px solid #9CA3AF;';
+      if(r===2||r===5)sty+='border-bottom:3px solid #9CA3AF;';
+      if(cell&&cell.t==='center')sty+=`background:${d.color};color:#fff;font-weight:800;font-size:10.5px;border:2px solid ${d.color};`;
+      else if(cell&&cell.t==='sub')sty+=`background:${d.bg};color:${d.color};font-weight:700;border:1.5px solid ${d.color};`;
+      else sty+='background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;';
+      const tx=cell?(cell.t==='center'?cell.tx.replace(/\n/g,'<br>'):cell.tx):'';
+      h+=`<div style="${sty}">${tx}</div>`;
+    }
+  }
+  document.getElementById('mandala-grid').innerHTML=h;
+  const m=document.getElementById('mandala-modal');
+  m.style.display='flex';m.scrollTop=0;
+}
+function closeMandala(){document.getElementById('mandala-modal').style.display='none';}
+function downloadCSVFromModal(){downloadCSV(_curMndKey);}
+
+/* ========== CSV ========== */
+function buildCSV(k){
+  const d=getAllMnd()[k];if(!d)return'';
+  let csv='対象名,チーム,中心目標,サブ目標No,サブ目標,アクションNo,アクション内容\n';
+  SP_MAP.forEach(({oc,si})=>{
+    let ai=0;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      if(dr===0&&dc===0)continue;
+      const r=oc[0]+dr,c=oc[1]+dc;
+      if(r>=0&&r<9&&c>=0&&c<9){
+        const actTxt=(d.acts[si]||[])[ai]||'';
+        csv+=`"${d.name}","${d.team}","${(d.center||'').replace(/\n/,' ')}",${si+1},"${d.subs[si]||''}",${ai+1},"${actTxt}"\n`;
+      }
+      ai++;
+    }
+  });
+  return csv;
+}
+function downloadCSV(k){
+  const d=getAllMnd()[k];if(!d)return;
+  const blob=new Blob(['﻿'+buildCSV(k)],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`mandala_${(d.name||k).replace(/[\s　]/g,'_')}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+function downloadAllCSV(){
+  let csv='対象名,チーム,中心目標,サブ目標No,サブ目標,アクションNo,アクション内容\n';
+  Object.keys(getAllMnd()).filter(k=>!k.startsWith('__')).forEach(k=>{
+    const rows=buildCSV(k).split('\n').slice(1).join('\n');
+    if(rows)csv+=rows+'\n';
+  });
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`mandala_全件_${new Date().toISOString().slice(0,10)}.csv`;a.click();
+}
+
+/* ========== 星評価 ========== */
+function starHTML(id,n){
+  return Array.from({length:5},(_,i)=>`<span class="star${i<n?' on':''}" onclick="setStar('${id}',${i+1})">★</span>`).join('');
+}
+function setStar(id,n){
+  const r=getRat(id);
+  r.stars=(r.stars===n?0:n);
+  const row=document.getElementById('stars-'+id);
+  if(row)row.innerHTML=starHTML(id,r.stars);
+}
+function saveCmt(id,val){getRat(id).comment=val;}
+
+/* ========== チーム評価（KGI・CSFまで） ========== */
+function renderTeamEval(){
+  const con=document.getElementById('team-eval-container');if(!con)return;
+  let h='';
+  Object.values(TEAMS).forEach(t=>{
+    const tk='team-'+t.id;
+    const d=MND[t.id];
+    h+=`<div class="eval-card">
+      <div class="eval-card-top">
+        <div class="eval-avatar" style="background:${t.color}">${t.name.charAt(0)}</div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700">${t.name}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">リーダー: ${t.leaderName} ／ ${t.members.length}名</div>
+        </div>
+        <div class="pw" style="min-width:160px">
+          <div class="pt"><div class="pf" style="width:${t.rate}%;background:${t.color}"></div></div>
+          <div class="pp" style="color:${t.color}">${t.rate}%</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        ${d?`<button class="card-btn" onclick="openMandala('${t.id}')">🧿 チャートを見る</button><button class="card-btn" style="background:#F3F4F6;color:var(--text2)" onclick="downloadCSV('${t.id}')">⬇ CSV</button>`:'<span style="font-size:10px;color:var(--text3)">曼荼羅データなし</span>'}
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:12px">`;
+    if(d){
+      h+=evalBlock(tk,'kgi',-1,'KGI','#0D9488',(d.center||'').replace(/\n/g,' '));
+      h+=`<button class="card-btn" style="background:var(--accent-l);color:var(--accent);margin-bottom:10px" onclick="toggleCsf('${tk}')"><span id="csfarrow-${tk}">▸</span> CSF評価（8項目）</button>
+        <div id="csf-${tk}" style="display:none">`;
+      for(let si=0;si<8;si++)h+=evalBlock(tk,'csf',si,'CSF-'+(si+1),'#F59E0B',d.subs[si]);
+      h+=`</div>`;
+    }else{
+      h+=evalBlock(tk,'kgi',-1,'総合','#0D9488','チーム総合評価');
+    }
+    h+=`<button class="f-submit" style="margin-top:4px;padding:8px 20px;font-size:12px" onclick="saveMemberEvalExec('${tk}','${t.name}')">評価を保存</button>
+      </div>
+    </div>`;
+  });
+  con.innerHTML=h;
+}
+
+/* ========== 個人評価（KGI・CSFまで） ========== */
+const memberEval={};
+function _mev(id){if(!memberEval[id])memberEval[id]={kgi:{stars:0,comment:''},csf:Array.from({length:8},()=>({stars:0,comment:''}))};return memberEval[id];}
+function mevStarHTML(id,type,si){
+  const e=_mev(id);const cur=type==='kgi'?e.kgi.stars:e.csf[si].stars;
+  let h='';for(let n=1;n<=5;n++)h+=`<span class="star${n<=cur?' on':''}" onclick="setMevStar('${id}','${type}',${si},${n})">★</span>`;
+  return h;
+}
+function setMevStar(id,type,si,n){
+  const e=_mev(id);
+  if(type==='kgi')e.kgi.stars=(e.kgi.stars===n?0:n);else e.csf[si].stars=(e.csf[si].stars===n?0:n);
+  const row=document.getElementById(`mevstars-${id}-${type}-${si}`);
+  if(row)row.innerHTML=mevStarHTML(id,type,si);
+}
+function saveMevCmt(id,type,si,v){const e=_mev(id);if(type==='kgi')e.kgi.comment=v;else e.csf[si].comment=v;}
+function toggleCsf(id){
+  const el=document.getElementById('csf-'+id),ar=document.getElementById('csfarrow-'+id);
+  if(!el)return;const open=el.style.display!=='none';
+  el.style.display=open?'none':'block';if(ar)ar.textContent=open?'▸':'▾';
+}
+function saveMemberEvalExec(id,name){
+  const e=_mev(id);
+  const avg=Math.round(e.csf.reduce((a,c)=>a+c.stars,0)/8*10)/10;
+  showToast(`${name} の評価を保存しました（CSF平均 ${avg}★）✓`);
+}
+function evalBlock(id,type,si,tag,tagColor,goal){
+  return `<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:${tagColor}1A;color:${tagColor}">${tag}</span>
+      <span style="font-size:12.5px;font-weight:700;color:var(--text)">${goal}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:10px;color:var(--text3)">5段階評価</span>
+      <span id="mevstars-${id}-${type}-${si}" style="display:flex;gap:1px">${mevStarHTML(id,type,si)}</span>
+    </div>
+    <textarea class="fi" rows="2" style="resize:vertical;font-size:12px" placeholder="${tag}への評価コメント…" oninput="saveMevCmt('${id}','${type}',${si},this.value)">${type==='kgi'?_mev(id).kgi.comment:_mev(id).csf[si].comment}</textarea>
+  </div>`;
+}
+function renderMemberEval(){
+  const con=document.getElementById('member-eval-container');if(!con)return;
+  const q=(document.getElementById('member-search')||{}).value||'';
+  const tf=(document.getElementById('member-team-filter')||{}).value||'';
+  const mems=Object.entries(MEMBERS).filter(([id,m])=>{
+    if(tf&&m.team!==tf)return false;
+    if(q&&!m.name.includes(q))return false;
+    return true;
+  });
+  if(mems.length===0){con.innerHTML='<div style="text-align:center;padding:32px;color:var(--text3)">該当するメンバーがいません</div>';return;}
+  let h='';
+  mems.forEach(([id,m])=>{
+    const t=TEAMS[m.team];
+    const d=EMP[id];
+    h+=`<div class="eval-card">
+      <div class="eval-card-top">
+        <div class="eval-avatar" style="background:${t?t.color:'#9CA3AF'}">${m.name.charAt(0)}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">${m.name} <span class="badge ${m.role==='リーダー'?'b-leader':'b-member'}">${m.role}</span></div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${t?t.name:m.team} ／ ${m.email}</div>
+        </div>
+        <div class="pw" style="min-width:130px">
+          <div class="pt"><div class="pf" style="width:${m.rate}%;background:${rateColor(m.rate)}"></div></div>
+          <div class="pp" style="color:${rateColor(m.rate)}">${m.rate}%</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        ${d?`<button class="card-btn" onclick="openMandala('${id}')">🧿 チャートを見る</button><button class="card-btn" style="background:#F3F4F6;color:var(--text2)" onclick="downloadCSV('${id}')">⬇ CSV</button>`:'<span style="font-size:10px;color:var(--text3)">曼荼羅データなし</span>'}
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:12px">`;
+    if(d){
+      h+=evalBlock(id,'kgi',-1,'KGI','#0D9488',(d.center||'').replace(/\n/g,' '));
+      h+=`<button class="card-btn" style="background:var(--accent-l);color:var(--accent);margin-bottom:10px" onclick="toggleCsf('${id}')"><span id="csfarrow-${id}">▸</span> CSF評価（8項目）</button>
+        <div id="csf-${id}" style="display:none">`;
+      for(let si=0;si<8;si++)h+=evalBlock(id,'csf',si,'CSF-'+(si+1),'#F59E0B',d.subs[si]);
+      h+=`</div>`;
+    }else{
+      h+=evalBlock(id,'kgi',-1,'総合','#0D9488','総合評価');
+    }
+    h+=`<button class="f-submit" style="margin-top:4px;padding:8px 20px;font-size:12px" onclick="saveMemberEvalExec('${id}','${m.name}')">評価を保存</button>
+      </div>
+    </div>`;
+  });
+  con.innerHTML=h;
+}
+
+/* ========== 初期化 ========== */
+renderAccount();
+</script>
+
+<!-- ===== Supabase 連携（未設定時は上の内蔵デモデータのまま動作） ===== -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./web/config.js" onerror="this.dataset.miss=1"></script>
+<script src="./web/api.js"></script>
+<script>
+(function(){
+  var API = window.VexumAPI;
+  if(!API || !API.ready) return; // 未設定: 内蔵デモのまま
+  function repl(target, src){ Object.keys(target).forEach(function(k){ delete target[k]; }); Object.assign(target, src); }
+  API.loadAdminData().then(function(d){
+    if(!d) return;
+    repl(TEAMS, d.TEAMS); repl(MEMBERS, d.MEMBERS); repl(MND, d.MND); repl(EMP, d.EMP);
+    if(typeof renderAccount==='function') renderAccount();
+    if(typeof renderTeamEval==='function') renderTeamEval();
+    if(typeof renderMemberEval==='function') renderMemberEval();
+    console.log('[VEXUM] Supabaseデータを反映しました');
+  }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:', e); });
+})();
+</script>
+</body>
+</html>

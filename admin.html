@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VEXUM — Design D: 統括画面</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --sb:#fff;--sb-w:240px;--sb-text:#6B7280;--sb-hover:rgba(13,148,136,.06);
+  --sb-active-bg:rgba(13,148,136,.10);--sb-active:#0D9488;--sb-border:#DAEEE9;
+  --content:#F4FAFB;--card:#fff;--border:#B2DCDB;--shadow:0 2px 12px rgba(13,148,136,.10);
+  --accent:#0D9488;--accent-l:#DAEEE9;--pink:#EC4899;--green:#10B981;
+  --amber:#F59E0B;--red:#EF4444;--cyan:#06B6D4;
+  --text:#1A2E2C;--text2:#6B7280;--text3:#9CA3AF;--r:10px;--r-sm:6px;
+}
+body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:flex;min-height:100vh;font-size:14px}
+/* sidebar */
+.sidebar{width:var(--sb-w);min-height:100vh;background:var(--sb);display:flex;flex-direction:column;position:fixed;left:0;top:0;z-index:100;border-right:1px solid var(--sb-border)}
+.sb-logo{padding:18px 16px 14px;border-bottom:1px solid var(--sb-border)}
+.sb-brand{font-size:16px;font-weight:800;color:var(--accent);letter-spacing:.05em}
+.sb-brand-sub{font-size:9px;color:var(--text3);letter-spacing:.15em;margin-top:2px}
+.sb-role{margin:10px 10px 4px;background:rgba(13,148,136,.10);border:1px solid rgba(13,148,136,.20);border-radius:20px;padding:5px 10px;display:flex;align-items:center;gap:6px}
+.sb-role-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.sb-role-lbl{font-size:10px;font-weight:600;color:var(--accent);letter-spacing:.08em}
+.sb-user{padding:6px 16px 12px;border-bottom:1px solid var(--sb-border)}
+.sb-uname{font-size:12px;font-weight:600;color:var(--text)}
+.sb-uemail{font-size:10px;color:var(--text2);margin-top:2px}
+.sb-nav{padding:8px 0;flex:1;overflow-y:auto;scrollbar-width:none}
+.sb-nav::-webkit-scrollbar{display:none}
+.sb-sec{font-size:9px;font-weight:700;letter-spacing:.15em;color:var(--text3);padding:0 14px;margin:10px 0 3px;text-transform:uppercase}
+.sb-item{display:flex;align-items:center;gap:9px;padding:8px 14px;cursor:pointer;color:var(--text2);font-size:12.5px;font-weight:500;transition:background .12s;position:relative;border:none;background:none;width:100%;text-align:left;font-family:inherit}
+.sb-item:hover{background:var(--sb-hover);color:var(--text)}
+.sb-item.active{background:var(--sb-active-bg);color:var(--sb-active)}
+.sb-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);border-radius:0 2px 2px 0}
+.sb-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.sb-badge{margin-left:auto;background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px}
+.sb-footer{padding:10px 14px;border-top:1px solid var(--sb-border);font-size:10px;color:var(--text3)}
+/* main */
+.main{margin-left:var(--sb-w);flex:1;display:flex;flex-direction:column;background:var(--content)}
+.topbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:15px;font-weight:700}
+.topbar-path{font-size:10px;color:var(--text3);margin-top:1px}
+.topbar-actions{display:flex;gap:8px;align-items:center}
+.tb-btn{background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.tb-icon{width:32px;height:32px;border-radius:50%;background:var(--accent-l);color:var(--accent);border:none;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+/* content area */
+.content{padding:24px;flex:1}
+.tab-content{display:none}.tab-content.active{display:block}
+/* card */
+.card{background:var(--card);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px}
+.card-hd{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.card-title{font-size:13px;font-weight:700}
+.card-sub{font-size:10px;color:var(--text3);margin-top:1px}
+.card-btn{font-size:11px;color:var(--accent);font-weight:600;background:var(--accent-l);padding:4px 10px;border-radius:5px;border:none;cursor:pointer;font-family:inherit}
+.card-body{padding:14px 18px}
+/* grids */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:16px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+/* stat */
+.stat-card{background:var(--card);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--shadow);padding:18px}
+.s-lbl{font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+.s-val{font-size:28px;font-weight:800;line-height:1}
+.s-trend{font-size:10px;font-weight:600;margin-top:6px}.up{color:var(--green)}.down{color:var(--red)}
+/* progress */
+.pw{display:flex;align-items:center;gap:8px}
+.pt{flex:1;height:6px;background:#F3F4F6;border-radius:3px;overflow:hidden}
+.pf{height:100%;border-radius:3px}
+.pp{font-size:11px;font-weight:700;width:32px;text-align:right}
+/* team row */
+.team-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.team-row:last-child{border-bottom:none}
+.tdot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.tname{font-size:12px;font-weight:600;min-width:90px}
+/* rank */
+.rank-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.rank-row:last-child{border-bottom:none}
+.rank-n{font-size:13px;font-weight:700;width:28px;text-align:center}
+.rank-name{font-size:12px;font-weight:600;flex:1}
+.rank-team{font-size:10px;color:var(--text3);min-width:80px}
+/* activity */
+.act-row{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);align-items:flex-start}
+.act-row:last-child{border-bottom:none}
+.act-ico{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+/* badges */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.b-admin{background:rgba(13,148,136,.12);color:var(--accent)}
+.b-manager{background:rgba(245,158,11,.12);color:var(--amber)}
+.b-employee{background:rgba(16,185,129,.12);color:var(--green)}
+/* status */
+.chip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap}
+.s-done{background:#D1FAE5;color:var(--green)}.s-wip{background:#DAEEE9;color:var(--accent)}
+.s-todo{background:#F3F4F6;color:var(--text3)}.s-late{background:#FEE2E2;color:var(--red)}
+.s-hi{background:#F3E8FF;color:#9333EA}.s-md{background:#DAEEE9;color:var(--amber)}.s-lo{background:#F3F4F6;color:var(--text3)}
+/* table */
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:left;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;padding:0 12px 10px 0;border-bottom:1px solid var(--border)}
+.tbl td{padding:10px 12px 10px 0;border-bottom:1px solid #F3F4F6;color:var(--text2);vertical-align:middle}
+.tbl td:first-child{color:var(--text);font-weight:600}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover td{background:#FAFAFA}
+/* filter */
+.filter-row{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.f-btn{padding:5px 13px;border-radius:20px;font-size:11px;font-weight:600;border:1.5px solid var(--border);background:var(--card);color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s}
+.f-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* KGI */
+.kgi-card{background:var(--card);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
+.kgi-hd{display:flex;align-items:center;gap:10px;padding:14px 18px;cursor:pointer;transition:background .15s}
+.kgi-hd:hover{background:#FAFAFA}
+.kgi-hd.open{border-bottom:1px solid var(--border)}
+.karrow{font-size:10px;color:var(--text3);transition:transform .2s;display:inline-block}
+.karrow.open{transform:rotate(90deg)}
+.kgi-title{font-size:13px;font-weight:700;flex:1}
+.kgi-body{padding:0 18px 14px;display:none}
+.kgi-body.open{display:block}
+.kpi-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.kpi-row:last-child{border-bottom:none}
+.kpi-name{font-size:12px;font-weight:600;flex:1}
+.kpi-who{font-size:10px;color:var(--text3);min-width:80px}
+.kpi-prog{display:flex;align-items:center;gap:8px;min-width:180px}
+/* create */
+.create-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px}
+.ctab{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;border:1.5px solid var(--border);background:var(--card);color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s}
+.ctab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.cpane{display:none}.cpane.active{display:block}
+/* form */
+.form-card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);border:1px solid var(--border);padding:24px;max-width:560px}
+.fg{margin-bottom:16px}
+.fl{display:block;font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;letter-spacing:.04em}
+.fi,.fs{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--text);background:var(--card);outline:none;transition:border .15s}
+.fi:focus,.fs:focus{border-color:var(--accent)}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.f-submit{padding:10px 24px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.sec-title{font-size:18px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+/* ===== MANDALA ===== */
+.mnd-list-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-bottom:8px}
+.mnd-lcard{background:var(--card);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--shadow);padding:18px}
+.mnd-lcard-head{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.mnd-avatar{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#fff;flex-shrink:0}
+.mnd-linfo{flex:1;min-width:0}
+.mnd-lname{font-size:14px;font-weight:700;color:var(--text)}
+.mnd-lteam{font-size:10px;color:var(--text3);margin-top:2px}
+.mnd-goal-chip{font-size:11px;font-weight:600;color:var(--text2);padding:7px 10px;background:var(--accent-l);border-radius:6px;margin-bottom:10px;line-height:1.4}
+.mnd-lprog-row{display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:4px}
+.mnd-lprog-bar{height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-bottom:12px}
+.mnd-lprog-fill{height:100%;border-radius:3px;transition:.3s}
+.mnd-lbtns{display:flex;gap:6px;flex-wrap:wrap}
+.mnd-lbtn{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;border:none;cursor:pointer;font-family:inherit;transition:opacity .15s}
+.mnd-lbtn:hover{opacity:.82}
+.mnd-lbtn-view{background:var(--accent-l);color:var(--accent)}
+.mnd-lbtn-eval{background:var(--accent);color:#fff}
+.mnd-lbtn-csv{background:#F3F4F6;color:var(--text2)}
+.mnd-sec-label{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;margin:18px 0 8px}
+/* subs input */
+.mnd-subs-wrap{border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;margin-bottom:14px}
+.mnd-sub-row{display:grid;grid-template-columns:34px 1fr;border-bottom:1px solid var(--border)}
+.mnd-sub-row:last-child{border-bottom:none}
+.mnd-sub-num{background:var(--accent-l);color:var(--accent);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.mnd-sub-input{border:none;outline:none;padding:8px 10px;font-size:12px;font-family:inherit;width:100%;color:var(--text);background:transparent}
+/* mini preview */
+.mnd-preview-wrap{display:grid;grid-template-columns:repeat(9,1fr);gap:1px;background:#D1D5DB;border-radius:4px;overflow:hidden}
+/* eval states in modal cells */
+.mnd-eval-cell{cursor:pointer}
+.mnd-eval-cell:hover{filter:brightness(.93)}
+/* ===== レスポンシブ（iOS/Android = 上部タブ） ===== */
+@media(max-width:768px){
+  body{flex-direction:column}
+  .sidebar{position:sticky;top:0;width:100%;min-height:0;height:auto;border-right:none;border-bottom:1px solid var(--sb-border);flex-direction:column;z-index:200}
+  .sb-logo{display:flex;align-items:center;gap:10px;padding:9px 14px}
+  .sb-brand-sub,.sb-role,.sb-user,.sb-footer,.sb-sec,.sb-team{display:none}
+  .sb-nav{display:flex;flex-direction:row;flex-wrap:wrap;overflow:visible;padding:6px 8px;gap:6px;flex:none}
+  .sb-nav::-webkit-scrollbar{display:none}
+  .sb-item{flex:0 0 auto;width:auto;flex-direction:row;align-items:center;gap:6px;padding:10px 14px;font-size:12px;border-bottom:3px solid transparent;white-space:nowrap}
+  .sb-item .sb-icon{font-size:15px}
+  .sb-item.active{background:var(--sb-active-bg);border-bottom-color:var(--accent)}
+  .sb-item.active::before{display:none}
+  .sb-badge{position:static;margin:0 0 0 2px}
+  .main{margin-left:0}
+  .topbar{position:static}
+  .content{padding:14px}
+  .g2,.g3,.g4,.fr{grid-template-columns:1fr}
+  [style*="240px 1fr"],[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr !important}
+  .sec-title{font-size:16px}
+}
+</style>
+</head>
+<body>
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sb-logo"><div class="sb-brand">VEXUM</div><div class="sb-brand-sub">TASK MANAGEMENT SYSTEM</div></div>
+  <div class="sb-role"><span class="sb-role-dot"></span><span class="sb-role-lbl">★ ADMIN / 統合管理</span></div>
+  <div class="sb-user"><div class="sb-uname">山田 太郎</div><div class="sb-uemail">yamada@vexum.co.jp</div></div>
+  <div class="sb-nav">
+    <div class="sb-sec">統合管理コンソール</div>
+    <button class="sb-item active" onclick="swTab('progress',this)"><span class="sb-icon">◇</span>進捗ダッシュボード</button>
+    <button class="sb-item" onclick="swTab('tasks',this)"><span class="sb-icon">☰</span>タスク管理<span class="sb-badge">3</span></button>
+    <button class="sb-item" onclick="swTab('goals',this)"><span class="sb-icon">⊞</span>目標・KGI/KPI</button>
+    <button class="sb-item" onclick="swTab('reviews',this)"><span class="sb-icon">★</span>評価管理</button>
+    <button class="sb-item" onclick="swTab('create',this)"><span class="sb-icon">＋</span>新規作成</button>
+    <div class="sb-sec">管理者メニュー</div>
+    <button class="sb-item" onclick="swTab('team',this)"><span class="sb-icon">▣</span>チームダッシュボード</button>
+    <button class="sb-item" onclick="swTab('users',this)"><span class="sb-icon">👤</span>アカウント管理</button>
+    <button class="sb-item" onclick="swTab('assign',this)"><span class="sb-icon">📋</span>タスク割当</button>
+    <button class="sb-item" onclick="swTab('evalin',this)"><span class="sb-icon">📝</span>メンバー評価入力</button>
+    <button class="sb-item" onclick="swTab('evalrec',this)"><span class="sb-icon">📊</span>評価記録</button>
+    <div class="sb-sec">曼荼羅チャート</div>
+    <button class="sb-item" onclick="swTab('mandala-send',this);initMndSendForm()"><span class="sb-icon">◎</span>チャート送信</button>
+    <button class="sb-item" onclick="swTab('mandala-list',this);renderMandalaList()"><span class="sb-icon">☷</span>一覧・評価</button>
+  </div>
+  <div class="sb-footer">v2.4.1 © 2025 VEXUM Inc.</div>
+</aside>
+<div class="main">
+  <div class="topbar" id="topbar">
+    <div><div class="topbar-title" id="tb-title">進捗ダッシュボード</div><div class="topbar-path" id="tb-path">統合管理コンソール / 進捗ダッシュボード</div></div>
+    <div class="topbar-actions"><button class="tb-btn" onclick="swTab('create',null)">＋ 新規タスク</button><button class="tb-icon">🔔</button><button class="tb-icon">⚙</button></div>
+  </div>
+  <div class="content">
+
+<!-- 進捗 -->
+<div id="tc-progress" class="tab-content active">
+  <div class="g4">
+    <div class="stat-card"><div class="s-lbl">全体達成率</div><div class="s-val" style="color:var(--accent)">68%</div><div class="s-trend up">▲ 5pt 先月比</div></div>
+    <div class="stat-card"><div class="s-lbl">稼働メンバー</div><div class="s-val">24名</div><div class="s-trend" style="color:var(--text3)">3チーム</div></div>
+    <div class="stat-card"><div class="s-lbl">今週完了タスク</div><div class="s-val" style="color:var(--green)">47</div><div class="s-trend up">▲ 8 先週比</div></div>
+    <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)">5</div><div class="s-trend down">▲ 2 先週比</div></div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="card-hd"><div><div class="card-title">チーム別達成率</div><div class="card-sub">今月 KPI 達成状況</div></div><button class="card-btn" onclick="swTab('team',null)">詳細 →</button></div>
+      <div class="card-body">
+        <div class="team-row"><div class="tdot" style="background:var(--accent)"></div><div class="tname">営業チーム A</div><div class="pw"><div class="pt"><div class="pf" style="width:82%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">82%</div></div></div>
+        <div class="team-row"><div class="tdot" style="background:var(--pink)"></div><div class="tname">開発チーム B</div><div class="pw"><div class="pt"><div class="pf" style="width:61%;background:var(--pink)"></div></div><div class="pp" style="color:var(--pink)">61%</div></div></div>
+        <div class="team-row"><div class="tdot" style="background:var(--amber)"></div><div class="tname">マーケチーム C</div><div class="pw"><div class="pt"><div class="pf" style="width:55%;background:var(--amber)"></div></div><div class="pp" style="color:var(--amber)">55%</div></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-title">最近の活動</div><button class="card-btn">すべて →</button></div>
+      <div class="card-body">
+        <div class="act-row"><div class="act-ico" style="background:#DAEEE9;color:var(--accent)">★</div><div><div style="font-size:12px">田中さんの評価が入力されました</div><div style="font-size:10px;color:var(--text3);margin-top:2px">30分前</div></div></div>
+        <div class="act-row"><div class="act-ico" style="background:#FEE2E2;color:var(--red)">⚠</div><div><div style="font-size:12px">鈴木さんのタスクが期限超過</div><div style="font-size:10px;color:var(--text3);margin-top:2px">1時間前</div></div></div>
+        <div class="act-row"><div class="act-ico" style="background:#D1FAE5;color:var(--green)">✓</div><div><div style="font-size:12px">顧客ヒアリング資料が完了</div><div style="font-size:10px;color:var(--text3);margin-top:2px">3時間前</div></div></div>
+        <div class="act-row"><div class="act-ico" style="background:#DAEEE9;color:var(--amber)">📋</div><div><div style="font-size:12px">新しいタスクが割当されました</div><div style="font-size:10px;color:var(--text3);margin-top:2px">昨日</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hd"><div><div class="card-title">メンバー達成率ランキング</div><div class="card-sub">今月の KPI 達成率</div></div><button class="card-btn">全員表示 →</button></div>
+    <div class="card-body">
+      <div class="rank-row"><div class="rank-n">🥇</div><div class="rank-name">田中 花子</div><div class="rank-team">営業チームA</div><span class="badge b-manager">上長</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:94%;background:var(--green)"></div></div><div class="pp" style="color:var(--green)">94%</div></div></div>
+      <div class="rank-row"><div class="rank-n">🥈</div><div class="rank-name">鈴木 一郎</div><div class="rank-team">開発チームB</div><span class="badge b-employee">従業員</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:88%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">88%</div></div></div>
+      <div class="rank-row"><div class="rank-n">🥉</div><div class="rank-name">佐藤 美咲</div><div class="rank-team">マーケチームC</div><span class="badge b-manager">上長</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:81%;background:var(--cyan)"></div></div><div class="pp" style="color:var(--cyan)">81%</div></div></div>
+      <div class="rank-row"><div class="rank-n" style="color:var(--text3);font-size:11px">4</div><div class="rank-name">中村 健太</div><div class="rank-team">営業チームA</div><span class="badge b-employee">従業員</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:72%;background:var(--amber)"></div></div><div class="pp" style="color:var(--amber)">72%</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- タスク -->
+<div id="tc-tasks" class="tab-content">
+  <div class="sec-title">タスク管理 <button class="f-submit" style="padding:8px 16px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit">＋ 新規タスク</button></div>
+  <div class="filter-row">
+    <button class="f-btn active" onclick="filterTasks('all',this)">全て (8)</button>
+    <button class="f-btn" onclick="filterTasks('wip',this)">進行中 (3)</button>
+    <button class="f-btn" onclick="filterTasks('done',this)">完了 (2)</button>
+    <button class="f-btn" onclick="filterTasks('late',this)">遅延 (1)</button>
+    <button class="f-btn" onclick="filterTasks('todo',this)">未着手 (2)</button>
+  </div>
+  <div class="card" style="overflow:auto">
+    <table class="tbl" style="min-width:700px">
+      <thead><tr><th>タスク名</th><th>担当者</th><th>チーム</th><th>開始日</th><th>期限</th><th>優先度</th><th>ステータス</th></tr></thead>
+      <tbody>
+        <tr class="task-row" data-status="wip"><td>Q2 売上レポート作成</td><td>田中 花子</td><td>営業チームA</td><td>5/20</td><td>5/30</td><td><span class="chip s-hi">高</span></td><td><span class="chip s-wip">進行中</span></td></tr>
+        <tr class="task-row" data-status="late"><td>新機能リリース準備</td><td>鈴木 一郎</td><td>開発チームB</td><td>5/10</td><td style="color:var(--red);font-weight:700">5/25 ⚠</td><td><span class="chip" style="background:#FEE2E2;color:var(--red)">緊急</span></td><td><span class="chip s-late">遅延</span></td></tr>
+        <tr class="task-row" data-status="todo"><td>SNS 広告プランニング</td><td>佐藤 美咲</td><td>マーケチームC</td><td>5/28</td><td>6/5</td><td><span class="chip s-md">中</span></td><td><span class="chip s-todo">未着手</span></td></tr>
+        <tr class="task-row" data-status="done"><td>顧客ヒアリング資料</td><td>中村 健太</td><td>営業チームA</td><td>5/15</td><td>5/28</td><td><span class="chip s-lo">低</span></td><td><span class="chip s-done">完了</span></td></tr>
+        <tr class="task-row" data-status="wip"><td>競合分析レポート</td><td>伊藤 さくら</td><td>営業チームA</td><td>5/22</td><td>6/10</td><td><span class="chip s-md">中</span></td><td><span class="chip s-wip">進行中</span></td></tr>
+        <tr class="task-row" data-status="wip"><td>技術仕様書更新</td><td>山本 浩二</td><td>開発チームB</td><td>5/18</td><td>6/3</td><td><span class="chip s-hi">高</span></td><td><span class="chip s-wip">進行中</span></td></tr>
+        <tr class="task-row" data-status="done"><td>月次予算報告</td><td>佐藤 美咲</td><td>マーケチームC</td><td>5/1</td><td>5/10</td><td><span class="chip s-md">中</span></td><td><span class="chip s-done">完了</span></td></tr>
+        <tr class="task-row" data-status="todo"><td>採用候補者スクリーニング</td><td>田中 花子</td><td>営業チームA</td><td>6/1</td><td>6/15</td><td><span class="chip s-lo">低</span></td><td><span class="chip s-todo">未着手</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 目標 -->
+<div id="tc-goals" class="tab-content">
+  <div class="sec-title">目標管理（KGI / KPI）</div>
+  <div class="kgi-card"><div class="kgi-hd open" onclick="toggleKgi('kgi1',this)"><span class="karrow open">▶</span><div style="flex:1"><div class="kgi-title">KGI-1 &nbsp;月間売上目標 ¥1,000万</div><div style="font-size:10px;color:var(--text3);margin-top:2px">担当: 田中 花子 ／ 2025年 Q2</div></div><div class="pw" style="min-width:160px"><div class="pt"><div class="pf" style="width:92%;background:var(--green)"></div></div><div class="pp" style="color:var(--green)">92%</div></div><span class="chip s-wip" style="margin-left:10px">進行中</span></div>
+    <div id="kgi1" class="kgi-body open"><div class="kpi-row"><div class="kpi-name">KPI 1-1 &nbsp;新規商談数 50件</div><div class="kpi-who">担当: 中村 健太</div><div class="kpi-prog"><div class="pt"><div class="pf" style="width:96%;background:var(--green)"></div></div><span class="pp" style="color:var(--green)">96%</span><span style="font-size:10px;color:var(--text3)">48/50件</span></div></div><div class="kpi-row"><div class="kpi-name">KPI 1-2 &nbsp;成約率 40%</div><div class="kpi-who">担当: 田中 花子</div><div class="kpi-prog"><div class="pt"><div class="pf" style="width:88%;background:var(--accent)"></div></div><span class="pp" style="color:var(--accent)">88%</span><span style="font-size:10px;color:var(--text3)">35%/40%</span></div></div><div class="kpi-row"><div class="kpi-name">KPI 1-3 &nbsp;リピート率 70%</div><div class="kpi-who">担当: 伊藤 さくら</div><div class="kpi-prog"><div class="pt"><div class="pf" style="width:93%;background:var(--cyan)"></div></div><span class="pp" style="color:var(--cyan)">93%</span><span style="font-size:10px;color:var(--text3)">65%/70%</span></div></div></div>
+  </div>
+  <div class="kgi-card"><div class="kgi-hd" onclick="toggleKgi('kgi2',this)"><span class="karrow">▶</span><div style="flex:1"><div class="kgi-title">KGI-2 &nbsp;新規顧客獲得 20社</div><div style="font-size:10px;color:var(--text3);margin-top:2px">担当: 佐藤 美咲 ／ 2025年 Q2</div></div><div class="pw" style="min-width:160px"><div class="pt"><div class="pf" style="width:68%;background:var(--amber)"></div></div><div class="pp" style="color:var(--amber)">68%</div></div><span class="chip s-wip" style="margin-left:10px">進行中</span></div>
+    <div id="kgi2" class="kgi-body"><div class="kpi-row"><div class="kpi-name">KPI 2-1 &nbsp;リード獲得数 100件</div><div class="kpi-who">担当: 佐藤 美咲</div><div class="kpi-prog"><div class="pt"><div class="pf" style="width:72%;background:var(--amber)"></div></div><span class="pp" style="color:var(--amber)">72%</span><span style="font-size:10px;color:var(--text3)">72/100件</span></div></div><div class="kpi-row"><div class="kpi-name">KPI 2-2 &nbsp;デモ実施数 30件</div><div class="kpi-who">担当: 中村 健太</div><div class="kpi-prog"><div class="pt"><div class="pf" style="width:60%;background:var(--pink)"></div></div><span class="pp" style="color:var(--pink)">60%</span><span style="font-size:10px;color:var(--text3)">18/30件</span></div></div></div>
+  </div>
+  <div class="kgi-card"><div class="kgi-hd" onclick="toggleKgi('kgi3',this)"><span class="karrow">▶</span><div style="flex:1"><div class="kgi-title">KGI-3 &nbsp;顧客満足度スコア 4.5</div><div style="font-size:10px;color:var(--text3);margin-top:2px">担当: 田中 花子 ／ 2025年 Q2</div></div><div class="pw" style="min-width:160px"><div class="pt"><div class="pf" style="width:54%;background:var(--red)"></div></div><div class="pp" style="color:var(--red)">54%</div></div><span class="chip s-late" style="margin-left:10px">要改善</span></div>
+    <div id="kgi3" class="kgi-body"><div class="kpi-row"><div class="kpi-name">KPI 3-1 &nbsp;NPS スコア 50</div><div class="kpi-who">担当: 佐藤 美咲</div><div class="kpi-prog"><div class="pt"><div class="pf" style="width:50%;background:var(--red)"></div></div><span class="pp" style="color:var(--red)">50%</span><span style="font-size:10px;color:var(--text3)">25/50</span></div></div><div class="kpi-row"><div class="kpi-name">KPI 3-2 &nbsp;サポート解決率 95%</div><div class="kpi-who">担当: 山本 浩二</div><div class="kpi-prog"><div class="pt"><div class="pf" style="width:80%;background:var(--amber)"></div></div><span class="pp" style="color:var(--amber)">80%</span><span style="font-size:10px;color:var(--text3)">76%/95%</span></div></div></div>
+  </div>
+</div>
+
+<!-- 評価 -->
+<div id="tc-reviews" class="tab-content">
+  <div class="sec-title">評価管理 <button class="f-submit" style="padding:8px 16px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit" onclick="swTab('evalin',null)">＋ 評価入力</button></div>
+  <div class="card" style="overflow:auto"><table class="tbl" style="min-width:700px"><thead><tr><th>被評価者</th><th>評価者</th><th>期間</th><th>達成度</th><th>業務力</th><th>チームワーク</th><th>成長力</th><th>総合</th><th>ステータス</th></tr></thead><tbody>
+    <tr><td>田中 花子</td><td>山田 太郎</td><td>Q1 2025</td><td style="font-weight:700;color:var(--green)">95</td><td style="font-weight:700;color:var(--green)">90</td><td style="font-weight:700;color:var(--green)">92</td><td style="font-weight:700;color:var(--green)">90</td><td style="font-size:16px;font-weight:800;color:var(--green)">92</td><td><span class="chip s-done">完了</span></td></tr>
+    <tr><td>鈴木 一郎</td><td>田中 花子</td><td>Q1 2025</td><td style="font-weight:700;color:var(--accent)">80</td><td style="font-weight:700;color:var(--green)">85</td><td style="font-weight:700;color:var(--amber)">70</td><td style="font-weight:700;color:var(--accent)">78</td><td style="font-size:16px;font-weight:800;color:var(--accent)">78</td><td><span class="chip s-done">完了</span></td></tr>
+    <tr><td>佐藤 美咲</td><td>山田 太郎</td><td>Q1 2025</td><td style="font-weight:700;color:var(--green)">88</td><td style="font-weight:700;color:var(--accent)">82</td><td style="font-weight:700;color:var(--green)">86</td><td style="font-weight:700;color:var(--accent)">80</td><td style="font-size:16px;font-weight:800;color:var(--accent)">84</td><td><span class="chip s-done">完了</span></td></tr>
+    <tr><td>中村 健太</td><td>田中 花子</td><td>Q1 2025</td><td style="font-weight:700;color:var(--amber)">75</td><td style="font-weight:700;color:var(--amber)">70</td><td style="font-weight:700;color:var(--green)">80</td><td style="font-weight:700;color:var(--amber)">68</td><td style="font-size:16px;font-weight:800;color:var(--amber)">71</td><td><span class="chip s-done">完了</span></td></tr>
+    <tr><td>伊藤 さくら</td><td>田中 花子</td><td>Q2 2025</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td><span class="chip s-todo">未入力</span></td></tr>
+  </tbody></table></div>
+</div>
+
+<!-- 新規作成 -->
+<div id="tc-create" class="tab-content">
+  <div class="sec-title">新規作成</div>
+  <div class="create-tabs">
+    <button class="ctab active" onclick="swCreate('account',this)">👤 アカウント発行</button>
+    <button class="ctab" onclick="swCreate('team',this)">🏢 チーム編成</button>
+    <button class="ctab" onclick="swCreate('kgi',this)">⊞ KGI 設定</button>
+    <button class="ctab" onclick="swCreate('kpi',this)">◎ KPI 設定</button>
+    <button class="ctab" onclick="swCreate('task',this)">📋 タスク割当</button>
+  </div>
+  <div id="cp-account" class="cpane active"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">アカウント発行</h3><div class="fr"><div class="fg"><label class="fl">氏名</label><input class="fi" placeholder="山田 太郎"></div><div class="fg"><label class="fl">メールアドレス</label><input class="fi" placeholder="yamada@vexum.co.jp"></div></div><div class="fr"><div class="fg"><label class="fl">ロール</label><select class="fs"><option>従業員 (employee)</option><option>上長 (manager)</option><option>役員 (executive)</option><option>管理者 (admin)</option></select></div><div class="fg"><label class="fl">部門</label><input class="fi" placeholder="営業部"></div></div><div class="fg"><label class="fl">所属チーム</label><select class="fs"><option>—（未所属）</option><option>営業チーム A</option><option>開発チーム B</option><option>マーケチーム C</option></select></div><button class="f-submit">招待メールを送信</button></div></div>
+  <div id="cp-team" class="cpane"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">チーム編成</h3><div class="fr"><div class="fg"><label class="fl">チーム名</label><input class="fi" placeholder="営業チーム D"></div><div class="fg"><label class="fl">カラー</label><input class="fi" type="color" value="#6366F1" style="height:42px;padding:4px"></div></div><div class="fg"><label class="fl">チームリーダー</label><select class="fs"><option>田中 花子</option><option>佐藤 美咲</option><option>鈴木 一郎</option></select></div><div class="fg"><label class="fl">メンバー追加</label><select class="fs" multiple style="height:90px"><option>中村 健太</option><option>伊藤 さくら</option><option>山本 浩二</option></select></div><button class="f-submit">チームを作成</button></div></div>
+  <div id="cp-kgi" class="cpane"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">KGI 設定</h3><div class="fg"><label class="fl">KGI タイトル</label><input class="fi" placeholder="Q3 売上目標 ¥1,200万"></div><div class="fr"><div class="fg"><label class="fl">担当者</label><select class="fs"><option>田中 花子</option><option>佐藤 美咲</option></select></div><div class="fg"><label class="fl">目標値</label><input class="fi" placeholder="12000000"></div></div><div class="fr"><div class="fg"><label class="fl">開始日</label><input class="fi" type="date"></div><div class="fg"><label class="fl">終了日</label><input class="fi" type="date"></div></div><button class="f-submit">KGI を作成</button></div></div>
+  <div id="cp-kpi" class="cpane"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">KPI 設定</h3><div class="fg"><label class="fl">紐づく KGI</label><select class="fs"><option>KGI-1 月間売上目標 ¥1,000万</option><option>KGI-2 新規顧客獲得 20社</option><option>KGI-3 顧客満足度 4.5</option></select></div><div class="fg"><label class="fl">KPI タイトル</label><input class="fi" placeholder="新規商談数 50件"></div><div class="fr"><div class="fg"><label class="fl">担当者</label><select class="fs"><option>中村 健太</option><option>田中 花子</option></select></div><div class="fg"><label class="fl">目標値</label><input class="fi" placeholder="50"></div></div><div class="fr"><div class="fg"><label class="fl">単位</label><input class="fi" placeholder="件"></div><div class="fg"><label class="fl">測定頻度</label><select class="fs"><option>週次</option><option>月次</option><option>四半期</option></select></div></div><button class="f-submit">KPI を作成</button></div></div>
+  <div id="cp-task" class="cpane"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">タスク割当</h3><div class="fg"><label class="fl">タスク名</label><input class="fi" placeholder="Q3 提案書作成"></div><div class="fr"><div class="fg"><label class="fl">担当者</label><select class="fs"><option>田中 花子</option><option>鈴木 一郎</option><option>佐藤 美咲</option><option>中村 健太</option></select></div><div class="fg"><label class="fl">チーム</label><select class="fs"><option>営業チーム A</option><option>開発チーム B</option><option>マーケチーム C</option></select></div></div><div class="fr"><div class="fg"><label class="fl">開始日</label><input class="fi" type="date"></div><div class="fg"><label class="fl">期限</label><input class="fi" type="date"></div></div><div class="fg"><label class="fl">優先度</label><select class="fs"><option>高</option><option>中</option><option>低</option><option>緊急</option></select></div><button class="f-submit">タスクを割当</button></div></div>
+</div>
+
+<!-- チームダッシュボード -->
+<div id="tc-team" class="tab-content">
+  <div class="sec-title">チームダッシュボード</div>
+  <div class="g3">
+    <div class="card"><div class="card-hd" style="border-left:4px solid var(--accent)"><div><div class="card-title">営業チーム A</div><div class="card-sub">リーダー: 田中 花子 / 8名</div></div><span style="font-size:20px;font-weight:800;color:var(--accent)">82%</span></div><div class="card-body" style="padding:10px 14px"><div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">田中 花子</div><div class="pw"><div class="pt"><div class="pf" style="width:94%;background:var(--green)"></div></div><div class="pp" style="color:var(--green)">94%</div></div></div><div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">中村 健太</div><div class="pw"><div class="pt"><div class="pf" style="width:72%;background:var(--amber)"></div></div><div class="pp" style="color:var(--amber)">72%</div></div></div><div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">伊藤 さくら</div><div class="pw"><div class="pt"><div class="pf" style="width:68%;background:var(--text3)"></div></div><div class="pp" style="color:var(--text3)">68%</div></div></div><div style="text-align:right;padding-top:6px"><button class="card-btn" onclick="openMandala('A')" style="font-size:11px;color:var(--accent)">🧿 曼荼羅チャートを見る</button></div></div></div>
+    <div class="card"><div class="card-hd" style="border-left:4px solid var(--pink)"><div><div class="card-title">開発チーム B</div><div class="card-sub">リーダー: 鈴木 一郎 / 9名</div></div><span style="font-size:20px;font-weight:800;color:var(--pink)">61%</span></div><div class="card-body" style="padding:10px 14px"><div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">鈴木 一郎</div><div class="pw"><div class="pt"><div class="pf" style="width:88%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">88%</div></div></div><div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">山本 浩二</div><div class="pw"><div class="pt"><div class="pf" style="width:55%;background:var(--pink)"></div></div><div class="pp" style="color:var(--pink)">55%</div></div></div><div style="text-align:right;padding-top:6px"><button class="card-btn" onclick="openMandala('B')" style="font-size:11px;color:var(--pink)">🧿 曼荼羅チャートを見る</button></div></div></div>
+    <div class="card"><div class="card-hd" style="border-left:4px solid var(--amber)"><div><div class="card-title">マーケチーム C</div><div class="card-sub">リーダー: 佐藤 美咲 / 7名</div></div><span style="font-size:20px;font-weight:800;color:var(--amber)">55%</span></div><div class="card-body" style="padding:10px 14px"><div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">佐藤 美咲</div><div class="pw"><div class="pt"><div class="pf" style="width:81%;background:var(--cyan)"></div></div><div class="pp" style="color:var(--cyan)">81%</div></div></div><div style="text-align:right;padding-top:6px"><button class="card-btn" onclick="openMandala('C')" style="font-size:11px;color:var(--amber)">🧿 曼荼羅チャートを見る</button></div></div></div>
+  </div>
+</div>
+
+<!-- アカウント管理 -->
+<div id="tc-users" class="tab-content">
+  <div class="sec-title">アカウント管理 <button class="f-submit" style="padding:8px 16px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit" onclick="swTab('create',null)">＋ アカウント発行</button></div>
+  <div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>チーム</th><th>部門</th><th>操作</th></tr></thead><tbody>
+    <tr><td>山田 太郎</td><td>yamada@vexum.co.jp</td><td><span class="badge b-admin">admin</span></td><td style="color:var(--text3)">—</td><td>経営企画部</td><td><button class="card-btn">編集</button></td></tr>
+    <tr><td>田中 花子</td><td>tanaka@vexum.co.jp</td><td><span class="badge b-manager">manager</span></td><td>営業チームA</td><td>営業部</td><td><button class="card-btn">編集</button></td></tr>
+    <tr><td>鈴木 一郎</td><td>suzuki@vexum.co.jp</td><td><span class="badge b-employee">employee</span></td><td>開発チームB</td><td>開発部</td><td><button class="card-btn">編集</button></td></tr>
+    <tr><td>佐藤 美咲</td><td>sato@vexum.co.jp</td><td><span class="badge b-manager">manager</span></td><td>マーケチームC</td><td>マーケ部</td><td><button class="card-btn">編集</button></td></tr>
+    <tr><td>中村 健太</td><td>nakamura@vexum.co.jp</td><td><span class="badge b-employee">employee</span></td><td>営業チームA</td><td>営業部</td><td><button class="card-btn">編集</button></td></tr>
+    <tr><td>伊藤 さくら</td><td>ito@vexum.co.jp</td><td><span class="badge b-employee">employee</span></td><td>営業チームA</td><td>営業部</td><td><button class="card-btn">編集</button></td></tr>
+    <tr><td>山本 浩二</td><td>yamamoto@vexum.co.jp</td><td><span class="badge b-employee">employee</span></td><td>開発チームB</td><td>開発部</td><td><button class="card-btn">編集</button></td></tr>
+  </tbody></table></div>
+</div>
+
+<!-- タスク割当 (mgmt) -->
+<div id="tc-assign" class="tab-content">
+  <div class="sec-title">タスク割当</div>
+  <div class="g2">
+    <div class="card"><div class="card-hd"><div class="card-title">未割当タスク</div></div>
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12px;font-weight:600">インフラ移行計画書作成</div><div style="font-size:10px;color:var(--text3)">期限: 6/20 ／ 優先度: 高</div></div><button class="card-btn">割当</button></div>
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12px;font-weight:600">SNS 広告クリエイティブ制作</div><div style="font-size:10px;color:var(--text3)">期限: 6/15 ／ 優先度: 中</div></div><button class="card-btn">割当</button></div>
+      <div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12px;font-weight:600">顧客向け FAQ 更新</div><div style="font-size:10px;color:var(--text3)">期限: 6/30 ／ 優先度: 低</div></div><button class="card-btn">割当</button></div>
+    </div>
+    <div class="form-card" style="border:1px solid var(--border);box-shadow:var(--shadow)"><h3 style="font-size:14px;font-weight:700;margin-bottom:16px">タスクを割当</h3><div class="fg"><label class="fl">タスク名</label><input class="fi" placeholder="タスク名を入力"></div><div class="fg"><label class="fl">担当者</label><select class="fs"><option>田中 花子</option><option>鈴木 一郎</option><option>佐藤 美咲</option><option>中村 健太</option></select></div><div class="fr"><div class="fg"><label class="fl">開始日</label><input class="fi" type="date"></div><div class="fg"><label class="fl">期限</label><input class="fi" type="date"></div></div><div class="fg"><label class="fl">優先度</label><select class="fs"><option>高</option><option>中</option><option>低</option><option>緊急</option></select></div><button class="f-submit">割当する</button></div>
+  </div>
+</div>
+
+<!-- メンバー評価入力 -->
+<div id="tc-evalin" class="tab-content">
+  <div class="sec-title">メンバー評価入力</div>
+  <div class="form-card" style="max-width:600px;border:1px solid var(--border);box-shadow:var(--shadow)">
+    <div class="fr"><div class="fg"><label class="fl">被評価者</label><select class="fs"><option>田中 花子</option><option>鈴木 一郎</option><option>佐藤 美咲</option><option>中村 健太</option><option>伊藤 さくら</option><option>山本 浩二</option></select></div><div class="fg"><label class="fl">評価期間</label><select class="fs"><option>2025年 Q2</option><option>2025年 Q1</option><option>2024年 Q4</option></select></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div class="fg"><label class="fl">目標達成度 (0–100)</label><input class="fi" type="number" placeholder="85"></div>
+      <div class="fg"><label class="fl">業務遂行力 (0–100)</label><input class="fi" type="number" placeholder="80"></div>
+      <div class="fg"><label class="fl">チームワーク (0–100)</label><input class="fi" type="number" placeholder="90"></div>
+      <div class="fg"><label class="fl">成長・学習意欲 (0–100)</label><input class="fi" type="number" placeholder="75"></div>
+    </div>
+    <div class="fg"><label class="fl">総合コメント</label><textarea class="fi" rows="3" placeholder="評価コメントを入力…" style="resize:vertical"></textarea></div>
+    <button class="f-submit">評価を保存</button>
+  </div>
+</div>
+
+<!-- 評価記録 -->
+<div id="tc-evalrec" class="tab-content">
+  <div class="sec-title">評価記録</div>
+  <div class="card" style="overflow:auto"><table class="tbl" style="min-width:700px"><thead><tr><th>被評価者</th><th>評価者</th><th>期間</th><th>達成度</th><th>業務力</th><th>チームワーク</th><th>成長力</th><th>総合</th><th>状態</th></tr></thead><tbody>
+    <tr><td>田中 花子</td><td>山田 太郎</td><td>Q1 2025</td><td style="font-weight:700;color:var(--green)">95</td><td style="font-weight:700;color:var(--green)">90</td><td style="font-weight:700;color:var(--green)">92</td><td style="font-weight:700;color:var(--green)">90</td><td style="font-size:16px;font-weight:800;color:var(--green)">92</td><td><span class="chip s-done">完了</span></td></tr>
+    <tr><td>鈴木 一郎</td><td>田中 花子</td><td>Q1 2025</td><td style="font-weight:700;color:var(--accent)">80</td><td style="font-weight:700;color:var(--green)">85</td><td style="font-weight:700;color:var(--amber)">70</td><td style="font-weight:700;color:var(--accent)">78</td><td style="font-size:16px;font-weight:800;color:var(--accent)">78</td><td><span class="chip s-done">完了</span></td></tr>
+    <tr><td>佐藤 美咲</td><td>山田 太郎</td><td>Q1 2025</td><td style="font-weight:700;color:var(--green)">88</td><td style="font-weight:700;color:var(--accent)">82</td><td style="font-weight:700;color:var(--green)">86</td><td style="font-weight:700;color:var(--accent)">80</td><td style="font-size:16px;font-weight:800;color:var(--accent)">84</td><td><span class="chip s-done">完了</span></td></tr>
+    <tr><td>伊藤 さくら</td><td>田中 花子</td><td>Q2 2025</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td><span class="chip s-todo">未入力</span></td></tr>
+  </tbody></table></div>
+</div>
+
+<!-- ===== 曼荼羅チャート送信 ===== -->
+<div id="tc-mandala-send" class="tab-content">
+  <div class="sec-title">曼荼羅チャート送信 <span style="font-size:12px;font-weight:400;color:var(--text3)">固定タスクとして従業員に送付</span></div>
+  <div id="mnd-send-success" style="display:none;align-items:center;gap:10px;background:#D1FAE5;border:1px solid #10B981;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#065F46;font-size:13px;font-weight:600">
+    <span style="font-size:18px">✅</span><span id="mnd-send-success-msg">チャートを送信しました</span>
+  </div>
+  <div class="g2">
+    <div>
+      <div class="card">
+        <div class="card-hd"><div><div class="card-title">送信設定</div><div class="card-sub">宛先・内容を入力して送付</div></div></div>
+        <div class="card-body">
+          <div class="fg"><label class="fl">送信先（従業員）</label>
+            <select class="fs" id="mnd-send-to">
+              <option value="tanaka">田中 花子（営業チームA · 上長）</option>
+              <option value="suzuki">鈴木 一郎（開発チームB · 従業員）</option>
+              <option value="sato">佐藤 美咲（マーケチームC · 上長）</option>
+              <option value="nakamura">中村 健太（営業チームA · 従業員）</option>
+            </select>
+          </div>
+          <div class="fg"><label class="fl">テンプレート適用（任意）</label>
+            <select class="fs" onchange="applyMndTemplate(this.value)">
+              <option value="">— 空白から作成 —</option>
+              <option value="A">営業チームA テンプレート</option>
+              <option value="B">開発チームB テンプレート</option>
+              <option value="C">マーケチームC テンプレート</option>
+            </select>
+          </div>
+          <div class="fg"><label class="fl">中心目標</label>
+            <input class="fi" id="mnd-center-input" placeholder="例: Q3個人売上 ¥15M達成" oninput="updateMndPreview()">
+          </div>
+          <div class="fg"><label class="fl">サブ目標（8項目）</label>
+            <div class="mnd-subs-wrap" id="mnd-subs-list"></div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="f-submit" style="flex:1;background:var(--text3)" onclick="previewMndFull()">🔍 全画面プレビュー</button>
+            <button class="f-submit" style="flex:1" onclick="sendMandala()">✈ 送信する</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-hd"><div class="card-title">チャートプレビュー</div><span style="font-size:10px;color:var(--text3)">リアルタイム更新</span></div>
+        <div class="card-body">
+          <div id="mnd-send-preview" class="mnd-preview-wrap" style="margin-bottom:10px"></div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text2)">
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--accent);display:inline-block"></span>中心目標</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--accent-l);border:1px solid var(--accent);display:inline-block"></span>サブ目標</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#F9FAFB;border:1px solid #D1D5DB;display:inline-block"></span>アクション</span>
+          </div>
+          <div style="margin-top:14px;padding:10px;background:var(--accent-l);border-radius:6px;font-size:11px;color:var(--text2);line-height:1.6">
+            <strong style="color:var(--accent)">使い方</strong><br>
+            ① テンプレートを適用するか中心目標・サブ目標を手動入力<br>
+            ② 「全画面プレビュー」で確認<br>
+            ③ 「送信する」で従業員に固定タスクとして付与
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 曼荼羅チャート一覧・評価 ===== -->
+<div id="tc-mandala-list" class="tab-content">
+  <div class="sec-title">曼荼羅チャート一覧
+    <div style="display:flex;gap:8px">
+      <button class="card-btn" style="font-size:11px;padding:6px 14px" onclick="downloadAllCSV()">⬇ 全件CSV</button>
+    </div>
+  </div>
+  <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
+    <span style="font-size:14px">💡</span>
+    <span>「評価する」をクリックするとチャートの各アクション項目を評価できます。セルをクリックして 未評価 → 進行中 → 完了 → 要改善 を切り替えてください。</span>
+  </div>
+  <div id="mnd-list-container"></div>
+</div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+const TITLES={progress:['進捗ダッシュボード','統合管理コンソール / 進捗'],tasks:['タスク管理','統合管理コンソール / タスク'],goals:['目標管理 KGI/KPI','統合管理コンソール / 目標'],reviews:['評価管理','統合管理コンソール / 評価'],create:['新規作成','統合管理コンソール / 新規作成'],team:['チームダッシュボード','管理者メニュー / チームDB'],users:['アカウント管理','管理者メニュー / アカウント'],assign:['タスク割当','管理者メニュー / タスク割当'],evalin:['メンバー評価入力','管理者メニュー / 評価入力'],evalrec:['評価記録','管理者メニュー / 評価記録'],'mandala-send':['曼荼羅チャート送信','曼荼羅チャート / チャート送信'],'mandala-list':['曼荼羅チャート一覧・評価','曼荼羅チャート / 一覧・評価']};
+function swTab(id,btn){
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tc-'+id).classList.add('active');
+  document.querySelectorAll('.sb-item').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-path').textContent=TITLES[id][1];}
+}
+function filterTasks(s,btn){
+  document.querySelectorAll('.f-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.task-row').forEach(r=>r.style.display=(s==='all'||r.dataset.status===s)?'':'none');
+}
+function toggleKgi(id,hd){
+  const b=document.getElementById(id),a=hd.querySelector('.karrow'),open=b.classList.contains('open');
+  b.classList.toggle('open',!open);hd.classList.toggle('open',!open);a.classList.toggle('open',!open);
+}
+function swCreate(id,btn){
+  document.querySelectorAll('.cpane').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.ctab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('cp-'+id).classList.add('active');
+  if(btn)btn.classList.add('active');
+}
+</script>
+<!-- ===== MANDALA MODAL ===== -->
+<div id="mandala-modal" onclick="if(event.target===this)closeMandala()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:840px;box-shadow:0 24px 60px rgba(0,0,0,.3);font-family:-apple-system,'Hiragino Sans',sans-serif">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+      <div>
+        <div id="mandala-team-name" style="font-size:16px;font-weight:800;color:#1a1a2e;margin-bottom:3px">チーム — 曼荼羅チャート</div>
+        <div style="font-size:10px;color:#9ca3af">中心：チーム目標　第2層：サブ目標（8項目）　外周：アクション項目（各8項目）</div>
+      </div>
+      <button onclick="closeMandala()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#9ca3af;flex-shrink:0;line-height:1;padding:0 0 0 12px">✕</button>
+    </div>
+    <div style="display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap">
+      <span style="display:flex;align-items:center;gap:5px;font-size:10px;color:#6b7280"><span id="mleg-c" style="width:14px;height:14px;border-radius:2px;display:inline-block;flex-shrink:0"></span>チーム目標（中心）</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:10px;color:#6b7280"><span id="mleg-s" style="width:14px;height:14px;border-radius:2px;border:2px solid;display:inline-block;flex-shrink:0"></span>サブ目標</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:10px;color:#6b7280"><span style="width:14px;height:14px;border-radius:2px;background:#f3f4f6;border:1px solid #e5e7eb;display:inline-block;flex-shrink:0"></span>アクション項目</span>
+    </div>
+    <!-- 評価モードバー -->
+    <div id="mnd-eval-bar" style="display:none;align-items:center;gap:12px;background:#F0FDF4;border:1px solid #10B981;border-radius:8px;padding:10px 14px;margin-bottom:12px;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:700;color:#065F46">🖊 評価モード</span>
+      <span style="font-size:11px;color:#374151">セルをクリックして評価状態を切り替え</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px">
+        <span style="background:#F3F4F6;padding:2px 8px;border-radius:12px">⬜ 未評価</span>
+        <span style="background:#FEF3C7;padding:2px 8px;border-radius:12px;color:#92400E">⏳ 進行中</span>
+        <span style="background:#D1FAE5;padding:2px 8px;border-radius:12px;color:#065F46">✓ 完了</span>
+        <span style="background:#FEE2E2;padding:2px 8px;border-radius:12px;color:#991B1B">× 要改善</span>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;color:#6B7280">完了率: <strong id="mnd-eval-pct" style="color:#065F46">0%</strong></span>
+        <button onclick="downloadCSVFromModal()" style="padding:4px 12px;background:#10B981;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">⬇ CSV</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <div id="mandala-grid" style="display:grid;grid-template-columns:repeat(9,minmax(60px,1fr));gap:2px;min-width:560px"></div>
+    </div>
+  </div>
+</div>
+<script>
+/* ===== チームデータ ===== */
+const MND={
+  A:{color:'#0D9488',bg:'#CCEDE9',name:'営業チームA',center:'売上\n¥50M達成',
+    subs:['新規顧客獲得','アップセル強化','受注単価向上','訪問件数増加','提案書品質向上','顧客フォロー強化','CRM活用','スキルアップ'],
+    acts:[
+      ['月10件訪問','DM送付','紹介依頼','展示会参加','電話営業','LP制作','リスト整備','商談分析'],
+      ['定期MTG実施','提案強化','事例共有','ニーズ調査','価格交渉','フォロー電話','勉強会開催','ROI提示'],
+      ['高単価商品PR','オプション提案','競合比較表','価値訴求','割引抑制','実績強調','差別化','単価目標設定'],
+      ['日報記録','件数KPI設定','効率ルート','移動削減','オンライン活用','訪問計画','優先顧客選定','週次振返り'],
+      ['テンプレ整備','デザイン統一','実績追加','競合分析追記','社内レビュー','動画版作成','多言語化','A/Bテスト'],
+      ['週次連絡','アンケート送付','誕生日メール','定期勉強会','課題ヒアリング','SNS交流','御礼訪問','メルマガ配信'],
+      ['入力徹底','データ分析','アラート設定','共有促進','履歴活用','予実管理','連携強化','定期クリーニング'],
+      ['資格取得支援','外部研修参加','社内勉強会','読書推奨','ロープレ実施','メンター制度','成功事例共有','フィードバック']
+    ]},
+  B:{color:'#EC4899',bg:'#FDF2F8',name:'開発チームB',center:'製品品質\n向上',
+    subs:['バグ解決率向上','テストカバレッジ','コードレビュー徹底','CI/CD整備','ドキュメント整備','パフォーマンス改善','セキュリティ強化','UX改善'],
+    acts:[
+      ['優先度分類','即日対応体制','根本原因分析','再発防止策','バグDB構築','週次レビュー','自動検知導入','報告フロー整備'],
+      ['単体テスト実施','結合テスト計画','E2Eテスト導入','カバレッジ計測','自動テスト化','テストケース整備','品質ゲート設定','継続モニタリング'],
+      ['レビュー基準作成','ペアプログラミング','チェックリスト','ツール導入','指摘コメント統一','フィードバック強化','定期勉強会','品質基準明確化'],
+      ['パイプライン構築','自動デプロイ','ステージング環境','ロールバック設定','通知設定','テスト自動化','デプロイ頻度向上','監視強化'],
+      ['API仕様書作成','内部設計書更新','README整備','変更ログ管理','図解化','ナレッジベース','オンボーディング','定期見直し'],
+      ['ボトルネック特定','N+1問題解消','キャッシュ最適化','DB最適化','負荷テスト実施','CDN活用','コード最適化','応答速度計測'],
+      ['脆弱性スキャン','認証強化','暗号化実装','OWASP対応','ログ監視','侵入テスト','セキュリティ研修','インシデント対応'],
+      ['ユーザーテスト','UI改善計画','アクセシビリティ','エラーメッセージ','導線改善','レスポンシブ化','フォーム最適化','フィードバック収集']
+    ]},
+  C:{color:'#F59E0B',bg:'#FFFBEB',name:'マーケチームC',center:'ブランド\n認知拡大',
+    subs:['SNSフォロワー増加','メディア掲載拡大','コンテンツ制作','SEO強化','広告効果最大化','イベント開催','パートナー連携','データ分析強化'],
+    acts:[
+      ['投稿頻度向上','エンゲージメント施策','インフルエンサー活用','ハッシュタグ最適化','動画コンテンツ','ライブ配信','フォロワー分析','キャンペーン実施'],
+      ['プレスリリース','メディアリスト整備','記者会見開催','独自調査発表','専門家コメント','業界誌寄稿','テレビ出演','ポッドキャスト'],
+      ['記事制作','ホワイトペーパー','事例インタビュー','動画制作','ポッドキャスト','インフォグラフィック','メールマガジン','ウェビナー'],
+      ['キーワード調査','ページ最適化','被リンク獲得','サイト速度改善','構造化データ','コンテンツSEO','内部リンク最適化','モバイル最適化'],
+      ['ターゲット設定','A/Bテスト実施','リターゲティング','クリエイティブ改善','予算最適化','ROI計測','媒体比較','コンバージョン改善'],
+      ['ウェビナー開催','展示会出展','勉強会主催','懇親会企画','オンラインセミナー','ユーザー会','社内見学会','共催イベント'],
+      ['代理店開拓','コラボ企画','アライアンス構築','共同PR実施','クロスセル','紹介制度','エコシステム','相互送客'],
+      ['GA4設定','ダッシュボード整備','週次レポート','KPI追跡','A/Bテスト分析','顧客分析','競合分析','予実管理']
+    ]}
+};
+/* ===== 個人データ ===== */
+const EMP_MND={
+  tanaka:{name:'田中 花子',team:'営業チームA',role:'上長',color:'#0D9488',bg:'#CCEDE9',center:'個人売上\nQ2達成',
+    subs:['新規顧客8社','受注率40%','提案品質向上','訪問20件/月','商談力強化','資料整備','社内連携','自己研鑽'],
+    acts:[
+      ['週2件アポ','テレアポ100件','紹介依頼','SNS営業','展示会参加','メール営業','リスト整備','商談記録'],
+      ['ヒアリング強化','提案精度UP','フォロー徹底','競合分析','価値訴求','事例活用','価格交渉','クロージング'],
+      ['テンプレ整備','デザイン改善','数値強化','競合比較追記','動画版制作','社内レビュー','A/Bテスト','多言語化'],
+      ['効率ルート確立','オンライン活用','訪問計画立案','優先顧客選定','週次振返り','日報記録','移動時間削減','目標進捗管理'],
+      ['ロープレ実施','外部研修参加','メンター活用','事例研究','FB取得','スキル棚卸','資格取得','弱点改善'],
+      ['資料DB整備','テンプレ共有','更新ルール制定','バージョン管理','アクセス共有','定期見直し','フォルダ整理','命名規則統一'],
+      ['週次報告','定期MTG','情報共有徹底','協力依頼','クロスセル活用','他部署連携','連絡ルール策定','共有ツール活用'],
+      ['資格取得','ビジネス書','勉強会参加','ポッドキャスト','英語学習','業界動向調査','メンタリング','振返り日記']
+    ]},
+  suzuki:{name:'鈴木 一郎',team:'開発チームB',role:'従業員',color:'#EC4899',bg:'#FDF2F8',center:'製品品質\n向上目標',
+    subs:['バグ0件/週','テスト自動化','コードレビュー徹底','CI/CD整備','ドキュメント整備','パフォーマンス改善','セキュリティ強化','UX改善'],
+    acts:[
+      ['原因分析徹底','即日対応体制','再発防止策','バグDB構築','週次レビュー','自動検知導入','報告フロー整備','優先度管理'],
+      ['単体テスト実施','結合テスト計画','E2Eテスト導入','カバレッジ計測','テスト自動化','テストケース整備','品質ゲート設定','継続モニタリング'],
+      ['レビュー基準作成','ペアプログラミング','チェックリスト','ツール導入','コメント統一','FB強化','定期勉強会','品質基準明確化'],
+      ['パイプライン構築','自動デプロイ','ステージング環境','ロールバック設定','通知設定','テスト自動化','デプロイ頻度向上','監視強化'],
+      ['API仕様書作成','設計書更新','README整備','変更ログ管理','図解化','KB構築','オンボーディング','定期見直し'],
+      ['ボトルネック特定','N+1問題解消','キャッシュ最適化','DB最適化','負荷テスト実施','CDN活用','コード最適化','応答速度計測'],
+      ['脆弱性スキャン','認証強化','暗号化実装','OWASP対応','ログ監視','侵入テスト実施','セキュリティ研修','インシデント対応'],
+      ['UXテスト実施','UI改善計画','アクセシビリティ','エラーメッセージ改善','導線改善','レスポンシブ化','フォーム最適化','FB収集']
+    ]},
+  sato:{name:'佐藤 美咲',team:'マーケチームC',role:'上長',color:'#F59E0B',bg:'#FFFBEB',center:'リード\n獲得100件',
+    subs:['SNSフォロワー増','メディア露出拡大','コンテンツ制作','SEO強化','広告運用','イベント企画','パートナー開拓','データ分析'],
+    acts:[
+      ['投稿頻度向上','エンゲージ施策','インフルエンサー活用','タグ最適化','動画制作','ライブ配信','フォロワー分析','CP実施'],
+      ['PR送付','メディアリスト整備','プレス会見','調査発表','専門家取材','業界誌寄稿','テレビ出演','ポッドキャスト'],
+      ['週2記事','WP作成','事例取材','動画週1','ポッドキャスト収録','インフォグラフィック','メルマガ','ウェビナー'],
+      ['KW調査','ページ最適化','被リンク獲得','速度改善','構造化データ設定','コンテンツSEO','内部リンク','モバイル最適'],
+      ['ターゲット設定','A/Bテスト実施','リターゲティング','クリエイティブ改善','予算最適','ROI計測','媒体比較','CV改善'],
+      ['ウェビナー開催','展示会出展','勉強会主催','懇親会企画','セミナー','ユーザー会開催','社内見学会','共催イベント'],
+      ['代理店開拓','コラボ企画立案','アライアンス構築','共同PR実施','クロスセル','紹介制度構築','エコシステム','相互送客'],
+      ['GA4設定','DB整備','週次レポート','KPI追跡','A/Bテスト分析','顧客分析','競合分析実施','予実管理']
+    ]},
+  nakamura:{name:'中村 健太',team:'営業チームA',role:'従業員',color:'#0D9488',bg:'#CCEDE9',center:'Q3個人売上\n¥15M達成',
+    subs:['新規顧客10社','訪問件数30件','受注率35%','単価向上','提案力UP','顧客フォロー強化','スキルアップ','健康管理'],
+    acts:[
+      ['週3件アポ','テレアポ実施','紹介依頼活用','展示会参加','SNS営業','メール営業','リスト管理','商談記録'],
+      ['訪問計画立案','優先顧客選定','効率ルート確立','週次振返り','日報記録','移動削減','オンライン活用','目標進捗管理'],
+      ['ヒアリング強化','事例活用提示','競合分析徹底','価値訴求強化','クロージング技術','価格交渉','提案精度向上','フォロー徹底'],
+      ['高単価商品PR','オプション提案','競合比較表作成','実績強調','差別化訴求','割引抑制','付加価値提示','単価目標設定'],
+      ['テンプレ整備','デザイン改善','実績追加','社内レビュー実施','動画版制作','A/Bテスト','競合比較追記','多言語化対応'],
+      ['週次連絡実施','アンケート送付','定期勉強会','御礼訪問','課題ヒアリング','メルマガ配信','SNS交流','誕生日メール'],
+      ['資格取得支援','外部研修参加','社内勉強会','読書推進','ロープレ実施','メンター活用','事例研究','FB取得'],
+      ['睡眠7時間確保','運動週3回','食事管理','ストレス管理','定時退社励行','休暇取得','趣味時間確保','家族時間']
+    ]}
+};
+
+/* ===== 共通定数・状態 ===== */
+const SP_MAP=[
+  {cr:3,cc:3,oc:[1,1],si:0},{cr:3,cc:4,oc:[1,4],si:1},{cr:3,cc:5,oc:[1,7],si:2},
+  {cr:4,cc:3,oc:[4,1],si:3},{cr:4,cc:5,oc:[4,7],si:4},
+  {cr:5,cc:3,oc:[7,1],si:5},{cr:5,cc:4,oc:[7,4],si:6},{cr:5,cc:5,oc:[7,7],si:7}
+];
+const EVAL_STYLES=[
+  'background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;',
+  'background:#FEF3C7;color:#92400E;border:1.5px solid #F59E0B;',
+  'background:#D1FAE5;color:#065F46;border:1.5px solid #10B981;',
+  'background:#FEE2E2;color:#991B1B;border:1.5px solid #EF4444;'
+];
+const EVAL_ICONS=['','⏳','✓','×'];
+const EVAL_NAMES=['未評価','進行中','完了','要改善'];
+const evalStates={};
+let _curEvalKey='';
+
+function getAllMnd(){return {...MND,...EMP_MND};}
+
+function getEvalProgress(k){
+  const st=evalStates[k]||{};
+  return Math.round(Object.values(st).filter(v=>v===2).length/56*100);
+}
+
+/* ===== 曼荼羅モーダル（表示・評価兼用） ===== */
+function buildMndGrid(k){
+  const d=getAllMnd()[k];
+  if(!d)return;
+  const G=Array.from({length:9},()=>Array(9).fill(null));
+  G[4][4]={t:'center',tx:d.center};
+  SP_MAP.forEach(({cr,cc,oc,si})=>{
+    G[cr][cc]={t:'sub',tx:d.subs[si]};
+    G[oc[0]][oc[1]]={t:'sub',tx:d.subs[si]};
+    let ai=0;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      if(dr===0&&dc===0)continue;
+      const r=oc[0]+dr,c=oc[1]+dc;
+      if(r>=0&&r<9&&c>=0&&c<9&&!G[r][c])G[r][c]={t:'action',tx:(d.acts[si]||[])[ai]||''};
+      ai++;
+    }
+  });
+  return G;
+}
+
+function openMandala(k,evalMode){
+  const d=getAllMnd()[k];if(!d)return;
+  if(!evalStates[k])evalStates[k]={};
+  _curEvalKey=k;
+  document.getElementById('mandala-team-name').textContent=d.name+' — 曼荼羅チャート';
+  const lc=document.getElementById('mleg-c'),ls=document.getElementById('mleg-s');
+  if(lc)lc.style.background=d.color;
+  if(ls){ls.style.background=d.bg;ls.style.borderColor=d.color;}
+  const evalBar=document.getElementById('mnd-eval-bar');
+  if(evalBar){
+    evalBar.style.display=evalMode?'flex':'none';
+    const pctEl=document.getElementById('mnd-eval-pct');
+    if(pctEl)pctEl.textContent=getEvalProgress(k)+'%';
+  }
+  const G=buildMndGrid(k);
+  let h='';
+  for(let r=0;r<9;r++){
+    for(let c=0;c<9;c++){
+      const cell=G[r][c];
+      const es=evalMode?(evalStates[k][`${r},${c}`]||0):0;
+      let sty='min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:9.5px;line-height:1.35;padding:4px 3px;border-radius:3px;word-break:break-all;box-sizing:border-box;';
+      if(c===2||c===5)sty+='border-right:3px solid #9CA3AF;';
+      if(r===2||r===5)sty+='border-bottom:3px solid #9CA3AF;';
+      let oc='';
+      if(cell&&cell.t==='center')sty+=`background:${d.color};color:#fff;font-weight:800;font-size:10.5px;border:2px solid ${d.color};`;
+      else if(cell&&cell.t==='sub')sty+=`background:${d.bg};color:${d.color};font-weight:700;border:1.5px solid ${d.color};`;
+      else{
+        sty+=evalMode?(EVAL_STYLES[es]+'cursor:pointer;'):'background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;';
+        if(evalMode)oc=`onclick="evalCellClick('${k}',${r},${c})"`;
+      }
+      const tx=cell?(cell.t==='center'?cell.tx.replace(/\n/g,'<br>'):cell.tx):'';
+      const icon=(evalMode&&cell?.t==='action'&&es>0)?`<span style="font-size:8px;margin-top:1px">${EVAL_ICONS[es]}</span>`:'';
+      h+=`<div ${oc} style="${sty}">${tx}${icon}</div>`;
+    }
+  }
+  document.getElementById('mandala-grid').innerHTML=h;
+  const m=document.getElementById('mandala-modal');
+  m.style.display='flex';m.scrollTop=0;
+}
+
+function closeMandala(){
+  document.getElementById('mandala-modal').style.display='none';
+  if(document.getElementById('mnd-list-container').innerHTML)renderMandalaList();
+}
+
+function evalCellClick(k,r,c){
+  if(!evalStates[k])evalStates[k]={};
+  const eKey=`${r},${c}`;
+  evalStates[k][eKey]=((evalStates[k][eKey]||0)+1)%4;
+  openMandala(k,true);
+}
+
+function downloadCSVFromModal(){downloadCSV(_curEvalKey);}
+
+/* ===== CSV ===== */
+function buildCSV(k){
+  const d=getAllMnd()[k];if(!d)return'';
+  const st=evalStates[k]||{};
+  let csv=`対象名,チーム,中心目標,サブ目標No,サブ目標,アクションNo,アクション内容,評価\n`;
+  SP_MAP.forEach(({oc,si})=>{
+    let ai=0;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      if(dr===0&&dc===0)continue;
+      const r=oc[0]+dr,c=oc[1]+dc;
+      if(r>=0&&r<9&&c>=0&&c<9){
+        const actTxt=(d.acts[si]||[])[ai]||'';
+        const es=st[`${r},${c}`]||0;
+        csv+=`"${d.name}","${d.team}","${(d.center||'').replace(/\n/,' ')}",${si+1},"${d.subs[si]||''}",${ai+1},"${actTxt}","${EVAL_NAMES[es]}"\n`;
+      }
+      ai++;
+    }
+  });
+  return csv;
+}
+
+function downloadCSV(k){
+  const d=getAllMnd()[k];if(!d)return;
+  const blob=new Blob(['﻿'+buildCSV(k)],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`mandala_${(d.name||k).replace(/[\s　]/g,'_')}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+function downloadAllCSV(){
+  let csv='対象名,チーム,中心目標,サブ目標No,サブ目標,アクションNo,アクション内容,評価\n';
+  Object.keys(getAllMnd()).filter(k=>k!=='__preview__').forEach(k=>{
+    const rows=buildCSV(k).split('\n').slice(1).join('\n');
+    if(rows)csv+=rows+'\n';
+  });
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`mandala_全件_${new Date().toISOString().slice(0,10)}.csv`;a.click();
+}
+
+/* ===== 一覧レンダリング ===== */
+function renderMandalaList(){
+  const con=document.getElementById('mnd-list-container');if(!con)return;
+  const groups=[{label:'チーム',keys:['A','B','C']},{label:'個人',keys:['tanaka','suzuki','sato','nakamura']}];
+  const all=getAllMnd();
+  let h='';
+  groups.forEach(({label,keys})=>{
+    h+=`<div class="mnd-sec-label">${label}</div><div class="mnd-list-grid">`;
+    keys.forEach(k=>{
+      const d=all[k];if(!d)return;
+      const pct=getEvalProgress(k);
+      const col=pct>=80?'var(--green)':pct>=40?'var(--amber)':'var(--accent)';
+      const ini=d.name?d.name.charAt(0):k.toUpperCase();
+      h+=`<div class="mnd-lcard">
+        <div class="mnd-lcard-head">
+          <div class="mnd-avatar" style="background:${d.color}">${ini}</div>
+          <div class="mnd-linfo">
+            <div class="mnd-lname">${d.name}${d.role?` <span style="font-size:9px;background:#F3F4F6;padding:1px 6px;border-radius:8px;color:var(--text3);font-weight:500">${d.role}</span>`:''}</div>
+            <div class="mnd-lteam">${d.team}</div>
+          </div>
+        </div>
+        <div class="mnd-goal-chip">${(d.center||'').replace(/\n/,' ')}</div>
+        <div class="mnd-lprog-row"><span>評価完了率</span><span style="font-weight:700;color:${col}">${pct}%</span></div>
+        <div class="mnd-lprog-bar"><div class="mnd-lprog-fill" style="width:${pct}%;background:${col}"></div></div>
+        <div class="mnd-lbtns">
+          <button class="mnd-lbtn mnd-lbtn-view" onclick="openMandala('${k}',false)">👁 チャートを見る</button>
+          <button class="mnd-lbtn mnd-lbtn-eval" onclick="openMandala('${k}',true)">🖊 評価する</button>
+          <button class="mnd-lbtn mnd-lbtn-csv" onclick="downloadCSV('${k}')">⬇ CSV</button>
+        </div>
+      </div>`;
+    });
+    h+='</div>';
+  });
+  con.innerHTML=h;
+}
+
+/* ===== 送信フォーム ===== */
+function initMndSendForm(){
+  const wrap=document.getElementById('mnd-subs-list');
+  if(!wrap||wrap.children.length>0)return;
+  let h='';
+  for(let i=1;i<=8;i++)h+=`<div class="mnd-sub-row"><span class="mnd-sub-num">${i}</span><input class="mnd-sub-input" id="mnd-sub-${i}" placeholder="サブ目標 ${i}" oninput="updateMndPreview()"></div>`;
+  wrap.innerHTML=h;
+  updateMndPreview();
+}
+
+function applyMndTemplate(key){
+  if(!key||!MND[key])return;
+  const d=MND[key];
+  const ci=document.getElementById('mnd-center-input');
+  if(ci){ci.value=d.center.replace(/\n/,' ');}
+  d.subs.forEach((s,i)=>{const el=document.getElementById(`mnd-sub-${i+1}`);if(el)el.value=s;});
+  updateMndPreview();
+}
+
+function updateMndPreview(){
+  const grid=document.getElementById('mnd-send-preview');if(!grid)return;
+  const center=(document.getElementById('mnd-center-input')||{}).value||'';
+  const subs=Array.from({length:8},(_,i)=>(document.getElementById(`mnd-sub-${i+1}`)||{}).value||'');
+  const G=Array.from({length:9},()=>Array(9).fill(null));
+  G[4][4]={t:'center'};
+  SP_MAP.forEach(({cr,cc,oc,si})=>{
+    G[cr][cc]={t:'sub',v:subs[si]};G[oc[0]][oc[1]]={t:'sub',v:subs[si]};
+    let ai=0;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      if(dr===0&&dc===0)continue;
+      const r2=oc[0]+dr,c2=oc[1]+dc;
+      if(r2>=0&&r2<9&&c2>=0&&c2<9&&!G[r2][c2])G[r2][c2]={t:'action'};ai++;
+    }
+  });
+  let h='';
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const cell=G[r][c];
+    let sty='min-height:20px;display:flex;align-items:center;justify-content:center;font-size:5px;text-align:center;padding:1px;word-break:break-all;line-height:1.2;';
+    if(c===2||c===5)sty+='border-right:2px solid #9CA3AF;';
+    if(r===2||r===5)sty+='border-bottom:2px solid #9CA3AF;';
+    let txt='';
+    if(cell?.t==='center'){sty+='background:#0D9488;color:#fff;font-weight:800;';txt=center.slice(0,5);}
+    else if(cell?.t==='sub'){sty+='background:#CCEDE9;color:#0D9488;font-weight:700;';txt=(cell.v||'').slice(0,4);}
+    else sty+='background:#F9FAFB;color:#9CA3AF;';
+    h+=`<div style="${sty}">${txt}</div>`;
+  }
+  grid.innerHTML=h;
+}
+
+function previewMndFull(){
+  const center=(document.getElementById('mnd-center-input')||{}).value||'（未入力）';
+  const subs=Array.from({length:8},(_,i)=>(document.getElementById(`mnd-sub-${i+1}`)||{}).value||`サブ目標${i+1}`);
+  getAllMnd()['__preview__']={name:'送信プレビュー',team:'—',color:'#0D9488',bg:'#CCEDE9',center,subs,acts:subs.map(()=>Array(8).fill('—'))};
+  openMandala('__preview__',false);
+}
+
+function sendMandala(){
+  const center=(document.getElementById('mnd-center-input')||{}).value;
+  if(!center){alert('中心目標を入力してください');return;}
+  const toEl=document.getElementById('mnd-send-to');
+  const toName=toEl?toEl.options[toEl.selectedIndex].text:'従業員';
+  const msg=document.getElementById('mnd-send-success');
+  const msgTxt=document.getElementById('mnd-send-success-msg');
+  if(msgTxt)msgTxt.textContent=`「${center}」を ${toName} に送信しました`;
+  if(msg){msg.style.display='flex';setTimeout(()=>{msg.style.display='none';},5000);}
+}
+</script>
+
+<!-- ===== Supabase 連携（未設定時は内蔵デモのまま動作） ===== -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./web/config.js" onerror="this.dataset.miss=1"></script>
+<script src="./web/api.js"></script>
+<script>
+(function(){
+  var API=window.VexumAPI; if(!API||!API.ready) return;
+  function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
+  API.loadTokatsuData().then(function(d){
+    if(!d) return;
+    repl(MND,d.MND); repl(EMP_MND,d.EMP);
+    if(typeof renderMandalaList==='function') renderMandalaList();
+    console.log('[VEXUM] Supabaseデータを反映しました');
+  }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:',e); });
+})();
+</script>
+</body>
+</html>
