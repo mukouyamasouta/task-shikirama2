@@ -9,13 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@shikirama/db": "*",
     "next": "15.5.18",
     "react": "19.0.0",
     "react-dom": "19.0.0"
   },
   "devDependencies": {
-    "@shikirama/tailwind-config": "*",
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
