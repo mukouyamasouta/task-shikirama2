@@ -148,6 +148,7 @@
         return { n: s, p: Math.max(0, Math.min(100, (m.achievement_rate || 0) + adj[i])) };
       });
       MEMBERS[key] = {
+        pid: p.id, chartId: c.id || null,
         name: p.full_name, role: m.role_in_team === 'leader' ? 'リーダー' : '従業員', team: team.name,
         color: p.color, bg: '#F3F4F6', rate: m.achievement_rate, kpis: kpis, stats: stats,
         center: c.center || (p.full_name + '\n個人目標'), subs: c.subs || [], acts: c.acts || []
@@ -180,6 +181,7 @@
       if (assigned[p.id] || p.role === 'admin' || p.role === 'executive') return;
       var key = MEMBER_KEY[p.id]; if (!key) return;
       AVAILABLE[key] = {
+        pid: p.id,
         name: p.full_name, role: '従業員', team: '（未所属）', email: p.email, color: p.color, bg: '#F3F4F6', rate: 50,
         kpis: [{ n: '重点目標1', p: 50 }, { n: '重点目標2', p: 40 }, { n: '重点目標3', p: 58 }, { n: '重点目標4', p: 50 }],
         stats: { done: 0, wip: 0, late: 0 }, center: p.full_name + '\n個人目標',
@@ -187,7 +189,66 @@
         acts: Array.from({ length: 8 }, function (_, i) { return Array.from({ length: 8 }, function (__, j) { return '施策' + (i + 1) + '-' + (j + 1); }); })
       };
     });
-    return { MEMBERS: MEMBERS, MEMBER_TASKS: MEMBER_TASKS, REPORTS: REPORTS, EVAL_RECORDS: EVAL_RECORDS, DASH_IDS: DASH_IDS, EVAL_IDS: EVAL_IDS, AVAILABLE: AVAILABLE, teamName: team.name };
+    // メンバーキー→profile_id（リーダー操作の永続化用）
+    var memberPid = {};
+    raw.profiles.forEach(function (p) { memberPid[memKey(p.id)] = p.id; });
+    return { MEMBERS: MEMBERS, MEMBER_TASKS: MEMBER_TASKS, REPORTS: REPORTS, EVAL_RECORDS: EVAL_RECORDS, DASH_IDS: DASH_IDS, EVAL_IDS: EVAL_IDS, AVAILABLE: AVAILABLE, teamName: team.name, teamUuid: teamUuid, memberPid: memberPid };
+  }
+
+  // ===== リーダー操作：チーム所属の追加/削除・タスク割当・評価記録 =====
+  async function addTeamMember(teamUuid, pid, role, rate) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var r = await sb.from('team_members').insert({
+      team_id: teamUuid, profile_id: pid,
+      role_in_team: (role === 'リーダー' ? 'leader' : 'member'),
+      achievement_rate: (rate != null ? rate : 50)
+    });
+    if (r.error) return { error: r.error.message };
+    return { ok: true };
+  }
+  async function removeTeamMember(teamUuid, pid) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var r = await sb.from('team_members').delete().eq('team_id', teamUuid).eq('profile_id', pid);
+    if (r.error) return { error: r.error.message };
+    return { ok: true };
+  }
+  async function assignTask(o) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var me = await currentProfile();
+    var r = await sb.from('tasks').insert({
+      title: o.title, related_kgi: o.kpi || null, category: o.category || null,
+      assigner_id: me ? me.id : null, assignee_id: o.assigneePid || null, team_id: o.teamUuid || null,
+      source: 'leader', start_date: o.start || null, due_date: o.due || null,
+      priority: o.priority || 'md', progress: 0, status: 'todo'
+    }).select().single();
+    if (r.error) return { error: r.error.message };
+    return { data: r.data };
+  }
+  async function saveEvalRecord(o) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var me = await currentProfile();
+    var r = await sb.from('eval_records').insert({
+      evaluatee_id: o.evaluateePid || null, evaluatee_name: o.evaluateeName,
+      evaluator_name: me ? me.full_name : (o.evaluatorName || ''),
+      period: o.period, kgi: o.kgi || 0, csf_avg: o.csf || 0, task_avg: o.task || 0,
+      comment: o.comment || '', status: 'done'
+    });
+    if (r.error) return { error: r.error.message };
+    return { ok: true };
+  }
+  // メンバーの個人曼荼羅チャートを upsert（リーダーが記入＝タスク割当）
+  async function upsertMemberChart(o) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var payload = {
+      owner_type: 'user', owner_user_id: o.pid, name: o.name || '個人チャート',
+      center: o.center || '', subs: o.subs || [], acts: o.acts || [],
+      color: o.color || '#0D9488', bg: o.bg || '#CCEDE9'
+    };
+    if (o.id) { payload.id = o.id; }
+    else { payload.id = 'user_' + o.pid; }
+    var r = await sb.from('mandala_charts').upsert(payload).select().single();
+    if (r.error) return { error: r.error.message };
+    return { data: r.data };
   }
 
   // ===== 個人画面 用アダプタ =====
@@ -411,6 +472,11 @@
     fetchAll: fetchAll,
     loadAdminData: loadAdminData,
     loadLeaderData: loadLeaderData,
+    addTeamMember: addTeamMember,
+    removeTeamMember: removeTeamMember,
+    assignTask: assignTask,
+    saveEvalRecord: saveEvalRecord,
+    upsertMemberChart: upsertMemberChart,
     loadPersonalData: loadPersonalData,
     loadTokatsuData: loadTokatsuData,
     createAccount: createAccount,
