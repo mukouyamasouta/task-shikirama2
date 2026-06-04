@@ -44,8 +44,11 @@ Deno.serve(async (req) => {
     const caller = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } } });
     const { data: u } = await caller.auth.getUser();
     if (!u?.user) return json({ error: "unauthorized" }, 401);
-    const { data: prof } = await admin.from("profiles").select("role").eq("auth_user_id", u.user.id).single();
+    const { data: prof } = await admin.from("profiles").select("role, full_name, email").eq("auth_user_id", u.user.id).single();
     if (!prof || !["admin", "executive"].includes(prof.role)) return json({ error: "forbidden: admin/executive only" }, 403);
+    // 発行者（幹部）の情報 — 差出人名・返信先に使用
+    const issuerName = prof.full_name || "VEXUM";
+    const issuerEmail = prof.email || "";
 
     const password = genPw();
 
@@ -69,24 +72,28 @@ Deno.serve(async (req) => {
 
     // Resend でメール送信
     const resendKey = Deno.env.get("RESEND_API_KEY");
-    const from = Deno.env.get("MAIL_FROM") || "VEXUM <onboarding@resend.dev>";
+    // 差出人アドレスは「検証済みドメイン」固定。表示名を発行した幹部の名前にし、返信先をその幹部にする
+    const fromAddr = Deno.env.get("MAIL_FROM_ADDRESS") || "onboarding@resend.dev";
+    const from = `${issuerName} <${fromAddr}>`;
     const appUrl = login_url || "https://vexum-deploy.vercel.app/";
     let emailed = false, emailError = "";
     if (resendKey) {
-      const r = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from, to: [email], subject: "VEXUM アカウント発行のお知らせ",
-          html: `<div style="font-family:sans-serif;line-height:1.7">
+      const payload: Record<string, unknown> = {
+        from, to: [email], subject: "VEXUM アカウント発行のお知らせ",
+        html: `<div style="font-family:sans-serif;line-height:1.7">
             <p>${full_name || ""} 様</p>
-            <p>VEXUM タスク管理システムのアカウントが発行されました。</p>
+            <p>${issuerName} さんより VEXUM タスク管理システムのアカウントが発行されました。</p>
             <p><b>ログインURL：</b><a href="${appUrl}">${appUrl}</a><br>
             <b>メールアドレス：</b>${email}<br>
             <b>パスワード：</b>${password}</p>
             <p>セキュリティのため、初回ログイン後にパスワードの変更を推奨します。</p>
           </div>`,
-        }),
+      };
+      if (issuerEmail) payload.reply_to = issuerEmail;  // 返信は発行した幹部へ届く
+      const r = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
       emailed = r.ok;
       if (!r.ok) emailError = await r.text();
