@@ -67,21 +67,24 @@ button:disabled{opacity:.6}
     if(!API.ready){ msg.className='msg err'; msg.textContent='Supabase未設定のため登録できません'; return; }
     var btn=document.getElementById('btn'); btn.disabled=true;
     try{
-      var res=await API.sb.auth.signUp({ email:email, password:pw, options:{ data:{ full_name:name } } });
-      if(res.error){ throw res.error; }
-      if(res.data && res.data.session){
-        // メール確認OFF → 即ログイン状態。個人画面へ
+      // メール確認不要のセルフ登録RPC（確認済みユーザーを作成）
+      var reg=await API.sb.rpc('vexum_self_register', { p_email:email, p_password:pw, p_name:name });
+      if(reg.error){ throw reg.error; }
+      // そのままログインして個人画面へ
+      var s=await API.sb.auth.signInWithPassword({ email:email, password:pw });
+      if(!s.error){
         msg.className='msg ok'; msg.textContent='登録が完了しました。個人画面へ移動します…';
-        setTimeout(function(){ location.href='./employee.html'; }, 1200);
+        setTimeout(function(){ location.href='./employee.html'; }, 1000);
       }else{
-        // メール確認ON → 確認後にログイン
         msg.className='msg ok';
-        msg.innerHTML='登録を受け付けました。<br>確認メールが届いた場合はリンクを開いてから、<a href="./index.html">ログイン</a>してください。';
+        msg.innerHTML='登録が完了しました。<a href="./index.html">ログイン</a>してください。';
         btn.disabled=false;
       }
     }catch(ex){
       var m=(ex.message||String(ex));
-      if(/registered|already/i.test(m)) m='このメールアドレスは既に登録されています';
+      if(/already/i.test(m)) m='このメールアドレスは既に登録されています';
+      else if(/too short/i.test(m)) m='パスワードは6文字以上にしてください';
+      else if(/invalid email/i.test(m)) m='メールアドレスの形式が正しくありません';
       msg.className='msg err'; msg.textContent='登録失敗: '+m;
       btn.disabled=false;
     }

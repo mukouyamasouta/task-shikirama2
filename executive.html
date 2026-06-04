@@ -543,7 +543,6 @@ function memRowHTML(key,m,col){
     </div>`;
   }else{
     actions=`<button class="card-btn" style="margin-left:8px" onclick="openAccEdit('${key}')">✎ 編集</button>
-      <button class="card-btn" style="margin-left:6px;background:#FEF3C7;color:#92400E" onclick="resetMemberPw('${key}')">🔑 PW再発行</button>
       <button class="card-btn" style="margin-left:6px;background:#FEE2E2;color:var(--red)" onclick="askDeleteMember('${key}')">🗑 削除</button>`;
   }
   return `<div class="mem-row">
