@@ -340,25 +340,22 @@
       });
       if (tmIns.error) return { error: friendlyErr(tmIns.error.message) };
     }
-    // 発行: ランダムPWで確認済みユーザー作成＋メール送信（Edge Function）
-    var emailed = false, genPw = null, loginEnabled = false;
+    // 発行: ランダムPWを生成し、確認済みユーザーを作成（RPC）。PWは画面表示用に返す
+    var genPw = randomPassword();
+    var loginEnabled = false;
     try {
-      var fn = await sb.functions.invoke('issue-account', {
-        body: { email: o.email, full_name: o.name, login_url: (typeof location !== 'undefined' ? location.origin + '/' : null) }
-      });
-      if (!fn.error && fn.data && fn.data.ok) {
-        emailed = !!fn.data.emailed;
-        genPw = fn.data.password || null;   // メール未送信時のみ返る
-        loginEnabled = true;
-      } else { throw (fn.error || new Error('issue-account failed')); }
-    } catch (e) {
-      // フォールバック: 固定PWのRPC（Edge未デプロイ時）
-      try {
-        var rpc = await sb.rpc('vexum_create_login', { p_email: o.email, p_password: 'vexum2025' });
-        if (!rpc.error) { loginEnabled = true; genPw = 'vexum2025'; }
-      } catch (_) {}
-    }
-    return { data: ins.data, pid: pid, loginEnabled: loginEnabled, emailed: emailed, password: genPw };
+      var rpc = await sb.rpc('vexum_create_login', { p_email: o.email, p_password: genPw });
+      loginEnabled = !rpc.error;
+    } catch (_) { loginEnabled = false; }
+    return { data: ins.data, pid: pid, loginEnabled: loginEnabled, password: loginEnabled ? genPw : null };
+  }
+  function randomPassword(len) {
+    len = len || 12;
+    var c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    var out = '';
+    var a = (typeof crypto !== 'undefined' && crypto.getRandomValues) ? crypto.getRandomValues(new Uint32Array(len)) : null;
+    for (var i = 0; i < len; i++) out += c[(a ? a[i] : Math.floor(Math.random() * 1e9)) % c.length];
+    return out;
   }
   async function deleteAccount(pid) {
     if (!sb) return { error: 'Supabase未接続' };

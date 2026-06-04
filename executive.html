@@ -286,6 +286,24 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
 </div>
 
+<!-- 発行完了（URL・パスワード表示）モーダル -->
+<div id="issued-modal" onclick="if(event.target===this)closeIssued()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:460px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="font-size:16px;font-weight:800;color:var(--accent)">✅ アカウントを発行しました</div>
+      <button onclick="closeIssued()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">このURLとパスワードを本人にお伝えください（パスワードは再表示できません）</div>
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">ログインURL</div>
+    <div style="display:flex;gap:6px;margin-bottom:12px"><input class="fi" id="issued-url" readonly style="font-size:12px"><button class="card-btn" onclick="copyField('issued-url')">コピー</button></div>
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">メールアドレス</div>
+    <div style="display:flex;gap:6px;margin-bottom:12px"><input class="fi" id="issued-email" readonly style="font-size:12px"><button class="card-btn" onclick="copyField('issued-email')">コピー</button></div>
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">パスワード</div>
+    <div style="display:flex;gap:6px;margin-bottom:16px"><input class="fi" id="issued-pw" readonly style="font-size:14px;font-weight:700;letter-spacing:.05em"><button class="card-btn" onclick="copyField('issued-pw')">コピー</button></div>
+    <button class="f-submit" style="width:100%" onclick="copyIssuedAll()">3項目をまとめてコピー</button>
+  </div>
+</div>
+
 <!-- 自分のプロフィール編集モーダル -->
 <div id="self-modal" onclick="if(event.target===this)closeSelfModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:480px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
@@ -633,15 +651,27 @@ async function submitAccount(){
   if(teamId&&TEAMS[teamId]&&!TEAMS[teamId].members.includes(id))TEAMS[teamId].members.push(id);
   closeAccModal();
   renderAccount();
-  if(res.emailed){
-    showToast(`${name} を発行し、${email} に案内メールを送信しました ✓`);
-  }else if(res.password){
-    // メール未送信（Resend未設定など）→ 管理者に表示
-    showToast(`${name} を発行しました（メール未送信）`);
-    alert(`アカウントを発行しました（メールは送信されていません）\n\nログインURL: ${location.origin}/\nメール: ${email}\nパスワード: ${res.password}\n\n※ Resend を設定するとメールで自動送信されます。`);
+  if(res.password){
+    // 発行したURL・PWを画面表示
+    showIssued(email,res.password);
+    showToast(`${name} を発行しました ✓`);
   }else{
-    showToast(`${name} のアカウントを作成しました ✓`);
+    showToast(`${name} を作成しました（ログイン発行はSQL 08適用後に有効）`);
   }
+}
+/* 発行完了モーダル */
+function showIssued(email,pw){
+  document.getElementById('issued-url').value=location.origin+'/';
+  document.getElementById('issued-email').value=email;
+  document.getElementById('issued-pw').value=pw;
+  document.getElementById('issued-modal').style.display='flex';
+}
+function closeIssued(){document.getElementById('issued-modal').style.display='none';}
+function copyField(id){const el=document.getElementById(id);if(!el)return;el.select();try{navigator.clipboard.writeText(el.value);}catch(e){document.execCommand('copy');}showToast('コピーしました');}
+function copyIssuedAll(){
+  const t=`ログインURL: ${document.getElementById('issued-url').value}\nメール: ${document.getElementById('issued-email').value}\nパスワード: ${document.getElementById('issued-pw').value}`;
+  try{navigator.clipboard.writeText(t);}catch(e){}
+  showToast('3項目をコピーしました');
 }
 /* ===== アカウント編集 ===== */
 function openAccEdit(key){
