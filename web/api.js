@@ -369,12 +369,17 @@
   }
   async function deleteAccount(pid) {
     if (!sb) return { error: 'Supabase未接続' };
+    if (!pid) return { error: '対象アカウントIDが不明です' };
     // FK(NO ACTION) の依存行を先に削除（assigner/assignee/evaluator）
     await sb.from('tasks').delete().eq('assignee_id', pid);
     await sb.from('tasks').delete().eq('assigner_id', pid);
     await sb.from('evaluations').delete().eq('evaluator_id', pid);
-    var del = await sb.from('profiles').delete().eq('id', pid); // 残りは cascade / set null
-    if (del.error) return { error: del.error.message };
+    // .select() で実際に削除された行を確認（RLSで弾かれると0件・エラー無しになるため）
+    var del = await sb.from('profiles').delete().eq('id', pid).select('id');
+    if (del.error) return { error: friendlyErr(del.error.message) };
+    if (!del.data || del.data.length === 0) {
+      return { error: '削除できませんでした（権限不足の可能性。管理者/幹部アカウントでログインしてください）' };
+    }
     return { ok: true };
   }
   async function createTeamRemote(o) {
@@ -400,8 +405,9 @@
     if (patch.email != null) up.email = patch.email;
     if (patch.role != null) up.role = roleToEnum(patch.role);
     if (Object.keys(up).length) {
-      var r = await sb.from('profiles').update(up).eq('id', pid);
-      if (r.error) return { error: r.error.message };
+      var r = await sb.from('profiles').update(up).eq('id', pid).select('id');
+      if (r.error) return { error: friendlyErr(r.error.message) };
+      if (!r.data || r.data.length === 0) return { error: '更新できませんでした（権限不足の可能性。管理者/幹部でログインしてください）' };
     }
     return { ok: true };
   }
