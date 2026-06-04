@@ -615,13 +615,17 @@ async function submitAccount(){
   let teamId=(document.getElementById('acc-team')||{}).value;   // チーム短縮キー('A')or''
   if(!name){showToast('氏名を入力してください');return;}
   if(!email){showToast('メールアドレスを入力してください');return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){showToast('メールアドレスの形式が正しくありません');return;}
+  // 重複メールの事前チェック
+  const dup=Object.values(MEMBERS).some(m=>(m.email||'').toLowerCase()===email.toLowerCase());
+  if(dup){showToast('このメールアドレスは既に登録されています');return;}
   if(role==='幹部'||role==='管理者')teamId='';  // 管理職はチーム未所属
   const API=window.VexumAPI;
-  let id;
+  let id,loginEnabled=false;
   if(API&&API.ready){
     const res=await API.createAccount({name,email,role:role||'メンバー',teamLetter:teamId||null,rate:50});
     if(res&&res.error){showToast('作成失敗: '+res.error);return;}
-    id=res.pid;
+    id=res.pid;loginEnabled=res.loginEnabled;
   }else{
     id=makeId(name);
   }
@@ -629,7 +633,7 @@ async function submitAccount(){
   if(teamId&&TEAMS[teamId]&&!TEAMS[teamId].members.includes(id))TEAMS[teamId].members.push(id);
   closeAccModal();
   renderAccount();
-  showToast(`${name} のアカウントを作成しました ✓`);
+  showToast(loginEnabled?`${name} を作成しました（PW: vexum2025 でログイン可）✓`:`${name} のアカウントを作成しました ✓`);
 }
 /* ===== アカウント編集 ===== */
 function openAccEdit(key){

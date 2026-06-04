@@ -317,13 +317,19 @@
     var ids = Object.keys(TEAM_KEY).filter(function (id) { return TEAM_KEY[id] === letter; });
     return ids[0] || null;
   }
+  function friendlyErr(msg) {
+    msg = String(msg || '');
+    if (/duplicate|unique/i.test(msg)) return 'このメールアドレスは既に登録されています';
+    if (/permission denied|row-level/i.test(msg)) return '権限がありません（管理者・幹部でログインしてください）';
+    return msg;
+  }
   async function createAccount(o) {
     if (!sb) return { error: 'Supabase未接続' };
     var ins = await sb.from('profiles').insert({
       full_name: o.name, email: o.email, role: roleToEnum(o.role || 'メンバー'),
       department: o.department || null, color: o.color || '#0D9488'
     }).select().single();
-    if (ins.error) return { error: ins.error.message };
+    if (ins.error) return { error: friendlyErr(ins.error.message) };
     var pid = ins.data.id;
     var teamUuid = o.teamUuid || (o.teamLetter ? teamUuidOf(o.teamLetter) : null);
     if (teamUuid) {
@@ -332,9 +338,15 @@
         role_in_team: (o.role === 'リーダー') ? 'leader' : 'member',
         achievement_rate: (o.rate != null ? o.rate : 50)
       });
-      if (tmIns.error) return { error: tmIns.error.message };
+      if (tmIns.error) return { error: friendlyErr(tmIns.error.message) };
     }
-    return { data: ins.data, pid: pid };
+    // 即ログイン可能にする（RPC。未適用でもプロフィール作成は成功扱い）
+    var loginEnabled = false;
+    try {
+      var rpc = await sb.rpc('vexum_create_login', { p_email: o.email, p_password: 'vexum2025' });
+      loginEnabled = !rpc.error;
+    } catch (e) { loginEnabled = false; }
+    return { data: ins.data, pid: pid, loginEnabled: loginEnabled };
   }
   async function deleteAccount(pid) {
     if (!sb) return { error: 'Supabase未接続' };
