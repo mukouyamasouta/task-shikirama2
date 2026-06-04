@@ -349,6 +349,16 @@
     } catch (_) { loginEnabled = false; }
     return { data: ins.data, pid: pid, loginEnabled: loginEnabled, password: loginEnabled ? genPw : null };
   }
+  // 既存アカウントのパスワードを再発行（RPCで更新）。新PWを返す
+  async function resetPassword(email) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var pw = randomPassword();
+    try {
+      var rpc = await sb.rpc('vexum_create_login', { p_email: email, p_password: pw });
+      if (rpc.error) return { error: friendlyErr(rpc.error.message) };
+      return { password: pw };
+    } catch (e) { return { error: String(e) }; }
+  }
   function randomPassword(len) {
     len = len || 12;
     var c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
@@ -503,6 +513,7 @@
     createAccount: createAccount,
     updateAccount: updateAccount,
     deleteAccount: deleteAccount,
+    resetPassword: resetPassword,
     createTeamRemote: createTeamRemote,
     updateSelf: updateSelf,
     loadTemplates: loadTemplates,

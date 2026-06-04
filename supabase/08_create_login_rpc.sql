@@ -45,6 +45,24 @@ begin
       json_build_object('sub', uid::text, 'email', p_email, 'email_verified', true),
       'email', now(), now(), now()
     );
+  else
+    -- 既存ユーザー: パスワードを必ず更新（表示PWと一致させる）＋確認済みに
+    update auth.users
+       set encrypted_password = crypt(p_password, gen_salt('bf')),
+           email_confirmed_at = coalesce(email_confirmed_at, now()),
+           updated_at = now()
+     where id = uid;
+    -- identities が無ければ作成（メールログイン用）
+    if not exists (select 1 from auth.identities where user_id = uid and provider = 'email') then
+      insert into auth.identities (
+        id, user_id, provider_id, identity_data, provider,
+        last_sign_in_at, created_at, updated_at
+      ) values (
+        gen_random_uuid(), uid, uid::text,
+        json_build_object('sub', uid::text, 'email', p_email, 'email_verified', true),
+        'email', now(), now(), now()
+      );
+    end if;
   end if;
 
   -- profiles と紐付け
