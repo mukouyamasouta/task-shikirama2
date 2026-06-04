@@ -110,7 +110,7 @@
         var tk = TEAM_KEY[c.owner_team_id]; if (!tk) return;
         base.team = c.name; MND[tk] = base;
       } else if (c.id !== 'user_nakamura_q2') {
-        var mk = MEMBER_KEY[c.owner_user_id]; if (!mk) return;
+        var mk = memKey(c.owner_user_id); if (!mk) return;
         var mem = MEMBERS[mk] || {};
         base.team = letterName[mem.team] || ''; base.role = mem.role || 'メンバー';
         EMP[mk] = base;
@@ -122,12 +122,28 @@
   function fmtMD(d) { if (!d) return '-'; var p = d.split('-'); return (+p[1]) + '/' + (+p[2]); }
   function fmtYMD(d) { return d ? d.replace(/-/g, '/') : ''; }
 
-  // ===== リーダー画面 用アダプタ =====
+  // ===== リーダー画面 用アダプタ（引数なし＝ログイン中リーダーの担当チームを自動判定） =====
   async function loadLeaderData(teamLetter) {
-    teamLetter = teamLetter || 'A';
     var raw = await fetchAll(); if (!raw) return null;
     var prof = byId(raw.profiles);
-    var teamUuid = Object.keys(TEAM_KEY).filter(function (id) { return TEAM_KEY[id] === teamLetter; })[0];
+    var teamUuid = null;
+    if (teamLetter) {
+      teamUuid = Object.keys(TEAM_KEY).filter(function (id) { return TEAM_KEY[id] === teamLetter; })[0] || teamLetter;
+    } else {
+      // ログイン中ユーザーが「リーダーのチーム」を特定（leader_id一致 → 所属でrole=leader → 所属）
+      var me = await currentProfile();
+      if (me && me.id) {
+        var t1 = raw.teams.filter(function (t) { return t.leader_id === me.id; })[0];
+        if (t1) teamUuid = t1.id;
+        if (!teamUuid) {
+          var tm0 = raw.team_members.filter(function (m) { return m.profile_id === me.id; });
+          var lead = tm0.filter(function (m) { return m.role_in_team === 'leader'; })[0] || tm0[0];
+          if (lead) teamUuid = lead.team_id;
+        }
+      }
+    }
+    if (!teamUuid) teamUuid = Object.keys(TEAM_KEY).filter(function (id) { return TEAM_KEY[id] === 'A'; })[0]; // デモ用フォールバック
+    teamLetter = TEAM_KEY[teamUuid] || teamUuid;
     var team = raw.teams.filter(function (t) { return t.id === teamUuid; })[0] || { name: '' };
     var chartByUser = {};
     raw.mandala_charts.forEach(function (c) { if (c.owner_type === 'user' && c.id.indexOf('_q2') < 0) chartByUser[c.owner_user_id] = c; });
@@ -137,7 +153,7 @@
 
     var MEMBERS = {}, DASH_IDS = [], EVAL_IDS = [];
     members.forEach(function (m) {
-      var key = MEMBER_KEY[m.profile_id], p = prof[m.profile_id]; if (!key || !p) return;
+      var key = memKey(m.profile_id), p = prof[m.profile_id]; if (!key || !p) return;
       var c = chartByUser[m.profile_id] || { subs: [], acts: [], center: '' };
       var tk = raw.tasks.filter(function (t) { return t.assignee_id === m.profile_id; });
       var stats = { done: tk.filter(function (t) { return t.status === 'done'; }).length,
@@ -159,7 +175,7 @@
 
     var MEMBER_TASKS = {};
     raw.tasks.forEach(function (t) {
-      var key = MEMBER_KEY[t.assignee_id]; if (!key || !MEMBERS[key]) return;
+      var key = memKey(t.assignee_id); if (!key || !MEMBERS[key]) return;
       (MEMBER_TASKS[key] = MEMBER_TASKS[key] || []).push({
         name: t.title, kpi: t.related_kgi || '—', start: fmtMD(t.start_date), due: fmtMD(t.due_date), pri: t.priority, status: t.status
       });
@@ -167,7 +183,7 @@
 
     var REPORTS = {};
     raw.daily_reports.forEach(function (r) {
-      var key = MEMBER_KEY[r.author_id]; if (!key || !MEMBERS[key]) return;
+      var key = memKey(r.author_id); if (!key || !MEMBERS[key]) return;
       (REPORTS[key] = REPORTS[key] || []).push({ date: r.report_date, hours: r.hours, done: r.done, plan: r.plan, issue: r.issue, cond: r.condition });
     });
 
@@ -179,7 +195,7 @@
     var AVAILABLE = {};
     raw.profiles.forEach(function (p) {
       if (assigned[p.id] || p.role === 'admin' || p.role === 'executive') return;
-      var key = MEMBER_KEY[p.id]; if (!key) return;
+      var key = memKey(p.id); if (!key) return;
       AVAILABLE[key] = {
         pid: p.id,
         name: p.full_name, role: '従業員', team: '（未所属）', email: p.email, color: p.color, bg: '#F3F4F6', rate: 50,
@@ -251,12 +267,20 @@
     return { data: r.data };
   }
 
-  // ===== 個人画面 用アダプタ =====
-  async function loadPersonalData(memberKey) {
-    memberKey = memberKey || 'nakamura';
+  // ===== 個人画面 用アダプタ（引数なし＝ログイン中の本人を自動判定） =====
+  async function loadPersonalData(arg) {
     var raw = await fetchAll(); if (!raw) return null;
     var prof = byId(raw.profiles);
-    var uid = Object.keys(MEMBER_KEY).filter(function (id) { return MEMBER_KEY[id] === memberKey; })[0];
+    // uid解決: 実UUID / 短縮キー / 未指定(→ログイン中の本人)
+    var uid = null;
+    if (arg && prof[arg]) uid = arg;
+    else if (arg) uid = Object.keys(MEMBER_KEY).filter(function (id) { return MEMBER_KEY[id] === arg; })[0];
+    if (!uid) {
+      var me = await currentProfile();
+      if (me && me.id) uid = me.id;
+    }
+    if (!uid) uid = 'a0000000-0000-4000-8000-000000000004'; // デモ用フォールバック(中村)
+    var memberKey = MEMBER_KEY[uid] || uid;  // 既存=短縮キー / 新規=UUID（チャートidと一致）
     var tm = raw.team_members.filter(function (m) { return m.profile_id === uid; })[0];
     var teamLetter = tm ? TEAM_KEY[tm.team_id] : 'A';
     var teamRow = raw.teams.filter(function (t) { return tm && t.id === tm.team_id; })[0];

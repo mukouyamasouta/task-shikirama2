@@ -195,7 +195,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <aside class="sidebar">
   <div class="sb-logo"><div class="sb-brand">VEXUM</div><div class="sb-brand-sub">TASK MANAGEMENT SYSTEM</div></div>
   <div class="sb-role"><span class="sb-role-dot"></span><span class="sb-role-lbl">● 個人 / 従業員</span></div>
-  <div class="sb-user"><div class="sb-uname">中村 健太</div><div class="sb-uemail">nakamura@vexum.co.jp</div></div>
+  <div class="sb-user"><div class="sb-uname" id="sb-uname">中村 健太</div><div class="sb-uemail" id="sb-uemail">nakamura@vexum.co.jp</div></div>
   <div class="sb-nav">
     <div class="sb-sec">個人メニュー</div>
     <button class="sb-item active" onclick="swTab('progress',this)"><span class="sb-icon">◇</span>進捗ダッシュボード</button>
@@ -1241,7 +1241,8 @@ updateAssignBadge();
   var API=window.VexumAPI; if(!API||!API.ready) return;
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}
-  API.loadPersonalData('nakamura').then(function(d){
+  API.currentProfile().then(function(p){ if(!p)return; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; }).catch(function(){});
+  API.loadPersonalData().then(function(d){
     if(!d) return;
     repl(CHARTS,d.CHARTS); repl(FEEDBACK,d.FEEDBACK);
     replArr(ASSIGNMENTS,d.ASSIGNMENTS); replArr(ASSIGN_HISTORY,d.ASSIGN_HISTORY); replArr(PREPORTS,d.PREPORTS);

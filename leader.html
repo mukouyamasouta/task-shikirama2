@@ -141,7 +141,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <aside class="sidebar">
   <div class="sb-logo"><div class="sb-brand">VEXUM</div><div class="sb-brand-sub">TASK MANAGEMENT SYSTEM</div></div>
   <div class="sb-role"><span class="sb-role-dot"></span><span class="sb-role-lbl">★ LEADER / チーム管理</span></div>
-  <div class="sb-user"><div class="sb-uname">田中 花子</div><div class="sb-uemail">tanaka@vexum.co.jp</div></div>
+  <div class="sb-user"><div class="sb-uname" id="sb-uname">田中 花子</div><div class="sb-uemail" id="sb-uemail">tanaka@vexum.co.jp</div></div>
   <div class="sb-team">▣ 営業チームA ／ メンバー 4名</div>
   <div class="sb-nav">
     <div class="sb-sec">チームリーダーメニュー</div>
@@ -944,7 +944,8 @@ renderReports();
   var API=window.VexumAPI; if(!API||!API.ready) return;
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}
-  API.loadLeaderData('A').then(function(d){
+  API.currentProfile().then(function(p){ if(!p)return; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; if(typeof LEADER==='object'){LEADER.name=p.full_name;LEADER.email=p.email;} }).catch(function(){});
+  API.loadLeaderData().then(function(d){
     if(!d) return;
     repl(MEMBERS,d.MEMBERS); repl(MEMBER_TASKS,d.MEMBER_TASKS); repl(REPORTS,d.REPORTS); repl(AVAILABLE,d.AVAILABLE);
     replArr(EVAL_RECORDS,d.EVAL_RECORDS); replArr(DASH_IDS,d.DASH_IDS); replArr(EVAL_IDS,d.EVAL_IDS);
