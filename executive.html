@@ -621,11 +621,11 @@ async function submitAccount(){
   if(dup){showToast('このメールアドレスは既に登録されています');return;}
   if(role==='幹部'||role==='管理者')teamId='';  // 管理職はチーム未所属
   const API=window.VexumAPI;
-  let id,loginEnabled=false;
+  let id,res={};
   if(API&&API.ready){
-    const res=await API.createAccount({name,email,role:role||'メンバー',teamLetter:teamId||null,rate:50});
-    if(res&&res.error){showToast('作成失敗: '+res.error);return;}
-    id=res.pid;loginEnabled=res.loginEnabled;
+    res=await API.createAccount({name,email,role:role||'メンバー',teamLetter:teamId||null,rate:50})||{};
+    if(res.error){showToast('作成失敗: '+res.error);return;}
+    id=res.pid;
   }else{
     id=makeId(name);
   }
@@ -633,7 +633,15 @@ async function submitAccount(){
   if(teamId&&TEAMS[teamId]&&!TEAMS[teamId].members.includes(id))TEAMS[teamId].members.push(id);
   closeAccModal();
   renderAccount();
-  showToast(loginEnabled?`${name} を作成しました（PW: vexum2025 でログイン可）✓`:`${name} のアカウントを作成しました ✓`);
+  if(res.emailed){
+    showToast(`${name} を発行し、${email} に案内メールを送信しました ✓`);
+  }else if(res.password){
+    // メール未送信（Resend未設定など）→ 管理者に表示
+    showToast(`${name} を発行しました（メール未送信）`);
+    alert(`アカウントを発行しました（メールは送信されていません）\n\nログインURL: ${location.origin}/\nメール: ${email}\nパスワード: ${res.password}\n\n※ Resend を設定するとメールで自動送信されます。`);
+  }else{
+    showToast(`${name} のアカウントを作成しました ✓`);
+  }
 }
 /* ===== アカウント編集 ===== */
 function openAccEdit(key){
