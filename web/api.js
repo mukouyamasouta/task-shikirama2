@@ -252,6 +252,16 @@
     if (r.error) return { error: r.error.message };
     return { ok: true };
   }
+  // 評価履歴（eval_records）を取得
+  async function loadEvalHistory() {
+    if (!sb) return [];
+    var r = await sb.from('eval_records').select('*').order('created_at', { ascending: false });
+    if (r.error) { err('eval_records', r.error); return []; }
+    return (r.data || []).map(function (x) {
+      return { name: x.evaluatee_name, evaluator: x.evaluator_name, period: x.period,
+        kgi: +x.kgi || 0, csf: +x.csf_avg || 0, task: +x.task_avg || 0, comment: x.comment || '', status: x.status || 'done' };
+    });
+  }
   // 評価をメンバー本人に届ける（個人画面のフィードバックに表示される evaluations へ）
   async function saveEvaluation(o) {
     if (!sb) return { error: 'Supabase未接続' };
@@ -568,6 +578,7 @@
     assignTask: assignTask,
     saveEvalRecord: saveEvalRecord,
     saveEvaluation: saveEvaluation,
+    loadEvalHistory: loadEvalHistory,
     upsertMemberChart: upsertMemberChart,
     loadPersonalData: loadPersonalData,
     loadTokatsuData: loadTokatsuData,

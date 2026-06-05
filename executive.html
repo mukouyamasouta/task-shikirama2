@@ -229,6 +229,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="eval-switch">
     <button class="esw active" onclick="swEval('team',this)">🏢 チーム評価</button>
     <button class="esw" onclick="swEval('member',this)">👤 個人評価</button>
+    <button class="esw" onclick="swEval('history',this);renderEvalHistory()">📊 評価履歴</button>
   </div>
   <div id="ep-team" class="epane active">
     <div id="team-eval-container"></div>
@@ -244,6 +245,12 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       </select>
     </div>
     <div id="member-eval-container"></div>
+  </div>
+  <div id="ep-history" class="epane">
+    <div class="search-row">
+      <input class="search-in" id="evalhist-search" placeholder="🔍 氏名で検索…" oninput="renderEvalHistory()">
+    </div>
+    <div id="evalhist-container"></div>
   </div>
 </div>
 
@@ -1179,7 +1186,42 @@ function saveMemberEvalExec(id,name){
       .then(function(res){if(res&&res.error)console.warn('eval deliver:',res.error);});
     API.saveEvalRecord({evaluateePid:m.pid,evaluateeName:name,period:'2025 Q2',kgi:e.kgi.stars,csf:avg,task:0,comment:e.kgi.comment||''});
   }
+  // 履歴に即時反映
+  const rec={name,evaluator:(document.getElementById('sb-uname')||{}).textContent||'幹部',period:'2025 Q2',kgi:e.kgi.stars,csf:avg,task:0,comment:e.kgi.comment||'',status:'done'};
+  const idx=EVAL_HISTORY.findIndex(r=>r.name===name&&r.period===rec.period);
+  if(idx>=0)EVAL_HISTORY[idx]=rec;else EVAL_HISTORY.unshift(rec);
+  renderEvalHistory();
   showToast(`${name} の評価を保存しました（CSF平均 ${avg}★）✓`);
+}
+/* ===== 評価履歴 ===== */
+let EVAL_HISTORY=[];
+function starStr(n){const f=Math.round(n||0);let s='';for(let i=1;i<=5;i++)s+=i<=f?'★':'☆';return s;}
+function renderEvalHistory(){
+  const con=document.getElementById('evalhist-container');if(!con)return;
+  const q=(document.getElementById('evalhist-search')||{}).value||'';
+  const list=EVAL_HISTORY.filter(r=>!q||(r.name||'').includes(q));
+  if(!list.length){con.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:28px">評価履歴がありません。チーム評価・個人評価で保存すると、ここに履歴が表示されます。</div>';return;}
+  // 氏名でグループ化
+  const byName={};list.forEach(r=>{(byName[r.name]=byName[r.name]||[]).push(r);});
+  let h='';
+  Object.keys(byName).forEach(nm=>{
+    h+=`<div class="card"><div class="card-hd"><div class="card-title">${nm}</div><div class="card-sub">評価 ${byName[nm].length}件</div></div><div class="card-body" style="padding:0">`;
+    byName[nm].forEach(r=>{
+      h+=`<div style="padding:12px 16px;border-bottom:1px solid #F3F4F6">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+          <div style="font-size:12px;font-weight:700">${r.period||'—'} <span style="font-size:10px;font-weight:400;color:var(--text3)">評価者: ${r.evaluator||'—'}</span></div>
+          <div style="display:flex;gap:14px;font-size:11px">
+            <span>KGI <span style="color:var(--amber);letter-spacing:1px">${starStr(r.kgi)}</span></span>
+            <span>CSF <span style="color:var(--amber);letter-spacing:1px">${starStr(r.csf)}</span> <span style="color:var(--text3)">${r.csf||0}</span></span>
+            ${r.task?`<span>タスク <span style="color:var(--amber);letter-spacing:1px">${starStr(r.task)}</span></span>`:''}
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);background:#FAFAFA;border:1px solid var(--border);border-radius:6px;padding:8px 10px">💬 ${r.comment||'—'}</div>
+      </div>`;
+    });
+    h+=`</div></div>`;
+  });
+  con.innerHTML=h;
 }
 function evalBlock(id,type,si,tag,tagColor,goal){
   return `<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">
@@ -1278,6 +1320,11 @@ renderAccount();
   API.loadSends().then(function(rows){
     SENDS=rows||[];
     if(typeof renderSendHistory==='function')renderSendHistory();
+  }).catch(function(){});
+  // 評価履歴読込
+  API.loadEvalHistory().then(function(rows){
+    EVAL_HISTORY=rows||[];
+    if(typeof renderEvalHistory==='function')renderEvalHistory();
   }).catch(function(){});
 })();
 </script>
