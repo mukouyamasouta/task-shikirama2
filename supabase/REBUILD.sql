@@ -104,7 +104,8 @@ create table daily_reports (
   plan        text,
   issue       text,
   condition   report_condition default 'normal',
-  created_at  timestamptz default now()
+  created_at  timestamptz default now(),
+  unique (author_id, report_date)
 );
 create table evaluations (
   id             uuid primary key default gen_random_uuid(),
