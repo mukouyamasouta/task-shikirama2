@@ -1172,6 +1172,13 @@ function toggleCsf(id){
 function saveMemberEvalExec(id,name){
   const e=_mev(id);
   const avg=Math.round(e.csf.reduce((a,c)=>a+c.stars,0)/8*10)/10;
+  const API=window.VexumAPI;
+  const m=MEMBERS[id];
+  if(API&&API.ready&&m&&m.pid){
+    API.saveEvaluation({targetPid:m.pid,evaluatorRole:'executive',period:'2025 Q2',kgi:e.kgi.stars,kgiComment:e.kgi.comment||'',csf:e.csf.map(function(c){return {stars:c.stars,comment:c.comment};})})
+      .then(function(res){if(res&&res.error)console.warn('eval deliver:',res.error);});
+    API.saveEvalRecord({evaluateePid:m.pid,evaluateeName:name,period:'2025 Q2',kgi:e.kgi.stars,csf:avg,task:0,comment:e.kgi.comment||''});
+  }
   showToast(`${name} の評価を保存しました（CSF平均 ${avg}★）✓`);
 }
 function evalBlock(id,type,si,tag,tagColor,goal){

@@ -252,6 +252,21 @@
     if (r.error) return { error: r.error.message };
     return { ok: true };
   }
+  // 評価をメンバー本人に届ける（個人画面のフィードバックに表示される evaluations へ）
+  async function saveEvaluation(o) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var me = await currentProfile();
+    var row = {
+      target_type: 'user', target_user_id: o.targetPid || null,
+      evaluator_id: me ? me.id : null, evaluator_role: o.evaluatorRole || 'leader',
+      period: o.period || null, kgi_stars: o.kgi || 0, kgi_comment: o.kgiComment || '',
+      csf: o.csf || []
+    };
+    if (o.chartId) row.chart_id = o.chartId;
+    var r = await sb.from('evaluations').insert(row);
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    return { ok: true };
+  }
   // メンバーの個人曼荼羅チャートを upsert（リーダーが記入＝タスク割当）
   async function upsertMemberChart(o) {
     if (!sb) return { error: 'Supabase未接続' };
@@ -299,7 +314,8 @@
     raw.evaluations.forEach(function (ev) {
       var ck = ev.chart_id === 'user_' + memberKey ? 'self_q3'
              : ev.chart_id === 'user_' + memberKey + '_q2' ? 'self_q2'
-             : ev.chart_id === 'team_' + teamLetter ? 'team_' + teamLetter : null;
+             : ev.chart_id === 'team_' + teamLetter ? 'team_' + teamLetter
+             : (ev.target_user_id === uid ? 'self_q3' : null);  // 本人宛て評価は self_q3 に集約
       if (!ck) return;
       if (!FEEDBACK[ck]) FEEDBACK[ck] = { period: ev.period, evals: [] };
       var evp = prof[ev.evaluator_id] || {};
@@ -521,10 +537,24 @@
   async function currentProfile() {
     if (!sb) return null;
     var u = await sb.auth.getUser();
-    var uid = u && u.data && u.data.user && u.data.user.id;
+    var user = u && u.data && u.data.user;
+    var uid = user && user.id;
     if (!uid) return null;
-    var r = await sb.from('profiles').select('*').eq('auth_user_id', uid).single();
-    return r.data || null;
+    // まず auth_user_id 一致で取得
+    var r = await sb.from('profiles').select('*').eq('auth_user_id', uid).maybeSingle();
+    if (r.data) return r.data;
+    // フォールバック: メール一致で取得し、auth_user_id を自動修復
+    var email = user.email;
+    if (email) {
+      var r2 = await sb.from('profiles').select('*').ilike('email', email).maybeSingle();
+      if (r2.data) {
+        if (!r2.data.auth_user_id || r2.data.auth_user_id !== uid) {
+          try { await sb.from('profiles').update({ auth_user_id: uid }).eq('id', r2.data.id); r2.data.auth_user_id = uid; } catch (e) {}
+        }
+        return r2.data;
+      }
+    }
+    return null;
   }
 
   window.VexumAPI = {
@@ -537,6 +567,7 @@
     removeTeamMember: removeTeamMember,
     assignTask: assignTask,
     saveEvalRecord: saveEvalRecord,
+    saveEvaluation: saveEvaluation,
     upsertMemberChart: upsertMemberChart,
     loadPersonalData: loadPersonalData,
     loadTokatsuData: loadTokatsuData,

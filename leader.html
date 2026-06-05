@@ -698,8 +698,10 @@ function saveMemberEval(){
   const rec={name,evaluator:LEADER.name,period,kgi:e.kgi.stars,csf:avgCsf,task:taskAvg,comment:cmt,status:'done'};
   const API=window.VexumAPI;
   if(API&&API.ready){
-    API.saveEvalRecord({evaluateePid:pidOf(id),evaluateeName:name,period,kgi:e.kgi.stars,csf:avgCsf,task:taskAvg,comment:cmt})
-      .then(function(res){if(res&&res.error)showToast('evalin-saved');});
+    API.saveEvalRecord({evaluateePid:pidOf(id),evaluateeName:name,period,kgi:e.kgi.stars,csf:avgCsf,task:taskAvg,comment:cmt});
+    // メンバー本人の個人画面に評価を届ける
+    API.saveEvaluation({targetPid:pidOf(id),evaluatorRole:'leader',period,kgi:e.kgi.stars,kgiComment:e.kgi.comment||'',csf:e.csf.map(function(c){return {stars:c.stars,comment:c.comment};})})
+      .then(function(res){if(res&&res.error)console.warn('eval deliver:',res.error);});
   }
   const idx=EVAL_RECORDS.findIndex(r=>r.name===name&&r.period===period);
   if(idx>=0)EVAL_RECORDS[idx]=rec;else EVAL_RECORDS.unshift(rec);
