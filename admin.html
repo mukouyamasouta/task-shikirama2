@@ -870,6 +870,7 @@ function sendMandala(){
 <script>
 (function(){
   var API=window.VexumAPI; if(!API||!API.ready) return;
+  API.currentProfile().then(function(_m){ if(!_m){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); } });
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   API.loadTokatsuData().then(function(d){
     if(!d) return;

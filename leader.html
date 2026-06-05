@@ -944,6 +944,7 @@ renderReports();
 <script>
 (function(){
   var API=window.VexumAPI; if(!API||!API.ready) return;
+  API.currentProfile().then(function(_m){ if(!_m){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); } });
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}
   API.currentProfile().then(function(p){ if(!p)return; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; if(typeof LEADER==='object'){LEADER.name=p.full_name;LEADER.email=p.email;} }).catch(function(){});

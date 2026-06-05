@@ -1253,6 +1253,7 @@ renderAccount();
 (function(){
   var API = window.VexumAPI;
   if(!API || !API.ready) return; // 未設定: 内蔵デモのまま
+  API.currentProfile().then(function(_m){ if(!_m){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); } });
   function repl(target, src){ Object.keys(target).forEach(function(k){ delete target[k]; }); Object.assign(target, src); }
   API.loadAdminData().then(function(d){
     if(!d) return;
