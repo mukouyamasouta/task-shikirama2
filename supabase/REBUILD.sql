@@ -1,15 +1,338 @@
 -- =====================================================================
--- run_all_seeds.sql — 02〜05 を1回で投入する統合シード
--- 前提: 01_schema.sql が実行済み（テーブル作成済み）
--- 共通ログインパスワード: vexum2025
+-- VEXUM REBUILD.sql — バックエンド完全再構築（1ファイル / 上から順に1回実行）
+-- 対象: 幹部(executive) / リーダー(leader) / 従業員(employee) 画面
+-- 設計方針:
+--   * フロント(web/api.js)が使うテーブル・カラム・RPCに完全一致
+--   * RLSは「役職＋メール一致フォールバック」で紐付けズレに強い
+--   * アカウント削除がFKでブロックされないよう ON DELETE を整備
+--   * 評価は evaluations(本人が読む) と eval_records(履歴) の両方に対応
+--   * 全アカウントは確認済みで作成（共通PW: vexum2025）→ 即ログイン可
+-- 既存データは全て破棄して作り直します。
 -- =====================================================================
 
--- =====================================================================
--- 02_seed_core.sql — アカウント / チーム / 所属
--- HTML(統括・幹部・リーダー・個人)に登場するアカウントをそのまま再現
--- profiles.id は固定UUID（他シードから参照）。auth_user_id は後で紐付け。
--- =====================================================================
+create extension if not exists "pgcrypto";
 
+-- ========== 0. クリーンスレート（既存を全削除） ==========
+drop trigger if exists on_auth_user_created on auth.users;
+drop table if exists
+  chart_sends, chart_templates, eval_records, evaluations, daily_reports,
+  tasks, mandala_charts, team_members, teams, profiles cascade;
+drop function if exists
+  handle_new_user(), vexum_self_register(text,text,text), vexum_create_login(text,text),
+  my_team_member_ids(), my_led_team_ids(), is_admin_or_exec(), current_profile_id() cascade;
+-- デモ用 Auth ユーザーを削除（このSQLで作り直す）
+delete from auth.identities where provider='email' and user_id in (
+  select id from auth.users where email like '%@vexum.co.jp' or email='muko577628@icloud.com'
+);
+delete from auth.users where email like '%@vexum.co.jp' or email='muko577628@icloud.com';
+
+-- ========== 1. ENUM ==========
+do $$ begin create type user_role       as enum ('admin','executive','leader','member'); exception when duplicate_object then null; end $$;
+do $$ begin create type owner_type      as enum ('user','team'); exception when duplicate_object then null; end $$;
+do $$ begin create type task_priority   as enum ('hi','md','lo','urgent'); exception when duplicate_object then null; end $$;
+do $$ begin create type task_status     as enum ('todo','wip','done','late'); exception when duplicate_object then null; end $$;
+do $$ begin create type report_condition as enum ('great','good','normal','bad','poor'); exception when duplicate_object then null; end $$;
+do $$ begin create type evaluator_role  as enum ('leader','executive'); exception when duplicate_object then null; end $$;
+
+-- ========== 2. テーブル（FKのON DELETEを整備） ==========
+create table profiles (
+  id           uuid primary key default gen_random_uuid(),
+  auth_user_id uuid unique references auth.users(id) on delete set null,
+  full_name    text not null,
+  email        text unique not null,
+  role         user_role not null default 'member',
+  department   text,
+  color        text default '#0D9488',
+  created_at   timestamptz default now()
+);
+create table teams (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  color      text default '#0D9488',
+  bg         text default '#CCEDE9',
+  leader_id  uuid references profiles(id) on delete set null,
+  created_at timestamptz default now()
+);
+create table team_members (
+  team_id          uuid references teams(id) on delete cascade,
+  profile_id       uuid references profiles(id) on delete cascade,
+  role_in_team     text not null default 'member',
+  achievement_rate int  default 0,
+  joined_at        timestamptz default now(),
+  primary key (team_id, profile_id)
+);
+create table mandala_charts (
+  id            text primary key,
+  owner_type    owner_type not null,
+  owner_user_id uuid references profiles(id) on delete cascade,
+  owner_team_id uuid references teams(id)    on delete cascade,
+  name          text not null,
+  scope_label   text,
+  period        text,
+  start_date    date,
+  center        text not null,
+  subs          jsonb not null,
+  acts          jsonb not null,
+  color         text default '#0D9488',
+  bg            text default '#CCEDE9',
+  created_at    timestamptz default now()
+);
+create table tasks (
+  id             uuid primary key default gen_random_uuid(),
+  title          text not null,
+  related_kgi    text,
+  category       text,
+  assigner_id    uuid references profiles(id) on delete set null,
+  assignee_id    uuid references profiles(id) on delete cascade,
+  team_id        uuid references teams(id)    on delete set null,
+  source         text,
+  start_date     date,
+  due_date       date,
+  priority       task_priority default 'md',
+  progress       int default 0,
+  status         task_status   default 'todo',
+  comment        text,
+  completed_date date,
+  created_at     timestamptz default now()
+);
+create table daily_reports (
+  id          uuid primary key default gen_random_uuid(),
+  author_id   uuid references profiles(id) on delete cascade,
+  report_date date not null,
+  hours       text,
+  done        text,
+  plan        text,
+  issue       text,
+  condition   report_condition default 'normal',
+  created_at  timestamptz default now()
+);
+create table evaluations (
+  id             uuid primary key default gen_random_uuid(),
+  target_type    owner_type not null,
+  target_user_id uuid references profiles(id) on delete cascade,
+  target_team_id uuid references teams(id)    on delete cascade,
+  evaluator_id   uuid references profiles(id) on delete set null,
+  evaluator_role evaluator_role not null,
+  chart_id       text references mandala_charts(id) on delete set null,
+  period         text,
+  kgi_stars      int,
+  kgi_comment    text,
+  csf            jsonb,
+  task_eval      jsonb,
+  created_at     timestamptz default now()
+);
+create table eval_records (
+  id             uuid primary key default gen_random_uuid(),
+  evaluatee_id   uuid references profiles(id) on delete cascade,
+  evaluatee_name text,
+  evaluator_name text,
+  period         text,
+  kgi            numeric,
+  csf_avg        numeric,
+  task_avg       numeric,
+  comment        text,
+  status         text default 'done',
+  created_at     timestamptz default now()
+);
+create table chart_templates (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  center     text default '',
+  subs       jsonb not null default '[]'::jsonb,
+  acts       jsonb not null default '[]'::jsonb,
+  color      text default '#0D9488',
+  bg         text default '#CCEDE9',
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz default now()
+);
+create table chart_sends (
+  id            uuid primary key default gen_random_uuid(),
+  title         text,
+  center        text default '',
+  subs          jsonb not null default '[]'::jsonb,
+  acts          jsonb not null default '[]'::jsonb,
+  to_team       text,
+  to_profile_id uuid references profiles(id) on delete set null,
+  to_name       text,
+  status        text default 'sent',
+  progress      int  default 0,
+  cell_status   jsonb default '{}'::jsonb,
+  edited_by     jsonb default '{}'::jsonb,
+  sent_by       uuid references profiles(id) on delete set null,
+  sent_by_name  text,
+  sent_at       timestamptz default now(),
+  updated_at    timestamptz default now()
+);
+
+-- ========== 3. 本人判定関数（auth.uid または JWTメール一致） ==========
+create or replace function current_profile_id() returns uuid
+  language sql stable security definer set search_path = public, auth as $$
+  select id from profiles
+   where auth_user_id = auth.uid()
+      or lower(email) = lower(nullif(auth.jwt() ->> 'email',''))
+   order by (auth_user_id = auth.uid()) desc nulls last
+   limit 1
+$$;
+create or replace function is_admin_or_exec() returns boolean
+  language sql stable security definer set search_path = public, auth as $$
+  select coalesce((
+    select role in ('admin','executive') from profiles
+     where auth_user_id = auth.uid()
+        or lower(email) = lower(nullif(auth.jwt() ->> 'email',''))
+     order by (auth_user_id = auth.uid()) desc nulls last limit 1
+  ), false)
+$$;
+create or replace function my_led_team_ids() returns setof uuid
+  language sql stable security definer set search_path = public as $$
+  select id from teams where leader_id = current_profile_id()
+$$;
+create or replace function my_team_member_ids() returns setof uuid
+  language sql stable security definer set search_path = public as $$
+  select tm.profile_id from team_members tm
+   where tm.team_id in (select id from teams where leader_id = current_profile_id())
+$$;
+
+-- ========== 4. RLS ==========
+alter table profiles       enable row level security;
+alter table teams          enable row level security;
+alter table team_members   enable row level security;
+alter table mandala_charts enable row level security;
+alter table tasks          enable row level security;
+alter table daily_reports  enable row level security;
+alter table evaluations    enable row level security;
+alter table eval_records   enable row level security;
+alter table chart_templates enable row level security;
+alter table chart_sends    enable row level security;
+
+-- 参照: ログインユーザーは全件参照可（社内ツール想定）
+create policy "p_read"  on profiles       for select to authenticated using (true);
+create policy "t_read"  on teams          for select to authenticated using (true);
+create policy "tm_read" on team_members   for select to authenticated using (true);
+create policy "mc_read" on mandala_charts for select to authenticated using (true);
+create policy "tk_read" on tasks          for select to authenticated using (true);
+create policy "dr_read" on daily_reports  for select to authenticated using (true);
+create policy "ev_read" on evaluations    for select to authenticated using (true);
+create policy "er_read" on eval_records   for select to authenticated using (true);
+create policy "ct_read" on chart_templates for select to authenticated using (true);
+create policy "cs_read" on chart_sends    for select to authenticated using (true);
+
+-- profiles: 管理者/幹部は全操作、本人は自分の行を更新
+create policy "p_admin" on profiles for all to authenticated
+  using (is_admin_or_exec()) with check (is_admin_or_exec());
+create policy "p_self"  on profiles for update to authenticated
+  using (id = current_profile_id()) with check (id = current_profile_id());
+
+-- teams / team_members: 管理者・幹部 または 自チームのリーダー
+create policy "t_manage"  on teams for all to authenticated
+  using (is_admin_or_exec() or leader_id = current_profile_id())
+  with check (is_admin_or_exec() or leader_id = current_profile_id());
+create policy "tm_manage" on team_members for all to authenticated
+  using (is_admin_or_exec() or team_id in (select my_led_team_ids()))
+  with check (is_admin_or_exec() or team_id in (select my_led_team_ids()));
+
+-- mandala_charts: 管理者・幹部 / 本人 / 自チームのリーダー / 自チームメンバーの分
+create policy "mc_manage" on mandala_charts for all to authenticated
+  using (is_admin_or_exec() or owner_user_id = current_profile_id()
+         or owner_team_id in (select my_led_team_ids())
+         or owner_user_id in (select my_team_member_ids()))
+  with check (is_admin_or_exec() or owner_user_id = current_profile_id()
+         or owner_team_id in (select my_led_team_ids())
+         or owner_user_id in (select my_team_member_ids()));
+
+-- tasks: 管理者・幹部 / 依頼者 / 担当者本人 / 自チームのリーダー
+create policy "tk_write" on tasks for all to authenticated
+  using (is_admin_or_exec() or assigner_id = current_profile_id()
+         or assignee_id = current_profile_id() or team_id in (select my_led_team_ids()))
+  with check (is_admin_or_exec() or assigner_id = current_profile_id()
+         or assignee_id = current_profile_id() or team_id in (select my_led_team_ids()));
+
+-- daily_reports: 本人 / 管理者・幹部 / 自チームのリーダー
+create policy "dr_write" on daily_reports for all to authenticated
+  using (author_id = current_profile_id() or is_admin_or_exec()
+         or author_id in (select my_team_member_ids()))
+  with check (author_id = current_profile_id() or is_admin_or_exec()
+         or author_id in (select my_team_member_ids()));
+
+-- evaluations: 管理者・幹部 / 評価者本人 / 自チームのリーダー
+create policy "ev_write" on evaluations for all to authenticated
+  using (is_admin_or_exec() or evaluator_id = current_profile_id()
+         or target_user_id in (select my_team_member_ids()))
+  with check (is_admin_or_exec() or evaluator_id = current_profile_id()
+         or target_user_id in (select my_team_member_ids()));
+
+-- eval_records: 管理者・幹部・リーダー（リーダーは自分が誰かのリーダーなら可）
+create policy "er_write" on eval_records for all to authenticated
+  using (is_admin_or_exec() or current_profile_id() in (select leader_id from teams))
+  with check (is_admin_or_exec() or current_profile_id() in (select leader_id from teams));
+
+-- chart_templates: 管理者・幹部のみ
+create policy "ct_manage" on chart_templates for all to authenticated
+  using (is_admin_or_exec()) with check (is_admin_or_exec());
+
+-- chart_sends: 作成は管理者・幹部 / 進捗更新は全員 / 削除は管理者・幹部
+create policy "cs_insert" on chart_sends for insert to authenticated with check (is_admin_or_exec());
+create policy "cs_update" on chart_sends for update to authenticated using (true) with check (true);
+create policy "cs_delete" on chart_sends for delete to authenticated using (is_admin_or_exec());
+
+-- ========== 5. RPC / トリガー ==========
+-- 発行アカウントを即ログイン可能に（管理者・幹部のみ。既存はPW更新）
+create or replace function vexum_create_login(p_email text, p_password text default 'vexum2025')
+returns uuid language plpgsql security definer set search_path = public, auth, extensions as $$
+declare uid uuid;
+begin
+  if not is_admin_or_exec() then raise exception 'permission denied: admin/executive only'; end if;
+  select id into uid from auth.users where lower(email)=lower(p_email) limit 1;
+  if uid is null then
+    uid := gen_random_uuid();
+    insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,created_at,updated_at,raw_app_meta_data,raw_user_meta_data,is_super_admin,confirmation_token,recovery_token,email_change_token_new,email_change)
+    values ('00000000-0000-0000-0000-000000000000',uid,'authenticated','authenticated',p_email,crypt(p_password,gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}',false,'','','','');
+    insert into auth.identities (id,user_id,provider_id,identity_data,provider,last_sign_in_at,created_at,updated_at)
+    values (gen_random_uuid(),uid,uid::text,json_build_object('sub',uid::text,'email',p_email,'email_verified',true),'email',now(),now(),now());
+  else
+    update auth.users set encrypted_password=crypt(p_password,gen_salt('bf')), email_confirmed_at=coalesce(email_confirmed_at,now()), updated_at=now() where id=uid;
+    if not exists (select 1 from auth.identities where user_id=uid and provider='email') then
+      insert into auth.identities (id,user_id,provider_id,identity_data,provider,last_sign_in_at,created_at,updated_at)
+      values (gen_random_uuid(),uid,uid::text,json_build_object('sub',uid::text,'email',p_email,'email_verified',true),'email',now(),now(),now());
+    end if;
+  end if;
+  update profiles set auth_user_id=uid where lower(email)=lower(p_email);
+  return uid;
+end $$;
+grant execute on function vexum_create_login(text,text) to authenticated;
+
+-- 従業員セルフ登録（anon可・メール確認不要・確認済みユーザー作成）
+create or replace function vexum_self_register(p_email text, p_password text, p_name text default '')
+returns uuid language plpgsql security definer set search_path = public, auth, extensions as $$
+declare uid uuid;
+begin
+  if p_email is null or position('@' in p_email)=0 then raise exception 'invalid email'; end if;
+  if length(coalesce(p_password,''))<6 then raise exception 'password too short'; end if;
+  if exists (select 1 from auth.users where lower(email)=lower(p_email)) then raise exception 'already registered'; end if;
+  uid := gen_random_uuid();
+  insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,created_at,updated_at,raw_app_meta_data,raw_user_meta_data,is_super_admin,confirmation_token,recovery_token,email_change_token_new,email_change)
+  values ('00000000-0000-0000-0000-000000000000',uid,'authenticated','authenticated',p_email,crypt(p_password,gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}',json_build_object('full_name',coalesce(nullif(p_name,''),'メンバー')),false,'','','','');
+  insert into auth.identities (id,user_id,provider_id,identity_data,provider,last_sign_in_at,created_at,updated_at)
+  values (gen_random_uuid(),uid,uid::text,json_build_object('sub',uid::text,'email',p_email,'email_verified',true),'email',now(),now(),now());
+  return uid;  -- profiles は下記トリガーが作成
+end $$;
+grant execute on function vexum_self_register(text,text,text) to anon, authenticated;
+
+-- Authユーザー作成時に profiles(member) を自動作成 / 既存メールは紐付け
+create or replace function handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  update profiles set auth_user_id=new.id where lower(email)=lower(new.email) and auth_user_id is null;
+  if not found then
+    insert into profiles (auth_user_id, full_name, email, role)
+    select new.id, coalesce(nullif(new.raw_user_meta_data->>'full_name',''),'メンバー'), new.email, 'member'
+    where not exists (select 1 from profiles where lower(email)=lower(new.email));
+  end if;
+  return new;
+end $$;
+create trigger on_auth_user_created after insert on auth.users
+for each row execute function handle_new_user();
+
+-- ========== 6. SEED: アカウント / チーム / 所属 ==========
 -- ---- profiles（16アカウント） ----
 insert into profiles (id, full_name, email, role, department, color) values
 ('a0000000-0000-4000-8000-000000000001','山田 太郎','yamada@vexum.co.jp',   'admin',    '経営企画部','#0D9488'),
@@ -55,11 +378,12 @@ insert into team_members (team_id, profile_id, role_in_team, achievement_rate) v
 on conflict (team_id, profile_id) do nothing;
 -- 高橋/渡辺/山口/小川 は未所属（リーダー画面「登録アカウントから追加」候補）
 
--- =====================================================================
--- 03_seed_mandala.sql — 曼荼羅チャート（自動生成: gen_mandala_seed.js）
--- 統括/幹部/リーダー/個人 のHTMLに埋め込まれた KGI/CSF/KPI をそのまま反映
--- チーム3件 + 個人10名 + 中村Q2 = 14件
--- =====================================================================
+-- 向山颯太（あなた・幹部）を追加
+insert into profiles (id, full_name, email, role, department, color) values
+('a0000000-0000-4000-8000-000000000017','向山颯太','muko577628@icloud.com','executive','経営管理本部','#0D9488')
+on conflict (id) do nothing;
+
+-- ========== 7. SEED: 曼荼羅チャート ==========
 insert into mandala_charts
   (id, owner_type, owner_user_id, owner_team_id, name, scope_label, period, start_date, center, subs, acts, color, bg)
 values
@@ -93,11 +417,7 @@ Q2達成','["新規顧客8社","受注率40%","提案品質向上","訪問20件/
 目標達成','["提案力強化","商談件数増","資料品質向上","ロープレ月4回","業界知識習得","CRM入力徹底","メンター活用","健康維持"]'::jsonb,'[["提案書テンプレ作成","ロープレ実施","フィードバック取得","成功事例研究","動画学習","書籍読了","社内発表","外部研修参加"],["週4件アポ目標","日報必達","訪問効率化","新規リスト整備","商談記録徹底","振返り週次","既存深耕","未開拓地域攻略"],["デザイン統一","競合比較追記","実績データ追加","社内レビュー依頼","図解化","動画版検討","A/Bテスト","レスポンシブ化"],["毎週月曜実施","ロープレ動画録画","フィードバックメモ","改善点反映","上長立会い","社外参加","定例化","自己採点"],["業界誌購読","セミナー参加","社内勉強会","業界人脈構築","競合動向把握","法改正確認","技術動向調査","マーケ知識"],["毎日入力","項目完全記入","履歴整理","タグ付け統一","共有設定","アラート活用","週次クリーニング","上長確認"],["月2回面談","相談事項リスト","振返り日記","FB反映確認","目標共有","行動計画策定","進捗共有","感謝伝達"],["睡眠確保","運動習慣","食事改善","休暇取得","ストレス管理","趣味継続","家族時間","瞑想習慣"]]'::jsonb,'#06B6D4','#CFFAFE')
 on conflict (id) do nothing;
 
--- =====================================================================
--- 04_seed_activity.sql — タスク / 日報 / 評価 / 評価記録（自動生成）
--- 出典: リーダー画面(REPORTS/MEMBER_TASKS/EVAL_RECORDS) + 個人画面(FEEDBACK/ASSIGNMENTS)
--- tasks=12 / daily_reports=24 / evaluations=5 / eval_records=2
--- =====================================================================
+-- ========== 8. SEED: タスク / 日報 / 評価 ==========
 
 -- ===== tasks =====
 insert into tasks
@@ -162,57 +482,38 @@ values
 ('a0000000-0000-4000-8000-000000000004','中村 健太','田中 花子','2025年 Q1',4,3.5,4,'行動量は十分。クロージング力強化が課題。','done'),
 ('a0000000-0000-4000-8000-000000000005','伊藤 さくら','田中 花子','2025年 Q1',3,3.2,3,'着実に成長中。提案資料の質を上げたい。','done');
 
--- =====================================================================
--- 05_seed_auth.sql — ログイン用 Auth ユーザーを自動作成し profiles と紐付け
--- これを実行すると、HTMLに登場する全アカウントでログイン可能になります。
--- 共通デモパスワード: vexum2025
--- （SQL Editor は service_role 権限で動くため auth スキーマへ投入可能）
--- 実行順: 01_schema → 02_seed_core → 03_seed_mandala → 04_seed_activity → 05_seed_auth
--- =====================================================================
-
+-- ========== 9. SEED: ログイン用 Auth ユーザー（全員 PW: vexum2025） ==========
 do $$
-declare
-  r   record;
-  uid uuid;
+declare r record; uid uuid;
 begin
   for r in select id, email, full_name from profiles loop
-    -- 既に同じメールの Auth ユーザーがあれば再利用、なければ作成
-    select id into uid from auth.users where lower(email) = lower(r.email) limit 1;
-
+    select id into uid from auth.users where lower(email)=lower(r.email) limit 1;
     if uid is null then
       uid := gen_random_uuid();
-
-      insert into auth.users (
-        instance_id, id, aud, role, email,
-        encrypted_password, email_confirmed_at,
-        created_at, updated_at,
-        raw_app_meta_data, raw_user_meta_data,
-        is_super_admin, confirmation_token, recovery_token,
-        email_change_token_new, email_change
-      ) values (
-        '00000000-0000-0000-0000-000000000000', uid, 'authenticated', 'authenticated', r.email,
-        crypt('vexum2025', gen_salt('bf')), now(),
-        now(), now(),
-        '{"provider":"email","providers":["email"]}',
-        json_build_object('full_name', r.full_name),
-        false, '', '',
-        '', ''
-      );
-
-      insert into auth.identities (
-        id, user_id, provider_id, identity_data, provider,
-        last_sign_in_at, created_at, updated_at
-      ) values (
-        gen_random_uuid(), uid, uid::text,
-        json_build_object('sub', uid::text, 'email', r.email, 'email_verified', true),
-        'email', now(), now(), now()
-      );
+      insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,created_at,updated_at,raw_app_meta_data,raw_user_meta_data,is_super_admin,confirmation_token,recovery_token,email_change_token_new,email_change)
+      values ('00000000-0000-0000-0000-000000000000',uid,'authenticated','authenticated',r.email,crypt('vexum2025',gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}',json_build_object('full_name',r.full_name),false,'','','','');
+      insert into auth.identities (id,user_id,provider_id,identity_data,provider,last_sign_in_at,created_at,updated_at)
+      values (gen_random_uuid(),uid,uid::text,json_build_object('sub',uid::text,'email',r.email,'email_verified',true),'email',now(),now(),now());
     end if;
-
-    -- profiles に Auth ユーザーを紐付け
-    update profiles set auth_user_id = uid where id = r.id;
+    update profiles set auth_user_id=uid where id=r.id;
   end loop;
 end $$;
 
--- 確認用: 紐付け状況
--- select full_name, email, role, auth_user_id from profiles order by email;
+-- 確認用
+-- select full_name, email, role, (auth_user_id is not null) as linked from profiles order by role, email;
+
+-- ========== 10. 最小構成へ整理（残すのは3アカウント＋営業チームA） ==========
+-- 残す: 向山颯太(幹部) / 田中 花子(リーダー) / 中村 健太(従業員)
+-- ※フル投入後に不要分を削除（cascade/SET NULLで関連データも整合）
+-- 不要アカウントの Auth ユーザーを先に削除
+delete from auth.users u using profiles p
+ where u.email = p.email
+   and p.email not in ('muko577628@icloud.com','tanaka@vexum.co.jp','nakamura@vexum.co.jp');
+-- 不要プロフィール削除（team_members/mandala/tasks(assignee)/reports/evals は cascade）
+delete from profiles
+ where email not in ('muko577628@icloud.com','tanaka@vexum.co.jp','nakamura@vexum.co.jp');
+-- 営業チームA以外のチームを削除（B/C。所属・チーム曼荼羅は cascade）
+delete from teams where id <> 'b0000000-0000-4000-8000-0000000000a1';
+
+-- 最終確認
+-- select full_name, email, role, (auth_user_id is not null) linked from profiles order by role;
