@@ -252,10 +252,12 @@
     if (r.error) return { error: r.error.message };
     return { ok: true };
   }
-  // 特定メンバー(profile_id)宛ての評価を取得 → {fromLeader:[], fromExec:[], fromSelf:[]}
-  async function loadEvaluationsFor(pid) {
+  // 特定メンバー(profile_id)宛ての評価を取得（オプションでchartIdフィルタ）
+  async function loadEvaluationsFor(pid, chartId) {
     if (!sb || !pid) return { fromLeader: [], fromExec: [], fromSelf: [] };
-    var r = await sb.from('evaluations').select('*').eq('target_user_id', pid).order('created_at', { ascending: false });
+    var q = sb.from('evaluations').select('*').eq('target_user_id', pid).order('created_at', { ascending: false });
+    if (chartId) q = q.eq('chart_id', chartId);
+    var r = await q;
     if (r.error) { err('evaluationsFor', r.error); return { fromLeader: [], fromExec: [], fromSelf: [] }; }
     var prof = await sb.from('profiles').select('id,full_name,role');
     var byId = {}; (prof.data || []).forEach(function (p) { byId[p.id] = p; });
@@ -265,14 +267,20 @@
       var item = {
         evaluatorName: evp.full_name || '—', evaluatorRole: ev.evaluator_role,
         period: ev.period || '', kgi: ev.kgi_stars || 0, kgiComment: ev.kgi_comment || '',
-        csf: ev.csf || [], createdAt: ev.created_at
+        csf: ev.csf || [], chartId: ev.chart_id, createdAt: ev.created_at
       };
-      // 本人自身による評価 = 自己評価
       if (ev.evaluator_id === pid) out.fromSelf.push(item);
       else if (ev.evaluator_role === 'executive') out.fromExec.push(item);
       else out.fromLeader.push(item);
     });
     return out;
+  }
+  // 特定メンバーが持つ全曼荼羅チャート（評価対象選択用）
+  async function loadChartsFor(pid) {
+    if (!sb || !pid) return [];
+    var r = await sb.from('mandala_charts').select('id,name,period,scope_label,center,subs').eq('owner_user_id', pid).order('created_at', { ascending: true });
+    if (r.error) { err('chartsFor', r.error); return []; }
+    return r.data || [];
   }
   // 評価履歴（eval_records）を取得
   async function loadEvalHistory() {
@@ -332,7 +340,7 @@
     var teamLetter = tm ? TEAM_KEY[tm.team_id] : 'A';
     var teamRow = raw.teams.filter(function (t) { return tm && t.id === tm.team_id; })[0];
     function chartObj(c) {
-      return { name: c.name, scopeLabel: c.scope_label, period: c.period, startDate: c.start_date ? fmtYMD(c.start_date) : '',
+      return { dbId: c.id, name: c.name, scopeLabel: c.scope_label, period: c.period, startDate: c.start_date ? fmtYMD(c.start_date) : '',
         team: teamRow ? teamRow.name : '', color: c.color, bg: c.bg, center: c.center, subs: c.subs, acts: c.acts };
     }
     var CHARTS = {};
@@ -602,6 +610,7 @@
     saveEvaluation: saveEvaluation,
     loadEvalHistory: loadEvalHistory,
     loadEvaluationsFor: loadEvaluationsFor,
+    loadChartsFor: loadChartsFor,
     upsertMemberChart: upsertMemberChart,
     loadPersonalData: loadPersonalData,
     loadTokatsuData: loadTokatsuData,

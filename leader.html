@@ -728,24 +728,48 @@ function saveMeval(id,type,si,v){
   const e=_meval(id);
   if(type==='kgi')e.kgi.comment=v;else if(type==='csf')e.csf[si].comment=v;else{if(!e.tasks[si])e.tasks[si]={stars:0,comment:''};e.tasks[si].comment=v;}
 }
+function onEvalChartChange(v){_evalChartId=v;window._evalCache={};renderMemberEval();}
+function clearEvalCache(){window._chartsCache={};window._evalCache={};}
+window._chartsCache={};  // pid -> charts[]
+window._evalCache={};    // pid+chartId -> {fromSelf,fromLeader,fromExec}
+let _evalChartId='';     // 現在選択中の評価対象チャートID
 async function renderMemberEval(){
   const sel=document.getElementById('evalin-member');if(!sel)return;const id=sel.value;if(!id)return;
   const d=MEMBERS[id];const e=_meval(id);
-  // 本人の自己評価を取得（最新のもの）
-  let selfEval=null;
+  // メンバーの曼荼羅チャート一覧を取得
+  let charts=window._chartsCache[d.pid];
   const API=window.VexumAPI;
-  if(API&&API.ready&&d.pid){
+  if(!charts&&API&&API.ready&&d.pid){
+    try{charts=await API.loadChartsFor(d.pid);window._chartsCache[d.pid]=charts;}catch(err){charts=[];}
+  }
+  charts=charts||[];
+  // チャート選択（未設定なら現メンバーの主チャート）
+  if(!_evalChartId||!charts.some(c=>c.id===_evalChartId))_evalChartId=charts[0]?charts[0].id:'';
+  // 選択チャートの自己評価を取得
+  let selfEval=null;
+  if(API&&API.ready&&d.pid&&_evalChartId){
     try{
-      const ev=await API.loadEvaluationsFor(d.pid);
+      const ck=d.pid+'|'+_evalChartId;
+      let ev=window._evalCache[ck];
+      if(!ev){ev=await API.loadEvaluationsFor(d.pid,_evalChartId);window._evalCache[ck]=ev;}
       if(ev.fromSelf.length)selfEval=ev.fromSelf[0];
     }catch(err){console.warn(err);}
+  }
+  // チャートが選ばれてない＝全期間から自己評価取得（後方互換）
+  if(!selfEval&&API&&API.ready&&d.pid){
+    try{const ev=await API.loadEvaluationsFor(d.pid);if(ev.fromSelf.length)selfEval=ev.fromSelf[0];}catch(err){}
   }
   // 各入力欄の下に表示する小さな自己評価コメント
   const refCell=(label,kgi,comment)=>`<div style="margin-top:6px;padding:6px 10px;background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:4px;font-size:10.5px;color:#92400E;line-height:1.5"><span style="font-weight:700">📝 ${label}: </span><span style="color:var(--amber);letter-spacing:1px">${starStr(kgi)}</span> <span style="color:var(--text2)">「${comment||'—'}」</span></div>`;
   const selfKgi=selfEval?refCell('本人の自己評価(KGI)',selfEval.kgi,selfEval.kgiComment):'';
   const selfCsf=(si)=>{if(!selfEval||!selfEval.csf||!selfEval.csf[si])return '';const c=selfEval.csf[si];return refCell('本人の自己評価(CSF-'+(si+1)+')',c.stars||0,c.comment||'');};
 
-  let h=`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF・KPI）</div><div class="card-sub">${d.name} ／ ${d.team}${selfEval?'　📝 自己評価あり ('+selfEval.period+')':'　自己評価なし'}</div></div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMandala('${id}',false)">🧿 全体を見る</button><button class="card-btn" style="background:var(--accent);color:#fff" onclick="openMandala('${id}',true)">🖊 KPIまで評価</button></div></div><div class="card-body">`;
+  // チャート選択プルダウン
+  let chartSelHTML='';
+  if(charts.length){
+    chartSelHTML=`<div style="background:#FAFCFC;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap"><label class="fl" style="margin:0">評価対象の曼荼羅チャート</label><select class="fs" style="width:auto;min-width:280px" onchange="onEvalChartChange(this.value)">${charts.map(c=>`<option value="${c.id}" ${c.id===_evalChartId?'selected':''}>${c.name||c.id}${c.period?' ('+c.period+')':''}</option>`).join('')}</select>${selfEval?'<span style="font-size:11px;color:var(--amber);font-weight:700">📝 本人自己評価あり</span>':'<span style="font-size:11px;color:var(--text3)">自己評価なし</span>'}</div>`;
+  }
+  let h=`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF・KPI）</div><div class="card-sub">${d.name} ／ ${d.team}</div></div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMandala('${id}',false)">🧿 全体を見る</button><button class="card-btn" style="background:var(--accent);color:#fff" onclick="openMandala('${id}',true)">🖊 KPIまで評価</button></div></div>${chartSelHTML}<div class="card-body">`;
   h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-kgi">KGI</span><span class="eval-goal">${(d.center||'').replace(/\n/g,' ')}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'kgi',-1)}</div><textarea class="eval-cmt" rows="2" placeholder="KGIへの評価コメント…" oninput="saveMeval('${id}','kgi',-1,this.value)">${e.kgi.comment}</textarea>${selfKgi}</div>`;
   for(let si=0;si<8;si++)h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-csf">CSF-${si+1}</span><span class="eval-goal">${d.subs[si]}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'csf',si)}</div><textarea class="eval-cmt" rows="2" placeholder="CSF-${si+1}への評価コメント…" oninput="saveMeval('${id}','csf',${si},this.value)">${e.csf[si].comment}</textarea>${selfCsf(si)}</div>`;
   h+=`</div></div>`;
@@ -766,9 +790,9 @@ function saveMemberEval(){
   const API=window.VexumAPI;
   if(API&&API.ready){
     API.saveEvalRecord({evaluateePid:pidOf(id),evaluateeName:name,period,kgi:e.kgi.stars,csf:avgCsf,task:taskAvg,comment:cmt});
-    // メンバー本人の個人画面に評価を届ける
-    API.saveEvaluation({targetPid:pidOf(id),evaluatorRole:'leader',period,kgi:e.kgi.stars,kgiComment:e.kgi.comment||'',csf:e.csf.map(function(c){return {stars:c.stars,comment:c.comment};})})
-      .then(function(res){if(res&&res.error)console.warn('eval deliver:',res.error);});
+    // メンバー本人の個人画面に評価を届ける（選択中チャートに紐付け）
+    API.saveEvaluation({targetPid:pidOf(id),evaluatorRole:'leader',period,kgi:e.kgi.stars,kgiComment:e.kgi.comment||'',csf:e.csf.map(function(c){return {stars:c.stars,comment:c.comment};}),chartId:_evalChartId||null})
+      .then(function(res){if(res&&res.error)console.warn('eval deliver:',res.error); clearEvalCache();});
   }
   const idx=EVAL_RECORDS.findIndex(r=>r.name===name&&r.period===period);
   if(idx>=0)EVAL_RECORDS[idx]=rec;else EVAL_RECORDS.unshift(rec);
