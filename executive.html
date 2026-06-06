@@ -1333,8 +1333,14 @@ async function injectEvalRefs(memberId,pid){
     }
     const chartId=window._execChartChoice[memberId]||null;
     const ev=await API.loadEvaluationsFor(pid,chartId);
-    const self=ev.fromSelf[0]||null;
-    const leader=ev.fromLeader[0]||null;
+    let self=ev.fromSelf[0]||null;
+    let leader=ev.fromLeader[0]||null;
+    // chart_id 指定で取れなかった項目は chartId なし（全期間最新）でフォールバック
+    if(!self||!leader){
+      const evAll=await API.loadEvaluationsFor(pid);
+      if(!self)self=evAll.fromSelf[0]||null;
+      if(!leader)leader=evAll.fromLeader[0]||null;
+    }
     const renderRef=(targetId,sLabel,sStars,sComment,lLabel,lStars,lComment,hasSelf,hasLeader)=>{
       const el=document.getElementById(targetId);if(!el)return;
       let h='';
