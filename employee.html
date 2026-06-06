@@ -201,7 +201,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="sb-item active" onclick="swTab('progress',this)"><span class="sb-icon">◇</span>進捗ダッシュボード</button>
     <button class="sb-item" onclick="swTab('tasks',this)"><span class="sb-icon">☰</span>タスク管理<span class="sb-badge">2</span></button>
     <button class="sb-item" onclick="swTab('assign',this)"><span class="sb-icon">📌</span>割り当て<span class="sb-badge" id="assign-badge">3</span></button>
-    <button class="sb-item" onclick="swTab('reviews',this);renderEval()"><span class="sb-icon">★</span>評価管理</button>
+    <button class="sb-item" onclick="swTab('reviews',this);renderEval();refreshSelfEvalStatusCard()"><span class="sb-icon">★</span>評価管理</button>
     <button class="sb-item" onclick="swTab('create',this);initCreate()"><span class="sb-icon">＋</span>新規作成</button>
     <button class="sb-item" onclick="swTab('report',this)"><span class="sb-icon">📝</span>日報</button>
   </div>
@@ -293,8 +293,9 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <!-- 評価管理 -->
 <div id="tc-reviews" class="tab-content">
   <div class="sec-title">評価管理 <span style="font-size:11px;font-weight:400;color:var(--text3)">曼荼羅チャートのKGI / CSF / KPIを評価</span>
-    <button class="f-submit" style="padding:7px 16px;font-size:12px;background:var(--amber)" onclick="openSelfEval()">📝 自己評価を保存</button>
+    <button class="f-submit" style="padding:7px 16px;font-size:12px;background:var(--amber)" onclick="openSelfEval()">📝 自己評価を入力 / 編集 / 提出</button>
   </div>
+  <div id="self-eval-status-card" style="background:#FFFBEB;border:1px solid #F59E0B;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#92400E;display:none"></div>
   <!-- 自己評価モーダル（KGI＋CSF8項目） -->
   <div id="self-eval-modal" onclick="if(event.target===this)closeSelfEval()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
     <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:560px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
@@ -302,8 +303,9 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
         <div style="font-size:16px;font-weight:800;color:var(--amber)">📝 自己評価を保存</div>
         <button onclick="closeSelfEval()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:14px">KGI・CSF8項目を自己評価できます。リーダー・幹部が評価する際の参考になります。</div>
-      <div class="fg"><label class="fl">対象チャート</label><select class="fs" id="se-chart"></select></div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:14px">KGI・CSF8項目を自己評価できます。<b>下書き保存</b>は何度でも編集可、<b>提出</b>すると確定（編集不可）になり、リーダー・幹部画面に反映されます。</div>
+      <div id="se-status-bar" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:6px;font-size:11px;font-weight:700"></div>
+      <div class="fg"><label class="fl">対象チャート</label><select class="fs" id="se-chart" onchange="onSeChartChange()"></select></div>
       <div class="fg"><label class="fl">期間</label><input class="fi" id="se-period" placeholder="例: 2025年 Q3"></div>
       <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px;margin-bottom:12px">
         <div style="font-size:11px;font-weight:700;color:#92400E;margin-bottom:6px">🎯 KGI（中心目標）</div>
@@ -312,7 +314,10 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       </div>
       <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">📊 CSF（8項目）</div>
       <div id="se-csf-container"></div>
-      <button class="f-submit" style="width:100%;margin-top:8px" onclick="submitSelfEval()">保存する</button>
+      <div id="se-actions" style="display:flex;gap:8px;margin-top:8px">
+        <button class="f-submit" style="flex:1;background:var(--text3)" onclick="submitSelfEval(false)">💾 下書き保存</button>
+        <button class="f-submit" style="flex:1" onclick="submitSelfEval(true)">📤 提出する（確定）</button>
+      </div>
     </div>
   </div>
 
@@ -927,18 +932,36 @@ function downloadCSV(k){
 }
 
 /* ===== 評価管理 ===== */
-function onEvalChartChange(){evalChartKey=document.getElementById('eval-chart-sel').value;renderEval();}
+function onEvalChartChange(){evalChartKey=document.getElementById('eval-chart-sel').value;renderEval();refreshSelfEvalStatusCard();}
+async function refreshSelfEvalStatusCard(){
+  const card=document.getElementById('self-eval-status-card');if(!card)return;
+  const API=window.VexumAPI;if(!(API&&API.ready)){card.style.display='none';return;}
+  const k=evalChartKey;const c=CHARTS[k];
+  if(!c){card.style.display='none';return;}
+  const dbId=c.dbId||(k==='self_q3'?'user_nakamura':k==='self_q2'?'user_nakamura_q2':k);
+  try{
+    const ex=await API.loadMySelfEval(dbId);
+    if(!ex){card.style.display='block';card.style.background='#F3F4F6';card.style.borderColor='#9CA3AF';card.style.color='var(--text2)';card.innerHTML=`📝 このチャートの自己評価は<b>未入力</b>です。「自己評価を入力」ボタンから保存できます。`;return;}
+    card.style.display='block';
+    if(ex.submitted){
+      card.style.background='#D1FAE5';card.style.borderColor='#10B981';card.style.color='#065F46';
+      card.innerHTML=`✅ <b>提出済み</b>（${ex.period||'—'} / KGI ★${ex.kgi}） — 編集不可。リーダー・幹部画面に反映されています。`;
+    }else{
+      card.style.background='#FEF3C7';card.style.borderColor='#F59E0B';card.style.color='#92400E';
+      card.innerHTML=`📝 <b>下書き保存中</b>（${ex.period||'—'} / KGI ★${ex.kgi}） — 編集可。提出するとリーダー・幹部画面に反映されます。`;
+    }
+  }catch(e){card.style.display='none';}
+}
 function setEvalView(v,btn){evalView=v;document.querySelectorAll('#seg-view .seg-btn').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');renderEval();}
 
-/* ===== 自己評価（KGI + CSF8項目） ===== */
+/* ===== 自己評価（KGI + CSF8項目）— 下書き/提出/既存読込/ロック対応 ===== */
 let _seStars=0;
 let _seCsfStars=[0,0,0,0,0,0,0,0];
 let _seCsfComments=['','','','','','','',''];
+let _seLocked=false;   // true なら全入力ロック（提出済み）
 function openSelfEval(){
-  _seStars=0;
-  _seCsfStars=[0,0,0,0,0,0,0,0];
-  _seCsfComments=['','','','','','','',''];
-  const sb=document.getElementById('se-period');if(sb&&!sb.value)sb.value='2025年 Q3';
+  _seStars=0;_seCsfStars=[0,0,0,0,0,0,0,0];_seCsfComments=['','','','','','','',''];_seLocked=false;
+  const sb=document.getElementById('se-period');if(sb)sb.value='2025年 Q3';
   const cm=document.getElementById('se-comment');if(cm)cm.value='';
   // チャート選択肢を構築（DB由来のIDを value に）
   const csel=document.getElementById('se-chart');
@@ -950,16 +973,48 @@ function openSelfEval(){
       opts.push(`<option value="${dbId}">${c.name||k} — ${c.scopeLabel||''} ${c.period?'('+c.period+')':''}</option>`);
     });
     csel.innerHTML=opts.join('')||'<option value="">— チャートなし —</option>';
-    // 現在閲覧中のチャートを既定値に
     const curK=(typeof evalChartKey!=='undefined')?evalChartKey:(typeof curChartKey!=='undefined'?curChartKey:'self_q3');
     const curC=CHARTS[curK];const curId=curC&&(curC.dbId||(curK==='self_q3'?'user_nakamura':curK==='self_q2'?'user_nakamura_q2':curK));
     if(curId)csel.value=curId;
   }
-  renderSeStars();
-  renderSeCsf();
+  renderSeStars();renderSeCsf();updateSeStatusBar();
   document.getElementById('self-eval-modal').style.display='flex';
+  // 既存自己評価を読み込み
+  loadExistingSelfEval();
 }
 function closeSelfEval(){document.getElementById('self-eval-modal').style.display='none';}
+async function onSeChartChange(){
+  _seStars=0;_seCsfStars=[0,0,0,0,0,0,0,0];_seCsfComments=['','','','','','','',''];_seLocked=false;
+  const cm=document.getElementById('se-comment');if(cm)cm.value='';
+  renderSeStars();renderSeCsf();updateSeStatusBar();
+  await loadExistingSelfEval();
+}
+async function loadExistingSelfEval(){
+  const API=window.VexumAPI;if(!(API&&API.ready))return;
+  const cid=(document.getElementById('se-chart')||{}).value||null;
+  try{
+    const ex=await API.loadMySelfEval(cid);
+    if(!ex)return;
+    _seStars=ex.kgi||0;
+    _seCsfStars=Array.from({length:8},(_,i)=>(ex.csf[i]&&ex.csf[i].stars)||0);
+    _seCsfComments=Array.from({length:8},(_,i)=>(ex.csf[i]&&ex.csf[i].comment)||'');
+    _seLocked=!!ex.submitted;
+    const cm=document.getElementById('se-comment');if(cm)cm.value=ex.kgiComment||'';
+    const sb=document.getElementById('se-period');if(sb&&ex.period)sb.value=ex.period;
+    renderSeStars();renderSeCsf();updateSeStatusBar();
+    // ロック制御
+    document.querySelectorAll('#self-eval-modal input,#self-eval-modal textarea,#self-eval-modal select').forEach(el=>{
+      if(el.id==='se-chart')return;el.disabled=_seLocked;
+    });
+    const act=document.getElementById('se-actions');if(act)act.style.display=_seLocked?'none':'flex';
+  }catch(e){console.warn(e);}
+}
+function updateSeStatusBar(){
+  const el=document.getElementById('se-status-bar');if(!el)return;
+  if(_seLocked){el.style.display='block';el.style.background='#D1FAE5';el.style.color='#065F46';el.style.border='1px solid #10B981';el.textContent='✅ 提出済み — 変更不可（リーダー・幹部画面に反映済み）';}
+  else if(_seStars||_seCsfStars.some(s=>s>0)){el.style.display='block';el.style.background='#FEF3C7';el.style.color='#92400E';el.style.border='1px solid #F59E0B';el.textContent='📝 下書きあり — 編集可。提出すると確定します';}
+  else{el.style.display='none';}
+}
 function renderSeStars(){
   const el=document.getElementById('se-stars');if(!el)return;
   let h='';for(let i=1;i<=5;i++)h+=`<span onclick="_seStars=${i};renderSeStars()" style="color:${i<=_seStars?'#F59E0B':'#D1D5DB'}">★</span>`;
@@ -982,21 +1037,23 @@ function renderSeCsf(){
   }
   el.innerHTML=h;
 }
-async function submitSelfEval(){
+async function submitSelfEval(isSubmit){
+  if(_seLocked){alert('既に提出済みです');return;}
   const period=(document.getElementById('se-period')||{}).value||'2025年 Q3';
   const comment=(document.getElementById('se-comment')||{}).value||'';
   if(!_seStars){alert('KGIの星評価を選択してください');return;}
+  if(isSubmit){
+    if(!confirm('提出すると、この自己評価は変更できなくなり、リーダー・幹部画面に確定として反映されます。よろしいですか？'))return;
+  }
   const API=window.VexumAPI;
   if(API&&API.ready){
-    const me=await API.currentProfile();
-    if(!me){alert('ログインし直してください');return;}
     const csfArr=_seCsfStars.map((s,i)=>({stars:s,comment:_seCsfComments[i]||''}));
     const chartId=(document.getElementById('se-chart')||{}).value||null;
-    const res=await API.saveEvaluation({targetPid:me.id,evaluatorRole:'leader',period,kgi:_seStars,kgiComment:comment,csf:csfArr,chartId});
+    const res=await API.upsertSelfEval({chartId,period,kgi:_seStars,kgiComment:comment,csf:csfArr,submitted:!!isSubmit});
     if(res&&res.error){alert('保存失敗: '+res.error);return;}
   }
-  closeSelfEval();
-  alert('自己評価を保存しました。リーダー・幹部が評価する際の参考になります。');
+  if(isSubmit){alert('✅ 提出しました。リーダー・幹部画面に反映されます。');closeSelfEval();}
+  else{alert('💾 下書きを保存しました。引き続き編集できます。');await loadExistingSelfEval();}
 }
 
 function renderEval(){

@@ -275,6 +275,44 @@
     });
     return out;
   }
+  // 自分が自分につけた自己評価の最新1件を取得（チャート別）
+  async function loadMySelfEval(chartId) {
+    if (!sb) return null;
+    var me = await currentProfile(); if (!me) return null;
+    var q = sb.from('evaluations').select('*').eq('target_user_id', me.id).eq('evaluator_id', me.id).order('created_at', { ascending: false }).limit(1);
+    if (chartId) q = q.eq('chart_id', chartId);
+    var r = await q;
+    if (r.error || !r.data || !r.data.length) return null;
+    var ev = r.data[0];
+    return { id: ev.id, chartId: ev.chart_id, period: ev.period || '', kgi: ev.kgi_stars || 0, kgiComment: ev.kgi_comment || '',
+      csf: ev.csf || [], submitted: !!ev.submitted, createdAt: ev.created_at };
+  }
+  // 自己評価を保存（下書き or 提出）。同チャートに下書きがあれば更新、なければ新規。
+  async function upsertSelfEval(o) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var me = await currentProfile(); if (!me) return { error: '未ログイン' };
+    var row = {
+      target_type: 'user', target_user_id: me.id, evaluator_id: me.id, evaluator_role: 'leader',
+      chart_id: o.chartId || null, period: o.period || null,
+      kgi_stars: o.kgi || 0, kgi_comment: o.kgiComment || '', csf: o.csf || [],
+      submitted: !!o.submitted
+    };
+    // 同 chart_id の既存「下書き」を探す（提出済は新規作成し履歴を残す）
+    var existing = null;
+    if (o.chartId) {
+      var q = await sb.from('evaluations').select('id,submitted').eq('target_user_id', me.id).eq('evaluator_id', me.id).eq('chart_id', o.chartId).order('created_at', { ascending: false }).limit(1);
+      if (q.data && q.data[0] && !q.data[0].submitted) existing = q.data[0];
+    }
+    if (existing) {
+      var u = await sb.from('evaluations').update(row).eq('id', existing.id);
+      if (u.error) return { error: friendlyErr(u.error.message) };
+      return { id: existing.id, submitted: row.submitted };
+    } else {
+      var ins = await sb.from('evaluations').insert(row).select().single();
+      if (ins.error) return { error: friendlyErr(ins.error.message) };
+      return { id: ins.data.id, submitted: row.submitted };
+    }
+  }
   // 特定メンバーが持つ全曼荼羅チャート（評価対象選択用）
   async function loadChartsFor(pid) {
     if (!sb || !pid) return [];
@@ -611,6 +649,8 @@
     loadEvalHistory: loadEvalHistory,
     loadEvaluationsFor: loadEvaluationsFor,
     loadChartsFor: loadChartsFor,
+    loadMySelfEval: loadMySelfEval,
+    upsertSelfEval: upsertSelfEval,
     upsertMemberChart: upsertMemberChart,
     loadPersonalData: loadPersonalData,
     loadTokatsuData: loadTokatsuData,
