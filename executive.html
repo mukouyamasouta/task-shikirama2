@@ -288,7 +288,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <div class="fg"><label class="fl">氏名</label><input class="fi" id="accedit-name"></div>
       <div class="fg"><label class="fl">メールアドレス</label><input class="fi" id="accedit-email"></div>
     </div>
-    <div class="fg"><label class="fl">ロール</label><select class="fs" id="accedit-role"><option value="メンバー">メンバー</option><option value="リーダー">リーダー</option><option value="幹部">幹部</option><option value="管理者">管理者</option></select></div>
+    <div class="fg"><label class="fl">所属チーム</label><select class="fs" id="accedit-team"></select></div>
     <button class="f-submit" style="width:100%" onclick="submitAccEdit()">変更を保存</button>
   </div>
 </div>
@@ -386,6 +386,17 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
     <div style="overflow-x:auto"><div id="tplmnd-grid" style="display:grid;grid-template-columns:repeat(9,minmax(58px,1fr));gap:2px;min-width:540px"></div></div>
     <button class="f-submit" style="width:100%;margin-top:14px" onclick="closeTplMnd()">この内容で確定</button>
+  </div>
+</div>
+
+<!-- 評価参照モーダル（リーダー評価＋本人自己評価を参照） -->
+<div id="evalref-modal" onclick="if(event.target===this)closeEvalRefs()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:680px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div><div style="font-size:16px;font-weight:800" id="evalref-title">評価を参照</div><div style="font-size:11px;color:var(--text3);margin-top:2px">これらを参考に評価入力してください</div></div>
+      <button onclick="closeEvalRefs()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div id="evalref-body"><div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">読み込み中…</div></div>
   </div>
 </div>
 
@@ -697,7 +708,9 @@ function openAccEdit(key){
   document.getElementById('accedit-key').value=key;
   document.getElementById('accedit-name').value=m.name||'';
   document.getElementById('accedit-email').value=(m.email==='—'?'':m.email)||'';
-  document.getElementById('accedit-role').value=m.role||'メンバー';
+  // 所属チームのプルダウン
+  const sel=document.getElementById('accedit-team');
+  if(sel)sel.innerHTML='<option value="">— 未所属 —</option>'+Object.values(TEAMS).map(t=>`<option value="${t.id}" ${t.id===m.team?'selected':''}>${t.name}</option>`).join('');
   document.getElementById('accedit-modal').style.display='flex';
 }
 function closeAccEdit(){document.getElementById('accedit-modal').style.display='none';}
@@ -706,14 +719,28 @@ async function submitAccEdit(){
   const m=MEMBERS[key];if(!m){closeAccEdit();return;}
   const name=document.getElementById('accedit-name').value.trim();
   const email=document.getElementById('accedit-email').value.trim();
-  const role=document.getElementById('accedit-role').value;
+  const newTeam=document.getElementById('accedit-team').value;  // チーム短縮キーまたは''
   if(!name){showToast('氏名を入力してください');return;}
   const API=window.VexumAPI;
   if(API&&API.ready&&m.pid){
-    const res=await API.updateAccount(m.pid,{name,email,role});
-    if(res&&res.error){showToast('更新失敗: '+res.error);return;}
+    // 氏名/メール更新
+    const upd=await API.updateAccount(m.pid,{name,email});
+    if(upd&&upd.error){showToast('更新失敗: '+upd.error);return;}
+    // 所属チーム変更（既存チームから外す→新チームに追加）
+    if(newTeam!==(m.team||'')){
+      const oldTeamUid=m.team&&TEAMS[m.team]?TEAMS[m.team].uid:null;
+      const newTeamUid=newTeam&&TEAMS[newTeam]?TEAMS[newTeam].uid:null;
+      if(oldTeamUid){const r=await API.removeTeamMember(oldTeamUid,m.pid);if(r&&r.error){showToast('チーム外し失敗: '+r.error);return;}}
+      if(newTeamUid){const r=await API.addTeamMember(newTeamUid,m.pid,m.role,m.rate);if(r&&r.error){showToast('チーム追加失敗: '+r.error);return;}}
+    }
   }
-  m.name=name;m.email=email||'—';m.role=role;m.roleEnum=roleToEnumJP(role);
+  // ローカル状態更新
+  if(newTeam!==(m.team||'')){
+    if(m.team&&TEAMS[m.team]){const i=TEAMS[m.team].members.indexOf(key);if(i>=0)TEAMS[m.team].members.splice(i,1);}
+    if(newTeam&&TEAMS[newTeam]&&!TEAMS[newTeam].members.includes(key))TEAMS[newTeam].members.push(key);
+    m.team=newTeam||'';
+  }
+  m.name=name;m.email=email||'—';
   closeAccEdit();renderAccount();
   showToast(`${name} を更新しました ✓`);
 }
@@ -1176,6 +1203,38 @@ function toggleCsf(id){
   if(!el)return;const open=el.style.display!=='none';
   el.style.display=open?'none':'block';if(ar)ar.textContent=open?'▸':'▾';
 }
+async function openEvalRefs(id){
+  const m=MEMBERS[id];if(!m)return;
+  document.getElementById('evalref-title').textContent=m.name+' への評価を参照';
+  document.getElementById('evalref-body').innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">読み込み中…</div>';
+  document.getElementById('evalref-modal').style.display='flex';
+  const API=window.VexumAPI;
+  if(!(API&&API.ready&&m.pid)){document.getElementById('evalref-body').innerHTML='<div style="color:var(--text3);font-size:12px">参照データなし</div>';return;}
+  try{
+    const ev=await API.loadEvaluationsFor(m.pid);
+    const section=(title,color,bg,list)=>{
+      if(!list.length)return `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:${color};margin-bottom:6px">${title}</div><div style="font-size:11px;color:var(--text3);padding:10px;background:#FAFAFA;border-radius:6px">記録なし</div></div>`;
+      let h=`<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:${color};margin-bottom:6px">${title}（${list.length}件）</div>`;
+      list.slice(0,5).forEach(ce=>{
+        h+=`<div style="border:1px solid ${color};background:${bg};border-radius:8px;padding:10px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-bottom:4px">
+            <span>${ce.evaluatorName} ／ ${ce.period||'—'}</span>
+            <span style="color:var(--amber);letter-spacing:1px">KGI ${starStr(ce.kgi)}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text2);background:#fff;border-radius:4px;padding:6px 8px">💬 ${ce.kgiComment||'—'}</div>
+        </div>`;
+      });
+      h+=`</div>`;return h;
+    };
+    let h='';
+    h+=section('📌 リーダーからの評価','#0D9488','#CCEDE9',ev.fromLeader);
+    h+=section('📝 本人による自己評価','#F59E0B','#FEF3C7',ev.fromSelf);
+    if(ev.fromExec.length)h+=section('◆ 他の幹部による評価','#9333EA','#F3E8FF',ev.fromExec);
+    document.getElementById('evalref-body').innerHTML=h||'<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">まだ評価はありません</div>';
+  }catch(e){document.getElementById('evalref-body').innerHTML='<div style="color:var(--red);font-size:12px">読み込み失敗: '+e+'</div>';}
+}
+function closeEvalRefs(){document.getElementById('evalref-modal').style.display='none';}
+
 function saveMemberEvalExec(id,name){
   const e=_mev(id);
   const avg=Math.round(e.csf.reduce((a,c)=>a+c.stars,0)/8*10)/10;
@@ -1264,7 +1323,8 @@ function renderMemberEval(){
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-        ${d?`<button class="card-btn" onclick="openMandala('${id}')">🧿 チャートを見る</button><button class="card-btn" style="background:#F3F4F6;color:var(--text2)" onclick="downloadCSV('${id}')">⬇ CSV</button>`:'<span style="font-size:10px;color:var(--text3)">曼荼羅データなし</span>'}
+        ${d?`<button class="card-btn" onclick="openMandala('${id}')">🧿 チャートを見る</button><button class="card-btn" style="background:#F3F4F6;color:var(--text2)" onclick="downloadCSV('${id}')">⬇ CSV</button>`:''}
+        <button class="card-btn" style="background:#FEF3C7;color:#92400E" onclick="openEvalRefs('${id}')">📋 評価を参照（リーダー・本人）</button>
       </div>
       <div style="border-top:1px solid var(--border);padding-top:12px">`;
     if(d){

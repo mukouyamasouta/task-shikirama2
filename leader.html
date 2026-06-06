@@ -728,10 +728,25 @@ function saveMeval(id,type,si,v){
   const e=_meval(id);
   if(type==='kgi')e.kgi.comment=v;else if(type==='csf')e.csf[si].comment=v;else{if(!e.tasks[si])e.tasks[si]={stars:0,comment:''};e.tasks[si].comment=v;}
 }
-function renderMemberEval(){
+async function renderMemberEval(){
   const sel=document.getElementById('evalin-member');if(!sel)return;const id=sel.value;if(!id)return;
   const d=MEMBERS[id];const e=_meval(id);
-  let h=`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF・KPI）</div><div class="card-sub">${d.name} ／ ${d.team}</div></div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMandala('${id}',false)">🧿 全体を見る</button><button class="card-btn" style="background:var(--accent);color:#fff" onclick="openMandala('${id}',true)">🖊 KPIまで評価</button></div></div><div class="card-body">`;
+  // 本人の自己評価を取得して表示
+  let refH='';
+  const API=window.VexumAPI;
+  if(API&&API.ready&&d.pid){
+    try{
+      const ev=await API.loadEvaluationsFor(d.pid);
+      if(ev.fromSelf.length){
+        refH=`<div class="card" style="background:#FFFBEB;border-color:#F59E0B"><div class="card-hd" style="background:#FEF3C7"><div><div class="card-title">📝 本人の自己評価（参考）</div><div class="card-sub">${d.name} さんが自分自身につけた評価です</div></div></div><div class="card-body">`;
+        ev.fromSelf.slice(0,3).forEach(ce=>{
+          refH+=`<div style="border:1px solid #FCD34D;border-radius:6px;padding:10px;margin-bottom:8px;background:#fff"><div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-bottom:4px"><span>${ce.period||'—'}</span><span style="color:var(--amber);letter-spacing:1px">KGI ${starStr(ce.kgi)}</span></div><div style="font-size:11px;color:var(--text2)">💬 ${ce.kgiComment||'—'}</div></div>`;
+        });
+        refH+=`</div></div>`;
+      }
+    }catch(err){console.warn(err);}
+  }
+  let h=refH+`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF・KPI）</div><div class="card-sub">${d.name} ／ ${d.team}</div></div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMandala('${id}',false)">🧿 全体を見る</button><button class="card-btn" style="background:var(--accent);color:#fff" onclick="openMandala('${id}',true)">🖊 KPIまで評価</button></div></div><div class="card-body">`;
   h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-kgi">KGI</span><span class="eval-goal">${(d.center||'').replace(/\n/g,' ')}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'kgi',-1)}</div><textarea class="eval-cmt" rows="2" placeholder="KGIへの評価コメント…" oninput="saveMeval('${id}','kgi',-1,this.value)">${e.kgi.comment}</textarea></div>`;
   for(let si=0;si<8;si++)h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-csf">CSF-${si+1}</span><span class="eval-goal">${d.subs[si]}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'csf',si)}</div><textarea class="eval-cmt" rows="2" placeholder="CSF-${si+1}への評価コメント…" oninput="saveMeval('${id}','csf',${si},this.value)">${e.csf[si].comment}</textarea></div>`;
   h+=`</div></div>`;
@@ -1017,6 +1032,10 @@ renderReports();
     if(typeof updateTeamLabel==='function') updateTeamLabel();
     console.log('[VEXUM] Supabaseデータを反映しました');
   }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:',e); });
+  // 評価記録(履歴)をDBから再取得して最新化
+  API.loadEvalHistory().then(function(rows){
+    if(rows&&rows.length){replArr(EVAL_RECORDS,rows);if(typeof renderEvalRec==='function')renderEvalRec();}
+  }).catch(function(){});
 })();
 </script>
 </body>

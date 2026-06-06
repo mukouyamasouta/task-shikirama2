@@ -252,6 +252,28 @@
     if (r.error) return { error: r.error.message };
     return { ok: true };
   }
+  // 特定メンバー(profile_id)宛ての評価を取得 → {fromLeader:[], fromExec:[], fromSelf:[]}
+  async function loadEvaluationsFor(pid) {
+    if (!sb || !pid) return { fromLeader: [], fromExec: [], fromSelf: [] };
+    var r = await sb.from('evaluations').select('*').eq('target_user_id', pid).order('created_at', { ascending: false });
+    if (r.error) { err('evaluationsFor', r.error); return { fromLeader: [], fromExec: [], fromSelf: [] }; }
+    var prof = await sb.from('profiles').select('id,full_name,role');
+    var byId = {}; (prof.data || []).forEach(function (p) { byId[p.id] = p; });
+    var out = { fromLeader: [], fromExec: [], fromSelf: [] };
+    (r.data || []).forEach(function (ev) {
+      var evp = byId[ev.evaluator_id] || {};
+      var item = {
+        evaluatorName: evp.full_name || '—', evaluatorRole: ev.evaluator_role,
+        period: ev.period || '', kgi: ev.kgi_stars || 0, kgiComment: ev.kgi_comment || '',
+        csf: ev.csf || [], createdAt: ev.created_at
+      };
+      // 本人自身による評価 = 自己評価
+      if (ev.evaluator_id === pid) out.fromSelf.push(item);
+      else if (ev.evaluator_role === 'executive') out.fromExec.push(item);
+      else out.fromLeader.push(item);
+    });
+    return out;
+  }
   // 評価履歴（eval_records）を取得
   async function loadEvalHistory() {
     if (!sb) return [];
@@ -579,6 +601,7 @@
     saveEvalRecord: saveEvalRecord,
     saveEvaluation: saveEvaluation,
     loadEvalHistory: loadEvalHistory,
+    loadEvaluationsFor: loadEvaluationsFor,
     upsertMemberChart: upsertMemberChart,
     loadPersonalData: loadPersonalData,
     loadTokatsuData: loadTokatsuData,

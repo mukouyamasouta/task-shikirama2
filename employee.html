@@ -292,7 +292,25 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- 評価管理 -->
 <div id="tc-reviews" class="tab-content">
-  <div class="sec-title">評価管理 <span style="font-size:11px;font-weight:400;color:var(--text3)">曼荼羅チャートのKGI / CSF / KPIを評価</span></div>
+  <div class="sec-title">評価管理 <span style="font-size:11px;font-weight:400;color:var(--text3)">曼荼羅チャートのKGI / CSF / KPIを評価</span>
+    <button class="f-submit" style="padding:7px 16px;font-size:12px;background:var(--amber)" onclick="openSelfEval()">📝 自己評価を保存</button>
+  </div>
+  <!-- 自己評価モーダル -->
+  <div id="self-eval-modal" onclick="if(event.target===this)closeSelfEval()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
+    <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:480px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-size:16px;font-weight:800;color:var(--amber)">📝 自己評価を保存</div>
+        <button onclick="closeSelfEval()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:12px">リーダー・幹部が評価する際の参考になります</div>
+      <div class="fg"><label class="fl">期間</label><input class="fi" id="se-period" placeholder="例: 2025年 Q3"></div>
+      <div class="fg"><label class="fl">KGI 5段階評価</label>
+        <div id="se-stars" style="display:flex;gap:4px;font-size:22px;cursor:pointer">★★★★★</div>
+      </div>
+      <div class="fg"><label class="fl">コメント（振り返り・所感）</label><textarea class="fi" id="se-comment" rows="3" placeholder="今期の取り組みや課題を記入…"></textarea></div>
+      <button class="f-submit" style="width:100%" onclick="submitSelfEval()">保存する</button>
+    </div>
+  </div>
 
   <!-- コントロールバー -->
   <div class="eval-select-bar">
@@ -907,6 +925,37 @@ function downloadCSV(k){
 /* ===== 評価管理 ===== */
 function onEvalChartChange(){evalChartKey=document.getElementById('eval-chart-sel').value;renderEval();}
 function setEvalView(v,btn){evalView=v;document.querySelectorAll('#seg-view .seg-btn').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');renderEval();}
+
+/* ===== 自己評価 ===== */
+let _seStars=0;
+function openSelfEval(){
+  _seStars=0;
+  const sb=document.getElementById('se-period');if(sb&&!sb.value)sb.value='2025年 Q3';
+  const cm=document.getElementById('se-comment');if(cm)cm.value='';
+  renderSeStars();
+  document.getElementById('self-eval-modal').style.display='flex';
+}
+function closeSelfEval(){document.getElementById('self-eval-modal').style.display='none';}
+function renderSeStars(){
+  const el=document.getElementById('se-stars');if(!el)return;
+  let h='';for(let i=1;i<=5;i++)h+=`<span onclick="_seStars=${i};renderSeStars()" style="color:${i<=_seStars?'#F59E0B':'#D1D5DB'}">★</span>`;
+  el.innerHTML=h;
+}
+async function submitSelfEval(){
+  const period=(document.getElementById('se-period')||{}).value||'2025年 Q3';
+  const comment=(document.getElementById('se-comment')||{}).value||'';
+  if(!_seStars){alert('KGIの星評価を選択してください');return;}
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const me=await API.currentProfile();
+    if(!me){alert('ログインし直してください');return;}
+    const res=await API.saveEvaluation({targetPid:me.id,evaluatorRole:'leader',period,kgi:_seStars,kgiComment:comment,csf:[]});
+    // 個人画面は本人=自己評価。evaluator_id=本人になるので fromSelf に分類される
+    if(res&&res.error){alert('保存失敗: '+res.error);return;}
+  }
+  closeSelfEval();
+  alert('自己評価を保存しました。リーダー・幹部が評価する際の参考になります。');
+}
 
 function renderEval(){
   const k=evalChartKey;const d=getAllMnd()[k];
