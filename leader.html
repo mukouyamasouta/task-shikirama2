@@ -308,6 +308,20 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 </div>
 
 <!-- ===== 個人チャート編集モーダル ===== -->
+<!-- ===== タスク配置 3択モーダル ===== -->
+<div id="assignchoice-modal" onclick="if(event.target===this)closeAssignChoice()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;align-items:flex-start;justify-content:center;padding:60px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:460px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="font-size:16px;font-weight:800">タスクの配置方法を選択</div>
+      <button onclick="closeAssignChoice()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div id="assignchoice-title" style="font-size:11px;color:var(--text3);margin-bottom:16px"></div>
+    <button class="f-submit" style="width:100%;margin-bottom:10px" onclick="assignChoice('existing')">🧿 既存の曼荼羅チャートに入れる（場所を選ぶ）</button>
+    <button class="f-submit" style="width:100%;margin-bottom:10px;background:var(--cyan)" onclick="assignChoice('new')">✨ 新しい曼荼羅チャートに入れる</button>
+    <button class="f-submit" style="width:100%;background:var(--text3)" onclick="assignChoice('none')">📋 曼荼羅チャートに入れない（通常タスクのみ）</button>
+  </div>
+</div>
+
 <div id="chartedit-modal" onclick="if(event.target===this)closeChartEdit()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:10000;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:760px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
@@ -573,6 +587,7 @@ const CELL_META=(function(){
   return M;
 })();
 let _chartEditId='';
+let _placeMode=false,_placeText='';   // タスク配置モード
 const CHARTEDIT={center:'',subs:Array(8).fill(''),acts:Array.from({length:8},()=>Array(8).fill(''))};
 function openChartEditor(id){
   const m=MEMBERS[id];if(!m){alert('メンバーを選択してください');return;}
@@ -604,6 +619,16 @@ function renderChartEdit(){
 }
 function chartEditClick(r,c){
   const meta=CELL_META[r][c];if(!meta)return;
+  if(_placeMode){
+    if(meta.type==='center')CHARTEDIT.center=_placeText;
+    else if(meta.type==='sub')CHARTEDIT.subs[meta.si]=_placeText;
+    else{if(!CHARTEDIT.acts[meta.si])CHARTEDIT.acts[meta.si]=Array(8).fill('');CHARTEDIT.acts[meta.si][meta.ai]=_placeText;}
+    _placeMode=false;
+    const t=document.getElementById('chartedit-title');if(t&&_chartEditId&&MEMBERS[_chartEditId])t.textContent=MEMBERS[_chartEditId].name+' の曼荼羅チャートに記入';
+    renderChartEdit();
+    showToast('asg-saved');
+    return;
+  }
   let label,cur;
   if(meta.type==='center'){label='KGI（中心目標）';cur=CHARTEDIT.center;}
   else if(meta.type==='sub'){label='CSF '+(meta.si+1);cur=CHARTEDIT.subs[meta.si];}
@@ -639,20 +664,45 @@ function renderAssignedTasks(){
   document.getElementById('assigned-list').innerHTML=h;
 }
 function pidOf(id){return (MEMBERS[id]&&MEMBERS[id].pid)||(AVAILABLE[id]&&AVAILABLE[id].pid)||(window._memberPid&&window._memberPid[id])||id;}
-async function submitAssign(){
+let PENDING_ASSIGN=null;   // 割当待ちタスク
+function submitAssign(){
   const name=val('asg-name');if(!name){alert('タスク名を入力してください');return;}
   const id=document.getElementById('asg-member').value;
-  const kpi=val('asg-kpi')||'—';
-  const pri=document.getElementById('asg-pri').value;
+  if(!id){alert('メンバーを選択してください');return;}
+  PENDING_ASSIGN={name,id,kpi:val('asg-kpi')||'—',pri:document.getElementById('asg-pri').value,
+    startV:val('asg-start')||null,dueV:val('asg-due')||null,startD:fmtDate('asg-start'),dueD:fmtDate('asg-due')};
+  const m=MEMBERS[id];
+  document.getElementById('assignchoice-title').textContent='「'+name+'」を '+(m?m.name:'')+' に割り当て';
+  document.getElementById('assignchoice-modal').style.display='flex';
+}
+function closeAssignChoice(){document.getElementById('assignchoice-modal').style.display='none';}
+async function doCreateTask(){
+  const pa=PENDING_ASSIGN;if(!pa)return null;
   const API=window.VexumAPI;
   if(API&&API.ready){
-    const res=await API.assignTask({title:name,kpi,assigneePid:pidOf(id),teamUuid:teamMeta.uid,start:val('asg-start')||null,due:val('asg-due')||null,priority:pri});
-    if(res&&res.error){alert('割当失敗: '+res.error);return;}
+    const res=await API.assignTask({title:pa.name,kpi:pa.kpi,assigneePid:pidOf(pa.id),teamUuid:teamMeta.uid,start:pa.startV,due:pa.dueV,priority:pa.pri});
+    if(res&&res.error){alert('割当失敗: '+res.error);return null;}
   }
-  if(!MEMBER_TASKS[id])MEMBER_TASKS[id]=[];
-  MEMBER_TASKS[id].push({name,kpi,start:fmtDate('asg-start'),due:fmtDate('asg-due'),pri,status:'todo'});
+  if(!MEMBER_TASKS[pa.id])MEMBER_TASKS[pa.id]=[];
+  MEMBER_TASKS[pa.id].push({name:pa.name,kpi:pa.kpi,start:pa.startD,due:pa.dueD,pri:pa.pri,status:'todo'});
   document.getElementById('asg-name').value='';document.getElementById('asg-kpi').value='';
-  renderAssignedTasks();showToast('asg-saved');
+  renderAssignedTasks();
+  return pa.id;
+}
+async function assignChoice(mode){
+  const pa=PENDING_ASSIGN;closeAssignChoice();if(!pa)return;
+  const id=await doCreateTask();if(!id){return;}
+  if(mode==='none'){showToast('asg-saved');PENDING_ASSIGN=null;return;}
+  if(mode==='new'){
+    const m=MEMBERS[id];
+    if(m){m.center='';m.subs=Array(8).fill('');m.acts=Array.from({length:8},()=>Array(8).fill(''));m.chartId=null;}
+  }
+  // 既存/新規ともチャートエディタを「配置モード」で開く
+  openChartEditor(id);
+  _placeMode=true;_placeText=pa.name;
+  const t=document.getElementById('chartedit-title');
+  if(t)t.textContent=(MEMBERS[id]?MEMBERS[id].name:'')+' の曼荼羅 — 「'+pa.name+'」を入れるセルをクリック';
+  PENDING_ASSIGN=null;
 }
 
 /* ===== メンバー評価入力 ===== */
