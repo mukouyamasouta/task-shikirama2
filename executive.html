@@ -126,7 +126,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <aside class="sidebar">
   <div class="sb-logo"><div class="sb-brand">VEXUM</div><div class="sb-brand-sub">TASK MANAGEMENT SYSTEM</div></div>
   <div class="sb-role"><span class="sb-role-dot"></span><span class="sb-role-lbl">◆ EXECUTIVE / 幹部</span></div>
-  <div class="sb-user" id="sb-user" onclick="openSelfModal()" style="cursor:pointer" title="クリックでプロフィール編集"><div class="sb-uname" id="sb-uname">木村 雅人</div><div class="sb-uemail" id="sb-uemail">kimura@vexum.co.jp</div></div>
+  <div class="sb-user" id="sb-user" onclick="openSelfModal()" style="cursor:pointer" title="クリックでプロフィール編集"><div class="sb-uname" id="sb-uname">（読み込み中）</div><div class="sb-uemail" id="sb-uemail">—</div></div>
   <div class="sb-nav">
     <div class="sb-sec">幹部コンソール</div>
     <button class="sb-item active" onclick="swTab('users',this)"><span class="sb-icon">👤</span>アカウント管理</button>
@@ -1335,17 +1335,23 @@ async function injectEvalRefs(memberId,pid){
     const ev=await API.loadEvaluationsFor(pid,chartId);
     const self=ev.fromSelf[0]||null;
     const leader=ev.fromLeader[0]||null;
-    const renderRef=(targetId,sLabel,sStars,sComment,lLabel,lStars,lComment)=>{
+    const renderRef=(targetId,sLabel,sStars,sComment,lLabel,lStars,lComment,hasSelf,hasLeader)=>{
       const el=document.getElementById(targetId);if(!el)return;
       let h='';
-      if(sStars||sComment){h+=`<div style="padding:5px 9px;background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:4px;font-size:10.5px;color:#92400E;line-height:1.5;margin-bottom:4px"><span style="font-weight:700">📝 ${sLabel}: </span><span style="color:#F59E0B;letter-spacing:1px">${starStr(sStars||0)}</span> <span style="color:var(--text2)">「${sComment||'—'}」</span></div>`;}
-      if(lStars||lComment){h+=`<div style="padding:5px 9px;background:#CCEDE9;border-left:3px solid var(--accent);border-radius:4px;font-size:10.5px;color:#0F766E;line-height:1.5"><span style="font-weight:700">📌 ${lLabel}: </span><span style="color:#F59E0B;letter-spacing:1px">${starStr(lStars||0)}</span> <span style="color:var(--text2)">「${lComment||'—'}」</span></div>`;}
+      if(hasSelf){
+        const txt=(sStars||sComment)?`<span style="color:#F59E0B;letter-spacing:1px">${starStr(sStars||0)}</span> <span style="color:var(--text2)">「${sComment||'—'}」</span>`:`<span style="color:var(--text3)">本人未入力</span>`;
+        h+=`<div style="padding:5px 9px;background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:4px;font-size:10.5px;color:#92400E;line-height:1.5;margin-bottom:4px"><span style="font-weight:700">📝 ${sLabel}: </span>${txt}</div>`;
+      }
+      if(hasLeader){
+        const txt=(lStars||lComment)?`<span style="color:#F59E0B;letter-spacing:1px">${starStr(lStars||0)}</span> <span style="color:var(--text2)">「${lComment||'—'}」</span>`:`<span style="color:var(--text3)">リーダー未入力</span>`;
+        h+=`<div style="padding:5px 9px;background:#CCEDE9;border-left:3px solid var(--accent);border-radius:4px;font-size:10.5px;color:#0F766E;line-height:1.5"><span style="font-weight:700">📌 ${lLabel}: </span>${txt}</div>`;
+      }
       el.innerHTML=h;
     };
-    renderRef('ref-'+memberId+'-kgi--1', '本人自己評価(KGI)', self&&self.kgi, self&&self.kgiComment, 'リーダー評価(KGI)', leader&&leader.kgi, leader&&leader.kgiComment);
+    renderRef('ref-'+memberId+'-kgi--1', '本人自己評価(KGI)', self&&self.kgi, self&&self.kgiComment, 'リーダー評価(KGI)', leader&&leader.kgi, leader&&leader.kgiComment, !!self, !!leader);
     for(let si=0;si<8;si++){
       const sc=self&&self.csf&&self.csf[si]; const lc=leader&&leader.csf&&leader.csf[si];
-      renderRef('ref-'+memberId+'-csf-'+si, '本人自己評価(CSF-'+(si+1)+')', sc&&sc.stars, sc&&sc.comment, 'リーダー評価(CSF-'+(si+1)+')', lc&&lc.stars, lc&&lc.comment);
+      renderRef('ref-'+memberId+'-csf-'+si, '本人自己評価(CSF-'+(si+1)+')', sc&&sc.stars, sc&&sc.comment, 'リーダー評価(CSF-'+(si+1)+')', lc&&lc.stars, lc&&lc.comment, !!self, !!leader);
     }
   }catch(e){console.warn('injectEvalRefs:',e);}
 }
