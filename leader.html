@@ -645,10 +645,11 @@ async function saveChartEdit(){
   const API=window.VexumAPI;
   if(API&&API.ready){
     const res=await API.upsertMemberChart({pid:m.pid||pidOf(id),id:m.chartId,name:m.name+' 個人チャート',center:CHARTEDIT.center,subs:CHARTEDIT.subs,acts:CHARTEDIT.acts,color:m.color,bg:m.bg});
-    if(res&&res.error){alert('保存失敗: '+res.error);return;}
+    if(res&&res.error){alert('保存失敗: '+res.error+'\n\n※内容は保持しています。ログインし直して再度「保存」してください。');return;}  // 失敗時は閉じない＝内容保持
     if(res&&res.data)m.chartId=res.data.id;
   }
   m.center=CHARTEDIT.center;m.subs=CHARTEDIT.subs.slice();m.acts=CHARTEDIT.acts.map(a=>a.slice());
+  if(_assignFlow){clearAsgForm();_assignFlow=false;}  // 割当が完全完了したのでフォームをクリア
   closeChartEdit();renderDashboard();
   showToast('asg-saved');
 }
@@ -685,23 +686,25 @@ async function doCreateTask(){
   }
   if(!MEMBER_TASKS[pa.id])MEMBER_TASKS[pa.id]=[];
   MEMBER_TASKS[pa.id].push({name:pa.name,kpi:pa.kpi,start:pa.startD,due:pa.dueD,pri:pa.pri,status:'todo'});
-  document.getElementById('asg-name').value='';document.getElementById('asg-kpi').value='';
   renderAssignedTasks();
-  return pa.id;
+  return pa.id;  // ※フォームは消さない（割当完了まで内容を保持）
 }
+let _assignFlow=false;  // チャート配置を伴う割当の進行中フラグ
+function clearAsgForm(){const n=document.getElementById('asg-name');if(n)n.value='';const k=document.getElementById('asg-kpi');if(k)k.value='';}
 async function assignChoice(mode){
   const pa=PENDING_ASSIGN;closeAssignChoice();if(!pa)return;
-  const id=await doCreateTask();if(!id){return;}
-  if(mode==='none'){showToast('asg-saved');PENDING_ASSIGN=null;return;}
+  const id=await doCreateTask();if(!id){return;}  // 失敗時は内容保持
+  if(mode==='none'){clearAsgForm();PENDING_ASSIGN=null;showToast('asg-saved');return;}
   if(mode==='new'){
     const m=MEMBERS[id];
     if(m){m.center='';m.subs=Array(8).fill('');m.acts=Array.from({length:8},()=>Array(8).fill(''));m.chartId=null;}
   }
-  // 既存/新規ともチャートエディタを「配置モード」で開く
+  // 既存/新規ともチャートエディタを「配置モード」で開く（保存成功までフォーム保持）
+  _assignFlow=true;
   openChartEditor(id);
   _placeMode=true;_placeText=pa.name;
   const t=document.getElementById('chartedit-title');
-  if(t)t.textContent=(MEMBERS[id]?MEMBERS[id].name:'')+' の曼荼羅 — 「'+pa.name+'」を入れるセルをクリック';
+  if(t)t.textContent=(MEMBERS[id]?MEMBERS[id].name:'')+' の曼荼羅 — 「'+pa.name+'」を入れるセルをクリック→保存';
   PENDING_ASSIGN=null;
 }
 

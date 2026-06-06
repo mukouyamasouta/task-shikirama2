@@ -288,7 +288,7 @@
     if (o.id) { payload.id = o.id; }
     else { payload.id = 'user_' + o.pid; }
     var r = await sb.from('mandala_charts').upsert(payload).select().single();
-    if (r.error) return { error: r.error.message };
+    if (r.error) return { error: friendlyErr(r.error.message) };
     return { data: r.data };
   }
 
@@ -370,7 +370,7 @@
   function friendlyErr(msg) {
     msg = String(msg || '');
     if (/duplicate|unique/i.test(msg)) return 'このメールアドレスは既に登録されています';
-    if (/permission denied|row-level/i.test(msg)) return '権限がありません（管理者・幹部でログインしてください）';
+    if (/permission denied|row-level/i.test(msg)) return '権限がありません。正しい役職のアカウントでログインし直してください（リーダーは自チーム、幹部・管理者は全体）';
     return msg;
   }
   async function createAccount(o) {
