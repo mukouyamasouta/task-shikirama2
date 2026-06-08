@@ -162,6 +162,12 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 .grid-editor-wrap{display:grid;grid-template-columns:repeat(9,1fr);gap:2px;background:#D1D5DB;border-radius:6px;overflow:hidden}
 .ge-cell{min-height:54px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.3;padding:4px 3px;cursor:pointer;word-break:break-all;position:relative;transition:filter .12s}
 .ge-cell:hover{filter:brightness(.9)}
+/* チャート管理 */
+.cm-task-item{border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden;background:var(--card)}
+.cm-task-head{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;user-select:none}
+.cm-task-head:hover{background:#FAFAFA}
+.cm-task-body{padding:12px 14px;border-top:1px solid #F3F4F6;display:none}
+.cm-task-body.open{display:block}
 /* eval select panel */
 .eval-select-bar{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;box-shadow:var(--shadow)}
 .eval-pct-input{width:72px;padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:14px;font-weight:700;color:var(--accent);font-family:inherit;text-align:center;outline:none}
@@ -200,6 +206,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div class="sb-sec">個人メニュー</div>
     <button class="sb-item active" onclick="swTab('progress',this)"><span class="sb-icon">◇</span>進捗ダッシュボード</button>
     <button class="sb-item" onclick="swTab('tasks',this)"><span class="sb-icon">☰</span>タスク管理<span class="sb-badge">2</span></button>
+    <button class="sb-item" onclick="swTab('chartmgr',this);initChartMgr()"><span class="sb-icon">🗂</span>チャート管理</button>
     <button class="sb-item" onclick="swTab('assign',this)"><span class="sb-icon">📌</span>割り当て<span class="sb-badge" id="assign-badge">3</span></button>
     <button class="sb-item" onclick="swTab('reviews',this);renderEval();refreshSelfEvalStatusCard()"><span class="sb-icon">★</span>評価管理</button>
     <button class="sb-item" onclick="swTab('create',this);initCreate()"><span class="sb-icon">＋</span>新規作成</button>
@@ -470,6 +477,51 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
 </div>
 
+<!-- チャート管理 -->
+<div id="tc-chartmgr" class="tab-content">
+  <div class="sec-title">チャート管理
+    <button class="f-submit" style="font-size:12px;padding:7px 16px;background:var(--green)" onclick="openCmAddTask()">＋ タスクを追加</button>
+  </div>
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;box-shadow:var(--shadow)">
+    <div style="flex:1;min-width:200px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:5px">管理するチャート</div>
+      <select class="fs" id="cm-chart-sel" onchange="onCmChartChange()" style="font-size:12px;padding:7px 10px;font-weight:600"></select>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">KPI編集済み</div>
+      <div style="font-size:20px;font-weight:800;color:var(--amber)" id="cm-edit-count">0件</div>
+    </div>
+    <button class="f-submit" style="background:var(--amber)" onclick="saveCmKpiEdits()">💾 KPI変更を保存</button>
+    <div style="font-size:10px;color:var(--text2);max-width:180px;line-height:1.5">編集したKPIは<b style="color:var(--amber)">黄色</b>表示され、<b>リーダー画面にも反映</b>されます</div>
+  </div>
+  <div class="g2">
+    <div>
+      <div class="card">
+        <div class="card-hd">
+          <div><div class="card-title">曼荼羅チャート</div><div class="card-sub">KGI/CSF: 表示のみ ／ KPI（外周）: クリックで編集・進捗入力</div></div>
+          <button class="card-btn" onclick="(function(){const k=document.getElementById('cm-chart-sel').value;if(k&&CHARTS[k])openMandala(k,false);})()">⛶ 全画面</button>
+        </div>
+        <div class="card-body" style="padding:8px"><div id="cm-kpi-grid" style="overflow-x:auto"></div></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-hd" style="flex-direction:column;align-items:flex-start;gap:8px">
+          <div><div class="card-title">タスク一覧</div><div class="card-sub">割り当て済み ＋ 自分で作成したタスク</div></div>
+          <div class="filter-row" style="margin:0">
+            <button class="f-btn active" id="cm-f-all" onclick="cmFilter('all',this)">全て</button>
+            <button class="f-btn" id="cm-f-wip" onclick="cmFilter('wip',this)">進行中</button>
+            <button class="f-btn" id="cm-f-todo" onclick="cmFilter('todo',this)">未着手</button>
+            <button class="f-btn" id="cm-f-done" onclick="cmFilter('done',this)">完了</button>
+            <button class="f-btn" id="cm-f-late" onclick="cmFilter('late',this)">遅延</button>
+          </div>
+        </div>
+        <div id="cm-task-list" style="padding:10px 14px;max-height:600px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 日報 -->
 <div id="tc-report" class="tab-content">
   <div class="sec-title">日報</div>
@@ -521,7 +573,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <script>
 /* ===== タブ切替 ===== */
-const TITLES={progress:['進捗ダッシュボード','個人メニュー / 進捗'],tasks:['タスク管理','個人メニュー / タスク'],assign:['割り当て','個人メニュー / 割り当て'],reviews:['評価管理','個人メニュー / 評価'],create:['新規作成','個人メニュー / 新規作成'],report:['日報','個人メニュー / 日報']};
+const TITLES={progress:['進捗ダッシュボード','個人メニュー / 進捗'],tasks:['タスク管理','個人メニュー / タスク'],assign:['割り当て','個人メニュー / 割り当て'],reviews:['評価管理','個人メニュー / 評価'],create:['新規作成','個人メニュー / 新規作成'],report:['日報','個人メニュー / 日報'],chartmgr:['チャート管理','個人メニュー / チャート管理']};
 /* 右上「新規作成」ボタンのタブ別制御（progress・assignでは非表示） */
 const TB_NEW={tasks:{label:'＋ タスク作成',fn:'openTaskCreate'},report:{label:'＋ 新規日報',fn:'newReport'}};
 function updateTbNewBtn(id){
@@ -701,6 +753,56 @@ function reportSubmit(){
     <div style="display:flex;gap:8px;margin-top:6px">
       <button class="f-submit" style="flex:1;background:#9CA3AF" onclick="closeTaskCreate()">キャンセル</button>
       <button class="f-submit" style="flex:1" onclick="submitTask()">タスクを作成</button>
+    </div>
+  </div>
+</div>
+
+<!-- KPI編集モーダル -->
+<div id="kpi-edit-modal" onclick="if(event.target===this)closeKpiEdit()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9991;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:460px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:15px;font-weight:800;color:var(--amber)">✏ KPIを編集</div>
+      <button onclick="closeKpiEdit()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div id="kpi-edit-csf" style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:4px"></div>
+    <div style="background:#F9FAFB;border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:12px;font-size:11px;color:var(--text2)">元のKPI: <span id="kpi-edit-orig" style="font-weight:600;color:var(--text)"></span></div>
+    <div class="fg"><label class="fl">KPI内容（書き換え可）</label>
+      <input class="fi" id="kpi-edit-text" placeholder="KPIの内容を入力…"></div>
+    <div class="fg"><label class="fl">進捗 <span id="kpi-edit-prog-val" style="color:var(--accent);font-weight:700">0%</span></label>
+      <input type="range" id="kpi-edit-prog" min="0" max="100" value="0" style="width:100%;accent-color:var(--accent)" oninput="document.getElementById('kpi-edit-prog-val').textContent=this.value+'%'"></div>
+    <div class="fg"><label class="fl">メモ（リーダーへのコメント・状況など）</label>
+      <textarea class="fi" id="kpi-edit-note" rows="3" placeholder="進捗状況・メモ・リーダーへの報告…" style="resize:vertical;font-size:12px"></textarea></div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="f-submit" style="flex:1;background:var(--text3)" onclick="clearKpiEdit()">元に戻す</button>
+      <button class="f-submit" style="flex:1" onclick="saveKpiEdit()">✓ 保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- タスク追加モーダル（チャート管理） -->
+<div id="cm-add-task-modal" onclick="if(event.target===this)closeCmAddTask()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9992;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:460px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div><div style="font-size:15px;font-weight:800;color:var(--green)">＋ タスクを追加</div><div style="font-size:10px;color:var(--text3);margin-top:2px">自分用の個人タスクを作成します</div></div>
+      <button onclick="closeCmAddTask()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div class="fg"><label class="fl">チャートを選択</label>
+      <select class="fs" id="cm-at-chart" onchange="cmAtUpdateCsf()"></select></div>
+    <div class="fg"><label class="fl">関連CSF（任意）</label>
+      <select class="fs" id="cm-at-csf" onchange="cmAtUpdateKpi()"><option value="">— CSFを選択（任意）—</option></select></div>
+    <div class="fg"><label class="fl">関連KPI（任意）</label>
+      <select class="fs" id="cm-at-kpi"><option value="">— KPIを選択（任意）—</option></select></div>
+    <div class="fg"><label class="fl">タスク名 *</label>
+      <input class="fi" id="cm-at-name" placeholder="例: 新規顧客 訪問アポ獲得"></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">開始日</label><input class="fi" id="cm-at-start" type="date"></div>
+      <div class="fg"><label class="fl">期限</label><input class="fi" id="cm-at-due" type="date"></div>
+    </div>
+    <div class="fg"><label class="fl">優先度</label>
+      <select class="fs" id="cm-at-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select></div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="f-submit" style="flex:1;background:#9CA3AF" onclick="closeCmAddTask()">キャンセル</button>
+      <button class="f-submit" style="flex:1;background:var(--green)" onclick="submitCmTask()">タスクを作成</button>
     </div>
   </div>
 </div>
@@ -1378,6 +1480,270 @@ renderEval();
 renderPReportCalendar();
 renderAssign();
 updateAssignBadge();
+</script>
+
+<script>
+/* ===== チャート管理タブ ===== */
+const KPI_LOC_MAP=(function(){
+  const m={};
+  SP_MAP.forEach(function(sp){
+    let ai=0;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      if(dr===0&&dc===0)continue;
+      const r=sp.oc[0]+dr,c=sp.oc[1]+dc;
+      m[r+','+c]={si:sp.si,ai};ai++;
+    }
+  });
+  return m;
+})();
+
+let kpiEdits={};      // {chartKey:{'si-ai':{text,note,progress}}}
+let kpiOrigActs={};   // 初回ロード時の元データ
+const cmPersonalTasks=[];
+let cmTaskFilter='all';
+let _editingKpi=null;
+
+function initChartMgr(){
+  const sel=document.getElementById('cm-chart-sel');if(!sel)return;
+  let opts='';
+  Object.entries(CHARTS).forEach(([k,c])=>{
+    if(k.startsWith('__'))return;
+    opts+=`<option value="${k}">${c.name||k} — ${c.scopeLabel||''} ${c.period?'('+c.period+')':''}</option>`;
+  });
+  sel.innerHTML=opts||'<option value="">— チャートなし —</option>';
+  onCmChartChange();
+}
+
+function onCmChartChange(){
+  const k=(document.getElementById('cm-chart-sel')||{}).value;
+  if(!k||!CHARTS[k])return;
+  if(!kpiOrigActs[k]){const d=CHARTS[k];kpiOrigActs[k]=(d.acts||[]).map(row=>[...(row||[])]);}
+  renderCmKpiGrid(k);renderCmTasks();updateCmEditCount(k);
+}
+
+function updateCmEditCount(k){
+  const cnt=k&&kpiEdits[k]?Object.keys(kpiEdits[k]).length:0;
+  const el=document.getElementById('cm-edit-count');if(el)el.textContent=cnt+'件';
+}
+
+function renderCmKpiGrid(k){
+  const d=CHARTS[k];if(!d)return;
+  const edits=kpiEdits[k]||{};
+  const G=buildMndGrid(k);
+  let h='<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:2px;background:#D1D5DB;border-radius:6px;overflow:hidden;min-width:480px">';
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const cell=G[r][c];
+    let sty='min-height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.3;padding:3px 2px;word-break:break-all;position:relative;box-sizing:border-box;';
+    if(c===2||c===5)sty+='border-right:3px solid #9CA3AF;';
+    if(r===2||r===5)sty+='border-bottom:3px solid #9CA3AF;';
+    let oc2='',tx='';
+    if(cell&&cell.t==='center'){
+      sty+=`background:${d.color};color:#fff;font-weight:800;font-size:10px;`;
+      tx=cell.tx.replace(/\n/g,'<br>');
+    }else if(cell&&cell.t==='sub'){
+      sty+=`background:${d.bg};color:${d.color};font-weight:700;`;
+      tx=cell.tx;
+    }else if(cell&&cell.t==='action'){
+      const loc=KPI_LOC_MAP[r+','+c];
+      if(loc){
+        const ekey=loc.si+'-'+loc.ai,ed=edits[ekey];
+        if(ed){
+          sty+='background:#FEF3C7;color:#92400E;border:1.5px solid #F59E0B;cursor:pointer;';
+          const pg=ed.progress>0?`<span style="font-size:7px;margin-top:1px">${ed.progress}%</span>`:'';
+          tx=`<span style="font-size:7px;position:absolute;top:1px;right:2px;color:#D97706">✏</span>${ed.text||cell.tx||''}${pg}`;
+        }else{
+          sty+='background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;cursor:pointer;';
+          tx=cell.tx||'';
+        }
+        oc2=`onclick="openKpiEdit('${k}',${loc.si},${loc.ai})"`;
+      }else{sty+='background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;';tx=cell?cell.tx:'';}
+    }else{sty+='background:#E5E7EB;';}
+    h+=`<div ${oc2} style="${sty}">${tx}</div>`;
+  }
+  h+='</div>';
+  const con=document.getElementById('cm-kpi-grid');if(con)con.innerHTML=h;
+}
+
+function openKpiEdit(k,si,ai){
+  _editingKpi={k,si,ai};
+  const d=CHARTS[k],edits=kpiEdits[k]||{},ekey=si+'-'+ai,ed=edits[ekey];
+  const origText=((d.acts||[])[si]||[])[ai]||'';
+  document.getElementById('kpi-edit-csf').textContent=`CSF-${si+1}: ${(d.subs||[])[si]||''}`;
+  document.getElementById('kpi-edit-orig').textContent=origText||'（未入力）';
+  document.getElementById('kpi-edit-text').value=ed?ed.text:origText;
+  const pg=ed?(ed.progress||0):0;
+  document.getElementById('kpi-edit-prog').value=pg;
+  document.getElementById('kpi-edit-prog-val').textContent=pg+'%';
+  document.getElementById('kpi-edit-note').value=ed?(ed.note||''):'';
+  document.getElementById('kpi-edit-modal').style.display='flex';
+}
+function closeKpiEdit(){document.getElementById('kpi-edit-modal').style.display='none';_editingKpi=null;}
+function clearKpiEdit(){
+  if(!_editingKpi)return;
+  const{k,si,ai}=_editingKpi;
+  if(kpiEdits[k])delete kpiEdits[k][si+'-'+ai];
+  closeKpiEdit();onCmChartChange();
+}
+function saveKpiEdit(){
+  if(!_editingKpi)return;
+  const{k,si,ai}=_editingKpi;
+  const newText=(document.getElementById('kpi-edit-text').value||'').trim();
+  const pg=parseInt(document.getElementById('kpi-edit-prog').value)||0;
+  const note=document.getElementById('kpi-edit-note').value||'';
+  if(!kpiEdits[k])kpiEdits[k]={};
+  kpiEdits[k][si+'-'+ai]={text:newText,note,progress:pg};
+  closeKpiEdit();onCmChartChange();
+}
+async function saveCmKpiEdits(){
+  const k=(document.getElementById('cm-chart-sel')||{}).value;
+  if(!k||!CHARTS[k]){alert('チャートを選択してください');return;}
+  const edits=kpiEdits[k]||{};
+  if(!Object.keys(edits).length){alert('編集済みのKPIがありません');return;}
+  const d=CHARTS[k];
+  const newActs=(d.acts||[]).map(row=>[...(row||[])]);
+  Object.entries(edits).forEach(([ekey,ed])=>{
+    const[si,ai]=ekey.split('-').map(Number);if(newActs[si])newActs[si][ai]=ed.text;
+  });
+  d.acts=newActs;
+  const API=window.VexumAPI;
+  if(API&&API.ready&&d.dbId){
+    const res=await API.saveMemberKpiEdits(d.dbId,edits,newActs);
+    if(res&&res.error){alert('保存失敗: '+res.error);return;}
+  }
+  alert('✅ KPIの変更を保存しました。リーダー画面に反映されます。');
+  renderCmKpiGrid(k);updateCmEditCount(k);
+}
+
+/* ===== チャート管理 タスク一覧 ===== */
+function renderCmTasks(){
+  const con=document.getElementById('cm-task-list');if(!con)return;
+  const allItems=[
+    ...ASSIGNMENTS.map((a,i)=>({
+      _id:'asg-'+i,_type:'assigned',
+      name:a.name,meta:a.meta||'',from:a.from||'',fromClass:a.fromClass||'',
+      start:a.start,end:a.end,pct:a.pct||0,comment:a.comment||'',
+      status:a.pct>=100?'done':a.pct>0?'wip':'todo',pri:'md'
+    })),
+    ...cmPersonalTasks.map((t,i)=>({
+      _id:'prv-'+i,_type:'personal',
+      name:t.name,meta:'関連KPI: '+(t.kpi||'—'),from:'🙋 自分で作成',fromClass:'',
+      start:t.start||'—',end:t.due||'—',pct:t.pct||0,comment:t.comment||'',
+      status:t.status||'todo',pri:t.pri||'md'
+    }))
+  ];
+  const filtered=cmTaskFilter==='all'?allItems:allItems.filter(t=>t.status===cmTaskFilter);
+  if(!filtered.length){con.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:24px">タスクがありません</div>';return;}
+  const priLabel={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低']};
+  const stLabel={wip:['s-wip','進行中'],done:['s-done','完了'],late:['s-late','遅延'],todo:['s-todo','未着手']};
+  let h='';
+  filtered.forEach(t=>{
+    const sc=stLabel[t.status]||stLabel.todo,pc=priLabel[t.pri]||priLabel.md;
+    const borderCol=t._type==='personal'?'var(--green)':t.fromClass==='exec'?'var(--pink)':'var(--accent)';
+    const tag=t._type==='personal'?'<span style="font-size:8px;background:#D1FAE5;color:var(--green);padding:1px 5px;border-radius:4px;font-weight:700;margin-left:4px">自作</span>':'<span style="font-size:8px;background:#DAEEE9;color:var(--accent);padding:1px 5px;border-radius:4px;font-weight:700;margin-left:4px">割当</span>';
+    h+=`<div class="cm-task-item" style="border-left:3px solid ${borderCol}">
+      <div class="cm-task-head" onclick="cmToggle('${t._id}')">
+        <span style="font-size:11px;color:var(--text3);transition:transform .2s;display:inline-block" id="cm-arr-${t._id}">▶</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;flex-wrap:wrap"><span style="font-size:12px;font-weight:700;color:var(--text)">${t.name}</span>${tag}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px">${t.meta}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0"><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div>
+      </div>
+      <div class="cm-task-body" id="cmb-${t._id}">
+        <div style="display:flex;gap:14px;font-size:11px;color:var(--text2);margin-bottom:8px;flex-wrap:wrap">
+          <span>開始 <b>${t.start}</b></span><span>期限 <b>${t.end}</b></span><span>依頼元 <b>${t.from}</b></span>
+        </div>
+        <div style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-bottom:4px"><span>達成度</span><span id="cm-pv-${t._id}" style="color:var(--accent)">${t.pct}%</span></div>
+          <input type="range" min="0" max="100" value="${t.pct}" style="width:100%;accent-color:var(--accent)" oninput="cmUpdPct('${t._id}',this.value)">
+        </div>
+        <textarea rows="2" placeholder="進捗メモ・リーダーへのコメント…" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:12px;font-family:inherit;resize:vertical;outline:none" id="cm-note-${t._id}" oninput="cmUpdNote('${t._id}',this.value)">${t.comment}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <select style="flex:1;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:12px;font-family:inherit;outline:none;color:var(--text)" id="cm-stat-${t._id}" onchange="cmUpdStatus('${t._id}',this.value)">
+            <option value="todo"${t.status==='todo'?' selected':''}>未着手</option>
+            <option value="wip"${t.status==='wip'?' selected':''}>進行中</option>
+            <option value="done"${t.status==='done'?' selected':''}>完了</option>
+            <option value="late"${t.status==='late'?' selected':''}>遅延</option>
+          </select>
+          <button style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit" onclick="cmSaveTask('${t._id}',this)">保存</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  con.innerHTML=h;
+}
+function cmFilter(s,btn){
+  cmTaskFilter=s;
+  document.querySelectorAll('#tc-chartmgr .f-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');renderCmTasks();
+}
+function cmToggle(id){
+  const body=document.getElementById('cmb-'+id),arr=document.getElementById('cm-arr-'+id);
+  if(!body)return;const open=body.classList.toggle('open');
+  if(arr)arr.style.transform=open?'rotate(90deg)':'';
+}
+function _cmIdxOf(id){
+  if(id.startsWith('asg-'))return{type:'asg',idx:+id.slice(4)};
+  if(id.startsWith('prv-'))return{type:'prv',idx:+id.slice(4)};
+  return null;
+}
+function cmUpdPct(id,val){
+  const pv=document.getElementById('cm-pv-'+id);if(pv)pv.textContent=val+'%';
+  const x=_cmIdxOf(id);if(!x)return;
+  if(x.type==='asg'&&ASSIGNMENTS[x.idx])ASSIGNMENTS[x.idx].pct=+val;
+  else if(x.type==='prv'&&cmPersonalTasks[x.idx])cmPersonalTasks[x.idx].pct=+val;
+}
+function cmUpdNote(id,val){
+  const x=_cmIdxOf(id);if(!x)return;
+  if(x.type==='asg'&&ASSIGNMENTS[x.idx])ASSIGNMENTS[x.idx].comment=val;
+  else if(x.type==='prv'&&cmPersonalTasks[x.idx])cmPersonalTasks[x.idx].comment=val;
+}
+function cmUpdStatus(id,val){
+  const x=_cmIdxOf(id);if(!x)return;
+  if(x.type==='asg'&&ASSIGNMENTS[x.idx])ASSIGNMENTS[x.idx].status=val;
+  else if(x.type==='prv'&&cmPersonalTasks[x.idx])cmPersonalTasks[x.idx].status=val;
+}
+function cmSaveTask(id,btn){
+  const old=btn.textContent;btn.textContent='✓ 保存しました';btn.style.background='var(--green)';
+  setTimeout(()=>{btn.textContent=old;btn.style.background='var(--accent)';},1800);
+}
+/* ===== タスク追加 ===== */
+function openCmAddTask(){
+  const sel=document.getElementById('cm-at-chart');if(!sel)return;
+  let opts='';
+  Object.entries(CHARTS).forEach(([k,c])=>{if(!k.startsWith('__'))opts+=`<option value="${k}">${c.name||k} — ${c.scopeLabel||''}</option>`;});
+  sel.innerHTML=opts||'<option>—</option>';
+  cmAtUpdateCsf();
+  document.getElementById('cm-add-task-modal').style.display='flex';
+}
+function closeCmAddTask(){document.getElementById('cm-add-task-modal').style.display='none';}
+function cmAtUpdateCsf(){
+  const k=(document.getElementById('cm-at-chart')||{}).value,d=k&&CHARTS[k];
+  const csfSel=document.getElementById('cm-at-csf');if(!csfSel)return;
+  csfSel.innerHTML='<option value="">— CSFを選択（任意）—</option>'+
+    (d?(d.subs||[]).map((s,i)=>`<option value="${i}">CSF-${i+1} ${s}</option>`).join(''):'');
+  cmAtUpdateKpi();
+}
+function cmAtUpdateKpi(){
+  const k=(document.getElementById('cm-at-chart')||{}).value,si=(document.getElementById('cm-at-csf')||{}).value,d=k&&CHARTS[k];
+  const kpiSel=document.getElementById('cm-at-kpi');if(!kpiSel)return;
+  kpiSel.innerHTML='<option value="">— KPIを選択（任意）—</option>'+
+    (d&&si!==''?((d.acts||[])[+si]||[]).map((a,i)=>`<option value="${a}">KPI ${+si+1}-${i+1} ${a}</option>`).join(''):'');
+}
+function submitCmTask(){
+  const name=((document.getElementById('cm-at-name')||{}).value||'').trim();
+  if(!name){alert('タスク名を入力してください');return;}
+  const k=(document.getElementById('cm-at-chart')||{}).value||'';
+  const kpi=(document.getElementById('cm-at-kpi')||{}).value||'—';
+  const startRaw=(document.getElementById('cm-at-start')||{}).value||'';
+  const dueRaw=(document.getElementById('cm-at-due')||{}).value||'';
+  function fmtD(v){if(!v)return'—';const p=v.split('-');return p.length===3?`${+p[1]}/${+p[2]}`:v;}
+  const pri=(document.getElementById('cm-at-pri')||{}).value||'md';
+  cmPersonalTasks.push({name,chartKey:k,kpi,start:fmtD(startRaw),due:fmtD(dueRaw),pri,status:'todo',pct:0,comment:''});
+  closeCmAddTask();renderCmTasks();
+  const API=window.VexumAPI;
+  if(API&&API.ready){API.assignTask({title:name,kpi:kpi!=='—'?kpi:null,start:startRaw||null,due:dueRaw||null,priority:pri});}
+}
 </script>
 
 <!-- ===== Supabase 連携（未設定時は内蔵デモのまま動作） ===== -->

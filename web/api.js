@@ -167,7 +167,8 @@
         pid: p.id, chartId: c.id || null,
         name: p.full_name, role: m.role_in_team === 'leader' ? 'リーダー' : '従業員', team: team.name,
         color: p.color, bg: '#F3F4F6', rate: m.achievement_rate, kpis: kpis, stats: stats,
-        center: c.center || (p.full_name + '\n個人目標'), subs: c.subs || [], acts: c.acts || []
+        center: c.center || (p.full_name + '\n個人目標'), subs: c.subs || [], acts: c.acts || [],
+        memberKpiEdits: c.member_kpi_edits || {}
       };
       DASH_IDS.push(key);
       if (m.role_in_team !== 'leader') EVAL_IDS.push(key);
@@ -313,6 +314,16 @@
       return { id: ins.data.id, submitted: row.submitted };
     }
   }
+  // メンバー自身のKPI編集を保存（member_kpi_edits列 + acts更新）
+  async function saveMemberKpiEdits(chartId, edits, newActs) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var payload = { member_kpi_edits: edits };
+    if (newActs) payload.acts = newActs;
+    var r = await sb.from('mandala_charts').update(payload).eq('id', chartId);
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    return { ok: true };
+  }
+
   // 特定メンバーが持つ全曼荼羅チャート（評価対象選択用）
   async function loadChartsFor(pid) {
     if (!sb || !pid) return [];
@@ -651,6 +662,7 @@
     loadChartsFor: loadChartsFor,
     loadMySelfEval: loadMySelfEval,
     upsertSelfEval: upsertSelfEval,
+    saveMemberKpiEdits: saveMemberKpiEdits,
     upsertMemberChart: upsertMemberChart,
     loadPersonalData: loadPersonalData,
     loadTokatsuData: loadTokatsuData,
