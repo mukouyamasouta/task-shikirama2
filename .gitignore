@@ -18,3 +18,7 @@ docs/
 node_modules/
 .next/
 .vercel/
+.vercel
+
+# Claude Code ローカル設定
+.claude/

@@ -27,22 +27,17 @@ VEXUM
 
 ---
 
-## 2. アカウント一覧（デモ用）
+## 2. アカウント一覧（現行・共通パスワード: `vexum2025`）
 
 | 氏名 | メール | ロール | 担当画面 |
 |---|---|---|---|
-| 山田 太郎 | yamada@vexum.co.jp | admin | 統括画面 |
-| 木村 雅人 | kimura@vexum.co.jp | executive | 幹部画面 |
+| 山田 太郎 | yamada@com | admin | 統括画面 |
+| 山本（幹部） | yamamoto@com | executive | 幹部画面 |
 | 田中 花子 | tanaka@vexum.co.jp | leader | リーダー画面（営業チームA） |
-| 鈴木 一郎 | suzuki@vexum.co.jp | leader | リーダー画面（開発チームB） |
-| 佐藤 美咲 | sato@vexum.co.jp | leader | リーダー画面（マーケチームC） |
 | 中村 健太 | nakamura@vexum.co.jp | member | 個人画面 |
-| 伊藤 さくら | ito@vexum.co.jp | member | 個人画面 |
-| 小林 大輔 | kobayashi@vexum.co.jp | member | 個人画面 |
-| 山本 浩二 | yamamoto@vexum.co.jp | member | 個人画面 |
-| 加藤 洋平 | kato@vexum.co.jp | member | 個人画面 |
-| 松田 奈緒 | matsuda@vexum.co.jp | member | 個人画面 |
-| 井上 大樹 | inoue@vexum.co.jp | member | 個人画面 |
+
+> 追加アカウントは ①幹部画面の「アカウント発行」（即ログイン可・PW自動発行）
+> ②ログイン画面の「新規登録」（セルフ登録 → member）のどちらでも作成できます。
 
 ---
 
@@ -94,14 +89,15 @@ VEXUM
 | 日報 | メンバー別・日付別日報カレンダー確認 |
 
 ### 個人画面（employee）
-| タブ | 機能 |
-|---|---|
-| 進捗ダッシュボード | 自分の達成率・KPI進捗・チーム内ランキング |
-| タスク管理 | 自分のタスク一覧・フィルタ |
-| 割り当て | 上長/役員からの割当課題・達成度スライダー入力 |
-| 評価管理 | KGI/CSF評価入力（バー/曼荼羅形式）・上長からの評価受信 |
-| 新規作成 | 曼荼羅チャート作成（フォーム/グリッド） |
-| 日報 | 日報作成・提出・カレンダー管理 |
+| タブ | 機能 | DB保存 |
+|---|---|---|
+| 進捗ダッシュボード | 自分の達成率・KPI進捗・チーム内ランキング | 読込 |
+| タスク管理 | 自分のタスク一覧・フィルタ・タスク作成 | ✅ tasks |
+| チャート管理 | 曼荼羅KPIの本人編集（黄色ハイライト→リーダー可視化）・割当＋自作タスクの一元管理・タスク追加 | ✅ mandala_charts.member_kpi_edits / tasks |
+| 割り当て | 上長/役員からの割当課題・達成度スライダー・コメント保存 | ✅ tasks |
+| 評価管理 | 自己評価の下書き/提出・上長/幹部からの評価受信 | ✅ evaluations |
+| 新規作成 | 曼荼羅チャート作成（フォーム/グリッド） | ✅ mandala_charts |
+| 日報 | 日報作成・提出（同一日は上書き）・カレンダー管理 | ✅ daily_reports |
 
 ---
 
@@ -116,13 +112,12 @@ VEXUM
 
 ## 6. Supabase セットアップ手順
 
+### 新規プロジェクトの場合（1ファイルで完結）
 1. [supabase.com](https://supabase.com) でプロジェクト作成
-2. SQL Editor で順に実行:
-   - `supabase/01_schema.sql` → テーブル・RLS・関数
-   - `supabase/02_seed_core.sql` → プロフィール16名・チーム3
-   - `supabase/03_seed_mandala.sql` → 曼荼羅チャート14件
-   - `supabase/04_seed_activity.sql` → タスク・日報・評価
-3. Authentication → Users → 上記12名のメールでアカウント作成
+2. SQL Editor で `supabase/REBUILD.sql` を実行
+   → テーブル・RLS・RPC・シード・ログイン用Authユーザー（PW: `vexum2025`）まで一括作成
+3. 続けて `supabase/15_backend_complete.sql` を実行
+   → 統括(admin)ログインの復旧と列の最終確認
 4. `web/config.js` に URL と anon key を設定:
    ```js
    window.SUPABASE_CONFIG = {
@@ -131,6 +126,12 @@ VEXUM
    };
    ```
 5. Vercel に config.js をプッシュ → 自動デプロイ
+
+### 既存プロジェクト（REBUILD実行済み）の場合
+- `supabase/15_backend_complete.sql` のみ実行（冪等・再実行安全）。
+  自己評価の提出フラグ・KPI本人編集列・adminログインが揃います。
+- `12_add_submitted.sql` / `13_change_exec_email.sql` / `14_kpi_edits.sql` は
+  過去の個別パッチ（履歴）。15 がすべて包含します（13のメール変更を除く）。
 
 > **デモモード**: config.js 未設定のままでも全機能がデモデータで動作します。
 
@@ -152,18 +153,28 @@ VEXUM
 ```
 /
 ├── index.html          # ログイン・ロール振り分け
+├── signup.html         # セルフ新規登録（member）
 ├── admin.html          # 統括画面
 ├── executive.html      # 幹部画面
 ├── leader.html         # リーダー画面
 ├── employee.html       # 個人画面
 ├── vercel.json         # Vercel静的サイト設定
 ├── web/
-│   ├── api.js          # Supabaseデータアクセス層
-│   ├── config.js       # Supabase接続設定（要設定）
+│   ├── api.js          # Supabaseデータアクセス層（window.VexumAPI）
+│   ├── config.js       # Supabase接続設定（要設定・anonキーのみ）
 │   └── config.example.js
 └── supabase/
-    ├── 01_schema.sql   # テーブル定義・RLS・関数
-    ├── 02_seed_core.sql
-    ├── 03_seed_mandala.sql
-    └── 04_seed_activity.sql
+    ├── REBUILD.sql               # バックエンド一括構築（テーブル/RLS/RPC/シード/Auth）
+    ├── 15_backend_complete.sql   # 既存DB用 同期パッチ（冪等）
+    ├── 12_add_submitted.sql      # （履歴）自己評価 提出フラグ
+    ├── 13_change_exec_email.sql  # （履歴）幹部メール変更
+    └── 14_kpi_edits.sql          # （履歴）KPI本人編集列
 ```
+
+---
+
+## 9. 既知の制限
+
+- 統括/幹部の「チャート送信」は `chart_sends` に保存・送信履歴に表示されますが、
+  受信側（リーダー/個人画面）に受信ボックスUIはまだありません（次フェーズ）。
+- 統括画面の新規作成系フォーム（アカウント発行・チーム編成）は幹部画面に集約しています。

@@ -75,6 +75,7 @@ create table mandala_charts (
   acts          jsonb not null,
   color         text default '#0D9488',
   bg            text default '#CCEDE9',
+  member_kpi_edits jsonb default '{}'::jsonb,  -- 本人によるKPI編集 {"si-ai":{text,note,progress}}
   created_at    timestamptz default now()
 );
 create table tasks (
@@ -120,8 +121,10 @@ create table evaluations (
   kgi_comment    text,
   csf            jsonb,
   task_eval      jsonb,
+  submitted      boolean default false,  -- 自己評価: true=提出済み / false=下書き
   created_at     timestamptz default now()
 );
+create index if not exists idx_evaluations_target_chart on evaluations(target_user_id, chart_id);
 create table eval_records (
   id             uuid primary key default gen_random_uuid(),
   evaluatee_id   uuid references profiles(id) on delete cascade,

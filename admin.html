@@ -851,11 +851,20 @@ function previewMndFull(){
   openMandala('__preview__',false);
 }
 
-function sendMandala(){
+async function sendMandala(){
   const center=(document.getElementById('mnd-center-input')||{}).value;
   if(!center){alert('中心目標を入力してください');return;}
   const toEl=document.getElementById('mnd-send-to');
+  const toKey=toEl?toEl.value:'';
   const toName=toEl?toEl.options[toEl.selectedIndex].text:'従業員';
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const subs=Array.from({length:8},(_,i)=>(document.getElementById(`mnd-sub-${i+1}`)||{}).value||'');
+    let toPid=null;
+    Object.keys(API.MEMBER_KEY).forEach(id=>{if(API.MEMBER_KEY[id]===toKey)toPid=id;});
+    const res=await API.createSend({center,title:center,subs,acts:subs.map(()=>Array(8).fill('')),toName,toPid});
+    if(res&&res.error){alert('送信の保存に失敗しました: '+res.error);return;}
+  }
   const msg=document.getElementById('mnd-send-success');
   const msgTxt=document.getElementById('mnd-send-success-msg');
   if(msgTxt)msgTxt.textContent=`「${center}」を ${toName} に送信しました`;

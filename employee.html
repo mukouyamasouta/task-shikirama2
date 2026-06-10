@@ -633,12 +633,28 @@ function asgUpdate(i,val){
   if(hint)hint.style.display=val>=100?'block':'none';
 }
 function asgComment(i,val){ASSIGNMENTS[i].comment=val;}
-function asgSaveData(i,btn){const old=btn.textContent;btn.textContent='✓ 保存しました';btn.style.background='var(--green)';setTimeout(()=>{btn.textContent=old;btn.style.background='var(--accent)';},1800);}
+async function asgSaveData(i,btn){
+  const a=ASSIGNMENTS[i];
+  const API=window.VexumAPI;
+  if(API&&API.ready&&a&&a.id){
+    const st=a.pct>=100?'done':a.pct>0?'wip':(a.status==='late'?'late':'todo');
+    const res=await API.updateTask(a.id,{progress:a.pct,comment:a.comment||'',status:st});
+    if(res&&res.error){alert('保存失敗: '+res.error);return;}
+    a.status=st;
+  }
+  const old=btn.textContent;btn.textContent='✓ 保存しました';btn.style.background='var(--green)';setTimeout(()=>{btn.textContent=old;btn.style.background='var(--accent)';},1800);
+}
 function updateAssignBadge(){const b=document.getElementById('assign-badge');if(!b)return;b.textContent=ASSIGNMENTS.length;b.style.display=ASSIGNMENTS.length?'':'none';}
 function processAssignCompletion(){
   let moved=0;
+  const API=window.VexumAPI;
+  const today=new Date(),iso=today.toISOString().slice(0,10);
   for(let i=ASSIGNMENTS.length-1;i>=0;i--){
-    if(ASSIGNMENTS[i].pct>=100){const a=ASSIGNMENTS[i];a.completed='2025/05/30';ASSIGN_HISTORY.unshift(a);ASSIGNMENTS.splice(i,1);moved++;}
+    if(ASSIGNMENTS[i].pct>=100){
+      const a=ASSIGNMENTS[i];a.completed=iso.replace(/-/g,'/');
+      if(API&&API.ready&&a.id)API.updateTask(a.id,{progress:100,status:'done',completedDate:iso,comment:a.comment||''});
+      ASSIGN_HISTORY.unshift(a);ASSIGNMENTS.splice(i,1);moved++;
+    }
   }
   if(moved){updateAssignBadge();renderAssign();}
   return moved;
@@ -677,10 +693,15 @@ function renderAssign(){
   }
   con.innerHTML=h;
 }
-function reportSubmit(){
+async function reportSubmit(){
   const date=document.getElementById('prep-date').value;
   if(!date){alert('日付を入力してください');return;}
   const rec={date,hours:document.getElementById('prep-hours').value||'—',done:document.getElementById('prep-done').value||'—',plan:document.getElementById('prep-plan').value||'—',issue:document.getElementById('prep-issue').value||'—',cond:document.getElementById('prep-cond').value};
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const res=await API.saveDailyReport(rec);
+    if(res&&res.error){alert('日報の保存に失敗しました: '+res.error);return;}
+  }
   const i=PREPORTS.findIndex(r=>r.date===date);
   if(i>=0)PREPORTS[i]=rec;else PREPORTS.push(rec);
   const p=date.split('-');prepYear=+p[0];prepMonth=+p[1]-1;
@@ -1275,12 +1296,31 @@ function previewMndFull(){
   CHARTS['__preview__']={name:'作成プレビュー',scopeLabel:'プレビュー',team:'—',color:'#0D9488',bg:'#CCEDE9',center,subs,acts:subs.map(()=>Array(8).fill('—'))};
   openMandala('__preview__',false);
 }
-function sendMandala(){
+async function sendMandala(){
   const center=(document.getElementById('mnd-center-input')||{}).value;
   if(!center){alert('KGI（中心目標）を入力してください');return;}
+  const subs=Array.from({length:8},(_,i)=>(document.getElementById(`mnd-sub-${i+1}`)||{}).value||'');
+  const acts=Array.from({length:8},()=>Array(8).fill(''));
+  const saved=await persistMyChart({name:center.slice(0,20),center,subs,acts});
+  if(!saved)return;
   const msg=document.getElementById('mnd-send-success'),msgTxt=document.getElementById('mnd-send-success-msg');
   if(msgTxt)msgTxt.textContent=`「${center}」を自分の曼荼羅チャートに登録しました`;
   if(msg){msg.style.display='flex';setTimeout(()=>{msg.style.display='none';},5000);}
+}
+/* 自分の曼荼羅チャートを Supabase に保存し、ローカル CHARTS にも反映 */
+async function persistMyChart(o){
+  const API=window.VexumAPI;
+  let dbId=null;
+  if(API&&API.ready){
+    const me=await API.currentProfile();
+    if(!me){alert('ログイン情報を取得できませんでした');return false;}
+    dbId='user_'+me.id+'_'+Date.now();
+    const res=await API.upsertMemberChart({pid:me.id,id:dbId,name:o.name,center:o.center,subs:o.subs,acts:o.acts,color:'#0D9488',bg:'#CCEDE9'});
+    if(res&&res.error){alert('チャートの保存に失敗しました: '+res.error);return false;}
+  }
+  const key=dbId||('local_'+Date.now());
+  CHARTS[key]={dbId,name:o.name,scopeLabel:'個人',period:'',team:'',color:'#0D9488',bg:'#CCEDE9',center:o.center,subs:o.subs,acts:o.acts};
+  return true;
 }
 
 /* ===== グリッドエディタ ===== */
@@ -1349,8 +1389,10 @@ function previewGrid(){
   CHARTS['__grid_preview__']={name:'グリッド作成',scopeLabel:'プレビュー',team:'—',color:'#0D9488',bg:'#CCEDE9',center:newChart.center,subs:newChart.subs.map((s,i)=>s||`CSF${i+1}`),acts:newChart.acts.map((row,si)=>row.map((v,ai)=>v||`KPI${si+1}-${ai+1}`))};
   openMandala('__grid_preview__',false);
 }
-function saveGridChart(){
+async function saveGridChart(){
   if(!newChart.center){alert('KGI（中心目標）を入力してください');return;}
+  const saved=await persistMyChart({name:newChart.center.slice(0,20),center:newChart.center,subs:[...newChart.subs],acts:newChart.acts.map(r=>[...r])});
+  if(!saved)return;
   const msg=document.getElementById('mnd-send-success'),msgTxt=document.getElementById('mnd-send-success-msg');
   if(msgTxt)msgTxt.textContent=`「${newChart.center}」をグリッド作成で登録しました`;
   if(msg){msg.style.display='flex';setTimeout(()=>{msg.style.display='none';},5000);}
@@ -1390,9 +1432,13 @@ function submitTask(){
   const name=document.getElementById('tm-name').value.trim();
   if(!name){alert('タスク名を入力してください');return;}
   const kpi=document.getElementById('tm-kpi').value||'-';
-  const start=fmtDate(document.getElementById('tm-start').value);
-  const due=fmtDate(document.getElementById('tm-due').value);
+  const startRaw=document.getElementById('tm-start').value;
+  const dueRaw=document.getElementById('tm-due').value;
+  const start=fmtDate(startRaw);
+  const due=fmtDate(dueRaw);
   const pri=document.getElementById('tm-pri').value;
+  const API=window.VexumAPI;
+  if(API&&API.ready)API.assignTask({title:name,kpi:kpi!=='-'?kpi:null,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self'});
   const priMap={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低']};
   const tb=document.getElementById('task-tbody');
   const tr=document.createElement('tr');
@@ -1622,7 +1668,7 @@ function renderCmTasks(){
       _id:'asg-'+i,_type:'assigned',
       name:a.name,meta:a.meta||'',from:a.from||'',fromClass:a.fromClass||'',
       start:a.start,end:a.end,pct:a.pct||0,comment:a.comment||'',
-      status:a.pct>=100?'done':a.pct>0?'wip':'todo',pri:'md'
+      status:a.status||(a.pct>=100?'done':a.pct>0?'wip':'todo'),pri:a.pri||'md'
     })),
     ...cmPersonalTasks.map((t,i)=>({
       _id:'prv-'+i,_type:'personal',
@@ -1703,7 +1749,18 @@ function cmUpdStatus(id,val){
   if(x.type==='asg'&&ASSIGNMENTS[x.idx])ASSIGNMENTS[x.idx].status=val;
   else if(x.type==='prv'&&cmPersonalTasks[x.idx])cmPersonalTasks[x.idx].status=val;
 }
-function cmSaveTask(id,btn){
+async function cmSaveTask(id,btn){
+  const x=_cmIdxOf(id);
+  const API=window.VexumAPI;
+  if(x&&API&&API.ready){
+    const t=x.type==='asg'?ASSIGNMENTS[x.idx]:cmPersonalTasks[x.idx];
+    const dbId=x.type==='asg'?(t&&t.id):(t&&t.dbId);
+    if(t&&dbId){
+      const st=t.status||(t.pct>=100?'done':t.pct>0?'wip':'todo');
+      const res=await API.updateTask(dbId,{progress:t.pct||0,status:st,comment:t.comment||''});
+      if(res&&res.error){alert('保存失敗: '+res.error);return;}
+    }
+  }
   const old=btn.textContent;btn.textContent='✓ 保存しました';btn.style.background='var(--green)';
   setTimeout(()=>{btn.textContent=old;btn.style.background='var(--accent)';},1800);
 }
@@ -1739,10 +1796,17 @@ function submitCmTask(){
   const dueRaw=(document.getElementById('cm-at-due')||{}).value||'';
   function fmtD(v){if(!v)return'—';const p=v.split('-');return p.length===3?`${+p[1]}/${+p[2]}`:v;}
   const pri=(document.getElementById('cm-at-pri')||{}).value||'md';
-  cmPersonalTasks.push({name,chartKey:k,kpi,start:fmtD(startRaw),due:fmtD(dueRaw),pri,status:'todo',pct:0,comment:''});
+  const task={name,chartKey:k,kpi,start:fmtD(startRaw),due:fmtD(dueRaw),pri,status:'todo',pct:0,comment:'',dbId:null};
+  cmPersonalTasks.push(task);
   closeCmAddTask();renderCmTasks();
   const API=window.VexumAPI;
-  if(API&&API.ready){API.assignTask({title:name,kpi:kpi!=='—'?kpi:null,start:startRaw||null,due:dueRaw||null,priority:pri});}
+  if(API&&API.ready){
+    API.assignTask({title:name,kpi:kpi!=='—'?kpi:null,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self'})
+      .then(res=>{
+        if(res&&res.error){alert('タスクの保存に失敗しました: '+res.error);return;}
+        if(res&&res.data)task.dbId=res.data.id;
+      });
+  }
 }
 </script>
 

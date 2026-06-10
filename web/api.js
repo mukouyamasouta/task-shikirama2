@@ -234,12 +234,40 @@
     var me = await currentProfile();
     var r = await sb.from('tasks').insert({
       title: o.title, related_kgi: o.kpi || null, category: o.category || null,
-      assigner_id: me ? me.id : null, assignee_id: o.assigneePid || null, team_id: o.teamUuid || null,
-      source: 'leader', start_date: o.start || null, due_date: o.due || null,
+      assigner_id: me ? me.id : null,
+      assignee_id: o.assigneePid || (me ? me.id : null),  // 未指定なら本人タスク（個人画面の自作）
+      team_id: o.teamUuid || null,
+      source: o.source || 'leader', start_date: o.start || null, due_date: o.due || null,
       priority: o.priority || 'md', progress: 0, status: 'todo'
     }).select().single();
-    if (r.error) return { error: r.error.message };
+    if (r.error) return { error: friendlyErr(r.error.message) };
     return { data: r.data };
+  }
+  // タスクの進捗・状態・コメントを更新（個人画面の保存系）
+  async function updateTask(id, patch) {
+    if (!sb) return { error: 'Supabase未接続' };
+    if (!id) return { error: 'タスクIDが不明です（デモデータは保存対象外）' };
+    var up = {};
+    if (patch.progress != null) up.progress = patch.progress;
+    if (patch.status) up.status = patch.status;
+    if (patch.comment != null) up.comment = patch.comment;
+    if (patch.completedDate !== undefined) up.completed_date = patch.completedDate;
+    var r = await sb.from('tasks').update(up).eq('id', id).select('id');
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    if (!r.data || r.data.length === 0) return { error: '更新できませんでした（権限不足の可能性）' };
+    return { ok: true };
+  }
+  // 日報を保存（同一日付は上書き: author_id + report_date でupsert）
+  async function saveDailyReport(o) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var me = await currentProfile(); if (!me) return { error: '未ログイン' };
+    var r = await sb.from('daily_reports').upsert({
+      author_id: me.id, report_date: o.date,
+      hours: o.hours || null, done: o.done || null, plan: o.plan || null,
+      issue: o.issue || null, condition: o.cond || 'normal'
+    }, { onConflict: 'author_id,report_date' });
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    return { ok: true };
   }
   async function saveEvalRecord(o) {
     if (!sb) return { error: 'Supabase未接続' };
@@ -398,6 +426,14 @@
       else if (c.id === 'user_' + memberKey + '_q2') CHARTS['self_q2'] = chartObj(c);
       else if (c.owner_type === 'team' && TEAM_KEY[c.owner_team_id] === teamLetter) CHARTS['team_' + teamLetter] = chartObj(c);
     });
+    // 本人所有の追加チャート（個人画面の新規作成分）も含める
+    raw.mandala_charts.forEach(function (c) {
+      if (c.owner_type !== 'user' || c.owner_user_id !== uid) return;
+      if (CHARTS['self_q3'] && CHARTS['self_q3'].dbId === c.id) return;
+      if (CHARTS['self_q2'] && CHARTS['self_q2'].dbId === c.id) return;
+      if (!CHARTS['self_q3']) CHARTS['self_q3'] = chartObj(c);
+      else CHARTS[c.id] = chartObj(c);
+    });
 
     var FEEDBACK = {};
     raw.evaluations.forEach(function (ev) {
@@ -419,9 +455,9 @@
       var meta = '関連KGI: ' + (t.related_kgi || '—') + ' ／ カテゴリ: ' + (t.category || '—');
       var from = '📌 ' + (exec ? '役員' : '上長') + ' · ' + (assigner.full_name || '');
       if (t.status === 'done' || (t.progress || 0) >= 100) {
-        ASSIGN_HISTORY.push({ name: t.title, meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '' });
+        ASSIGN_HISTORY.push({ id: t.id, name: t.title, meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '' });
       } else {
-        ASSIGNMENTS.push({ name: t.title, meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), pct: t.progress || 0, comment: t.comment || '' });
+        ASSIGNMENTS.push({ id: t.id, name: t.title, meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: t.source === 'self' });
       }
     });
 
@@ -655,6 +691,8 @@
     addTeamMember: addTeamMember,
     removeTeamMember: removeTeamMember,
     assignTask: assignTask,
+    updateTask: updateTask,
+    saveDailyReport: saveDailyReport,
     saveEvalRecord: saveEvalRecord,
     saveEvaluation: saveEvaluation,
     loadEvalHistory: loadEvalHistory,

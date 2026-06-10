@@ -8,17 +8,16 @@ Supabase + Vercel で公開するための手順。**認証情報を要する操
 
 ## 0. 構成
 ```
-design-D_統括.html / 幹部.html / リーダー.html / 個人.html   … 4画面（連携ブロック組込済）
+index.html / signup.html                          … ログイン / セルフ登録
+admin.html / executive.html / leader.html / employee.html … 4画面（連携ブロック組込済）
 web/
   ├ api.js              … Supabase接続・データ変換（window.VexumAPI）
   ├ config.example.js   … config.js の雛形（URL/anonキー）
-  ├ auth.html           … ログイン（role別に画面へ振り分け）
   └ INTEGRATION.md      … 連携の技術詳細
 supabase/
-  ├ 01_schema.sql       … テーブル/ENUM/RLS/関数
-  ├ 02_seed_core.sql    … アカウント16・チーム3・所属
-  ├ 03_seed_mandala.sql … 曼荼羅14（自動生成）
-  └ 04_seed_activity.sql… タスク/日報/評価/評価記録（自動生成）
+  ├ REBUILD.sql              … バックエンド一括構築（テーブル/RLS/RPC/シード/Auth）
+  ├ 15_backend_complete.sql  … 既存DB用 同期パッチ（冪等）
+  └ 12〜14_*.sql             … 過去の個別パッチ（履歴・15が包含）
 vercel.json             … 静的ホスティング設定
 ```
 **動作原理**: 画面は内蔵デモで描画 → `web/config.js` 設定時のみ Supabase 実データで上書き再描画。
@@ -26,44 +25,28 @@ vercel.json             … 静的ホスティング設定
 
 ---
 
-## 1. Supabase プロジェクト準備
+## 1. Supabase プロジェクト準備（← SQLの実行はあなたが実施）
 1. https://supabase.com でプロジェクト作成（リージョンは Tokyo 推奨）。
 2. **SQL Editor** で以下を順に貼り付けて実行（SQL Editor は service_role 権限で動くため RLS を気にせず投入可）:
-   1. `supabase/01_schema.sql`
-   2. `supabase/02_seed_core.sql`
-   3. `supabase/03_seed_mandala.sql`
-   4. `supabase/04_seed_activity.sql`
-3. Table Editor で `profiles`(16) / `teams`(3) / `mandala_charts`(14) / `tasks` / `daily_reports` / `evaluations` / `eval_records` に行が入っていることを確認。
-
-> 再実行する場合: `01` のポリシーは重複作成でエラーになります。やり直す時は新規プロジェクト推奨、
-> または各 `create policy` の前に `drop policy if exists "<名前>" on <table>;` を追加してください。
+   1. `supabase/REBUILD.sql` … 全テーブル/RLS/RPC/シード/Authユーザーを一括作成（既存データは破棄）
+   2. `supabase/15_backend_complete.sql` … adminログイン復旧＋列の最終確認（冪等）
+3. 15 の末尾の確認クエリが `1 / 1 / 1 / 1` を返せば完了。
 
 ---
 
-## 2. 認証ユーザー作成（← あなたが実施 / 私は代行不可）
-**A. ダッシュボードで作成**: Authentication → Users → "Add user" で各メールを登録（初期パスワードを設定）。
-16アカウント分（最低限ログインさせたい役割: yamada/kimura/tanaka/nakamura）。
+## 2. ログインアカウント（REBUILD が自動作成 / 共通PW: vexum2025）
+認証ユーザーは REBUILD.sql が profiles と紐付けて自動作成します。手動作成は不要です。
 
-**B. profiles と紐付け**（メール一致で auth_user_id を更新）:
-```sql
-update profiles p
-set    auth_user_id = u.id
-from   auth.users u
-where  lower(u.email) = lower(p.email);
-```
-> パスワードは強度のあるものを各自設定してください（私はパスワードを設定・入力できません）。
-
-### アカウント一覧（role → ログイン後の遷移先）
 | 氏名 | メール | role | 遷移先 |
 |---|---|---|---|
-| 山田 太郎 | yamada@vexum.co.jp | admin | 統括画面 |
-| 木村 雅人 | kimura@vexum.co.jp | executive | 幹部画面 |
-| 田中 花子 | tanaka@vexum.co.jp | leader | リーダー画面 |
-| 鈴木 一郎 | suzuki@vexum.co.jp | leader | リーダー画面 |
-| 佐藤 美咲 | sato@vexum.co.jp | leader | リーダー画面 |
+| 山田 太郎 | yamada@com | admin | 統括画面 |
+| 山本（幹部） | yamamoto@com | executive | 幹部画面 |
+| 田中 花子 | tanaka@vexum.co.jp | leader | リーダー画面（営業チームA） |
 | 中村 健太 | nakamura@vexum.co.jp | member | 個人画面 |
-| 伊藤 さくら / 小林 大輔 / 山本 浩二 / 加藤 洋平 / 松田 奈緒 / 井上 大樹 | （各メール） | member | 個人画面 |
-| 高橋 健 / 渡辺 由美 / 山口 翔 / 小川 真央 | （各メール） | member | 未所属（リーダー画面の追加候補） |
+
+追加は ①幹部画面「アカウント発行」（`vexum_create_login` RPC・PW自動発行）
+②`/signup.html` セルフ登録（`vexum_self_register` RPC・member固定）で行えます。
+> 本番運用ではログイン後に各自パスワードを変更してください（個人画面の設定から `updateSelf`）。
 
 ---
 
@@ -101,18 +84,22 @@ git push origin design-d-migration         # 確認後に main へマージ/上�
 - ビルド不要（静的）。Framework Preset は「Other」。Output はリポジトリルート。
 
 ### 入口URL
-- ログイン: `https://<your-domain>/web/auth.html`
-- 直接プレビュー: `/design-D_統括.html` `/design-D_幹部.html` `/design-D_リーダー.html` `/design-D_個人.html`
-- ギャラリー: `/index.html`
+- ログイン: `https://vexum-deploy.vercel.app/`
+- 直接プレビュー: `/admin` `/executive` `/leader` `/employee`（未ログイン時は内蔵デモ表示）
 
 ---
 
 ## 5. 動作確認チェックリスト
-- [ ] `web/auth.html` で tanaka でログイン → リーダー画面に遷移
+- [ ] `/` で tanaka@vexum.co.jp でログイン → リーダー画面に遷移
 - [ ] 各画面でブラウザのコンソールに `[VEXUM] Supabaseデータを反映しました` が出る
-- [ ] 幹部画面: アカウント管理にチーム3・メンバーが表示
+- [ ] 幹部画面: アカウント管理にチーム・メンバーが表示／アカウント発行でPWが表示される
 - [ ] リーダー画面: ダッシュボード/評価/日報カレンダーに実データ
-- [ ] 個人画面: 評価管理にリーダー/幹部のCSFコメント、割当の過去履歴、日報カレンダー
+- [ ] 個人画面（nakamura）:
+  - [ ] 割り当てタブで達成度を変えて「保存する」→ リロード後も値が残る
+  - [ ] 日報を提出 → リロード後もカレンダーに残る（リーダー画面の日報にも出る）
+  - [ ] チャート管理でKPIを編集して「💾 KPI変更を保存」→ リーダー画面の🧿曼荼羅で黄色表示
+  - [ ] 新規作成（フォーム/グリッド）→ リロード後もチャート一覧に残る
+  - [ ] 自己評価の下書き保存/提出 → リロード後も状態が残る
 - [ ] スマホ幅でタブが上部に横並び
 - [ ] `web/config.js` を外すと従来の内蔵デモで動く（フォールバック）
 
@@ -125,11 +112,16 @@ git push origin design-d-migration         # 確認後に main へマージ/上�
 
 ---
 
-## 7. 既知の制限 / 次の改善余地
-- 各画面は代表アカウント（個人=中村, リーダー=営業A）を読み込みます。**ログインユーザーに応じて
-  動的に切替**するには、bootstrap で `VexumAPI.currentProfile()` の role/所属から
-  `loadPersonalData(<自分>)` / `loadLeaderData(<自チーム>)` を呼ぶ形に拡張します。
-- リーダー画面の `kpis/stats` は `tasks` 集計＋CSFから導出しています。厳密値が必要なら
-  `team_members` に列追加で対応可能。
-- 書き込み（評価保存・タスク追加・日報提出）の Supabase 反映は read 連携の次フェーズで対応可能
-  （現状は画面内状態の更新。スキーマ側は受け入れ可能な構造です）。
+## 7. 対応状況 / 既知の制限
+**対応済み（Supabase 永続化）**
+- ログインユーザーに応じた画面データの動的切替（`currentProfile()` → role/所属で自動判定）
+- 評価保存（リーダー/幹部 → evaluations + eval_records）・自己評価の下書き/提出（submitted）
+- タスク: リーダー割当・個人の自作タスク・進捗/ステータス/コメント保存・完了日（tasks）
+- 日報提出（daily_reports / 同一日は上書き）
+- 曼荼羅: 個人の新規作成（mandala_charts）・KPI本人編集のリーダー可視化（member_kpi_edits）
+- チャート送信の保存（chart_sends / 統括・幹部とも）・アカウント/チームのCRUD・PW再発行
+
+**既知の制限（次フェーズ）**
+- チャート送信の受信側UI（リーダー/個人画面に受信ボックスがない。送信履歴は幹部画面で確認可）
+- リーダー画面の `kpis/stats` は `tasks` 集計＋CSFから導出（厳密値が必要なら列追加で対応）
+- 統括画面の評価入力・タスク割当フォームはデモ表示（実書き込みは幹部/リーダー画面に集約）
