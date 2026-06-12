@@ -1241,7 +1241,26 @@ updateInboxBadge();
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./web/config.js" onerror="this.dataset.miss=1"></script>
 <script src="./web/api.js"></script>
+<script src="./web/ui.js"></script>
 <script>
+/* 🔔 リーダーの通知: 受信チャート（要振り分け）・メンバーの日報提出 */
+window.vxNotifSource=function(){
+  const out=[];
+  if(typeof INBOX!=='undefined'&&Array.isArray(INBOX)){
+    INBOX.filter(s=>s.status!=='done').slice(0,6).forEach(s=>out.push({
+      icon:'📥',bg:'#DAEEE9',color:'var(--accent)',
+      text:`受信チャート「${(s.center||'').replace(/\n/,' ')}」 — メンバーへ振り分けてください`,
+      time:(s.sent_by_name||'幹部/統括')+' / '+((s.sent_at||'').slice(0,10)),tab:'inbox'}));
+  }
+  if(typeof REPORTS!=='undefined'&&typeof MEMBERS!=='undefined'){
+    Object.keys(REPORTS).forEach(id=>{
+      const rs=REPORTS[id]||[];if(!rs.length)return;
+      const last=rs[rs.length-1];const nm=(MEMBERS[id]||{}).name||'メンバー';
+      out.push({icon:'📓',bg:'#EDE9FE',color:'#7C3AED',text:`${nm}さんが日報を提出しました`,time:last.date||'',tab:'report'});
+    });
+  }
+  return out.slice(0,10);
+};
 function vexumLogout(){
   var API=window.VexumAPI;
   var done=function(){ location.replace('./index.html'); };
@@ -1273,6 +1292,7 @@ function vexumLogout(){
     if(typeof renderEvalRec==='function') renderEvalRec();
     if(typeof renderReports==='function') renderReports();
     if(typeof updateTeamLabel==='function') updateTeamLabel();
+    if(window.VexumUI)VexumUI.refresh();
     console.log('[VEXUM] Supabaseデータを反映しました');
   }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:',e); });
   // 評価記録(履歴)をDBから再取得して最新化
@@ -1285,6 +1305,7 @@ function vexumLogout(){
     replArr(INBOX, rows);
     if(typeof renderInbox==='function') renderInbox();
     if(typeof updateInboxBadge==='function') updateInboxBadge();
+    if(window.VexumUI)VexumUI.refresh();
   }).catch(function(){});
   // 自己評価マーカー
   if(typeof updateSelfEvalMarkers==='function')updateSelfEvalMarkers();

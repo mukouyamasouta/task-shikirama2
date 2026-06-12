@@ -2032,7 +2032,34 @@ function renderProgressDash(){
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./web/config.js" onerror="this.dataset.miss=1"></script>
 <script src="./web/api.js"></script>
+<script src="./web/ui.js"></script>
 <script>
+/* 🔔 個人の通知: 受信チャート（記入待ち）・割当タスク・受信した評価 */
+window.vxNotifSource=function(){
+  const out=[];
+  if(typeof INBOX!=='undefined'&&Array.isArray(INBOX)){
+    INBOX.filter(s=>s.status!=='done').slice(0,5).forEach(s=>out.push({
+      icon:'📥',bg:'#DAEEE9',color:'var(--accent)',
+      text:`受信チャート「${(s.center||'').replace(/\n/,' ')}」 — KPIを記入してください`,
+      time:(s.sent_by_name||'幹部/統括')+' / '+((s.sent_at||'').slice(0,10)),tab:'inbox'}));
+  }
+  if(typeof ASSIGNMENTS!=='undefined'&&Array.isArray(ASSIGNMENTS)){
+    ASSIGNMENTS.filter(a=>!a.self).slice(0,6).forEach(a=>out.push({
+      icon:'📌',bg:'#FEF3C7',color:'var(--amber)',
+      text:`割当タスク「${a.name}」（進捗${a.pct||0}%）`,
+      time:(a.from||'')+(a.end&&a.end!=='—'?' / 期限 '+a.end:''),tab:'assign'}));
+  }
+  if(typeof FEEDBACK!=='undefined'&&FEEDBACK){
+    Object.keys(FEEDBACK).forEach(k=>{
+      const fb=FEEDBACK[k];if(!fb||!Array.isArray(fb.evals))return;
+      fb.evals.forEach(ev=>out.push({
+        icon:'★',bg:'#DAEEE9',color:'var(--accent)',
+        text:`${ev.name||'評価者'}（${ev.role||''}）から評価が届いています`,
+        time:fb.period||'',tab:'reviews'}));
+    });
+  }
+  return out.slice(0,12);
+};
 function vexumLogout(){
   var API=window.VexumAPI;
   var done=function(){ location.replace('./index.html'); };
@@ -2061,6 +2088,7 @@ function vexumLogout(){
     if(typeof renderAssign==='function') renderAssign();
     if(typeof updateAssignBadge==='function') updateAssignBadge();
     if(typeof renderPReportCalendar==='function') renderPReportCalendar();
+    if(window.VexumUI)VexumUI.refresh();
     console.log('[VEXUM] Supabaseデータを反映しました');
   }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:',e); });
   // 受信ボックス（自分宛てのチャート送信）
@@ -2069,6 +2097,7 @@ function vexumLogout(){
     replArr(INBOX, rows);
     if(typeof renderInbox==='function') renderInbox();
     if(typeof updateInboxBadge==='function') updateInboxBadge();
+    if(window.VexumUI)VexumUI.refresh();
   }).catch(function(){});
 })();
 </script>

@@ -181,6 +181,7 @@ VEXUM
 ├── vercel.json         # Vercel静的サイト設定
 ├── web/
 │   ├── api.js          # Supabaseデータアクセス層（window.VexumAPI）
+│   ├── ui.js           # 共通トップバーUI（🔔通知ドロップダウン / ⚙設定モーダル）
 │   ├── config.js       # Supabase接続設定（要設定・anonキーのみ）
 │   └── config.example.js
 └── supabase/

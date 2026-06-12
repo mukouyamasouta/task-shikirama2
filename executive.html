@@ -1432,6 +1432,24 @@ renderAccount();
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./web/config.js" onerror="this.dataset.miss=1"></script>
 <script src="./web/api.js"></script>
+<script src="./web/ui.js"></script>
+<script>
+/* 🔔 幹部の通知: 送信チャートの記入・進捗更新（送信先の反応） */
+window.vxNotifSource=function(){
+  if(typeof SENDS==='undefined'||!Array.isArray(SENDS)||!SENDS.length)return [];
+  return SENDS.slice().sort((a,b)=>String(b.updated_at||b.sent_at||'').localeCompare(String(a.updated_at||a.sent_at||''))).slice(0,8).map(function(s){
+    const prog=s.progress||0;
+    const editors=s.edited_by?Object.values(s.edited_by):[];
+    const done=s.status==='done'||prog>=100;
+    return {
+      icon: done?'✅':(editors.length?'✍':'📤'),
+      bg: done?'#D1FAE5':'#DAEEE9', color: done?'var(--green)':'var(--accent)',
+      text: `「${(s.center||'').replace(/\n/,' ')}」→ ${s.to_name||'送信先'}：進捗${prog}%`+(editors.length?`（記入: ${editors.slice(0,3).join('・')}）`:''),
+      time: (s.updated_at||s.sent_at||'').slice(0,10), tab:'send'
+    };
+  });
+};
+</script>
 <script>
 function vexumLogout(){
   var API=window.VexumAPI;
@@ -1472,6 +1490,7 @@ function vexumLogout(){
   API.loadSends().then(function(rows){
     SENDS=rows||[];
     if(typeof renderSendHistory==='function')renderSendHistory();
+    if(window.VexumUI)VexumUI.refresh();
   }).catch(function(){});
   // 評価履歴読込
   API.loadEvalHistory().then(function(rows){
