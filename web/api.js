@@ -159,9 +159,13 @@
       var stats = { done: tk.filter(function (t) { return t.status === 'done'; }).length,
                     wip: tk.filter(function (t) { return t.status === 'wip'; }).length,
                     late: tk.filter(function (t) { return t.status === 'late'; }).length };
-      var adj = [4, -6, 8, -2];
-      var kpis = (c.subs || []).slice(0, 4).map(function (s, i) {
-        return { n: s, p: Math.max(0, Math.min(100, (m.achievement_rate || 0) + adj[i])) };
+      // KPI進捗 = そのCSFに紐づくタスクの平均進捗（タスクが無いCSFは達成率で代替）
+      var kpis = (c.subs || []).slice(0, 4).map(function (s) {
+        var rel = tk.filter(function (t) { return t.related_kgi === s; });
+        var p = rel.length
+          ? Math.round(rel.reduce(function (a, t) { return a + (t.progress || 0); }, 0) / rel.length)
+          : (m.achievement_rate || 0);
+        return { n: s, p: Math.max(0, Math.min(100, p)) };
       });
       MEMBERS[key] = {
         pid: p.id, chartId: c.id || null,
@@ -223,6 +227,18 @@
     if (r.error) return { error: r.error.message };
     return { ok: true };
   }
+  // チーム情報（名前・カラー・リーダー）を更新
+  async function updateTeam(teamUuid, patch) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var up = {};
+    if (patch.name != null) up.name = patch.name;
+    if (patch.color != null) up.color = patch.color;
+    if (patch.leaderPid !== undefined) up.leader_id = patch.leaderPid;
+    var r = await sb.from('teams').update(up).eq('id', teamUuid).select('id');
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    if (!r.data || r.data.length === 0) return { error: '更新できませんでした（権限不足の可能性）' };
+    return { ok: true };
+  }
   async function removeTeamMember(teamUuid, pid) {
     if (!sb) return { error: 'Supabase未接続' };
     var r = await sb.from('team_members').delete().eq('team_id', teamUuid).eq('profile_id', pid);
@@ -252,6 +268,10 @@
     if (patch.status) up.status = patch.status;
     if (patch.comment != null) up.comment = patch.comment;
     if (patch.completedDate !== undefined) up.completed_date = patch.completedDate;
+    if (patch.assigneePid) up.assignee_id = patch.assigneePid;   // 未割当タスクの割当用
+    if (patch.start !== undefined) up.start_date = patch.start;
+    if (patch.due !== undefined) up.due_date = patch.due;
+    if (patch.priority) up.priority = patch.priority;
     var r = await sb.from('tasks').update(up).eq('id', id).select('id');
     if (r.error) return { error: friendlyErr(r.error.message) };
     if (!r.data || r.data.length === 0) return { error: '更新できませんでした（権限不足の可能性）' };
@@ -341,6 +361,14 @@
       if (ins.error) return { error: friendlyErr(ins.error.message) };
       return { id: ins.data.id, submitted: row.submitted };
     }
+  }
+  // 曼荼羅チャートの部分更新（KPI追記・期間変更など）
+  async function updateChart(id, patch) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var r = await sb.from('mandala_charts').update(patch).eq('id', id).select('id');
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    if (!r.data || r.data.length === 0) return { error: '更新できませんでした（権限不足の可能性）' };
+    return { ok: true };
   }
   // メンバー自身のKPI編集を保存（member_kpi_edits列 + acts更新）
   async function saveMemberKpiEdits(chartId, edits, newActs) {
@@ -452,19 +480,45 @@
     raw.tasks.filter(function (t) { return t.assignee_id === uid; }).forEach(function (t) {
       var assigner = prof[t.assigner_id] || {};
       var exec = t.source === 'executive';
+      var self = t.source === 'self';
       var meta = '関連KGI: ' + (t.related_kgi || '—') + ' ／ カテゴリ: ' + (t.category || '—');
-      var from = '📌 ' + (exec ? '役員' : '上長') + ' · ' + (assigner.full_name || '');
+      var from = self ? '🙋 自分で作成' : ('📌 ' + (exec ? '役員' : '上長') + ' · ' + (assigner.full_name || ''));
       if (t.status === 'done' || (t.progress || 0) >= 100) {
-        ASSIGN_HISTORY.push({ id: t.id, name: t.title, meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '' });
+        ASSIGN_HISTORY.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '', pri: t.priority || 'md' });
       } else {
-        ASSIGNMENTS.push({ id: t.id, name: t.title, meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: t.source === 'self' });
+        ASSIGNMENTS.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: self });
       }
     });
 
     var PREPORTS = raw.daily_reports.filter(function (r) { return r.author_id === uid; })
       .map(function (r) { return { date: r.report_date, hours: r.hours, done: r.done, plan: r.plan, issue: r.issue, cond: r.condition }; });
 
-    return { CHARTS: CHARTS, FEEDBACK: FEEDBACK, ASSIGNMENTS: ASSIGNMENTS, ASSIGN_HISTORY: ASSIGN_HISTORY, PREPORTS: PREPORTS };
+    // 進捗ダッシュボード用: 自分の達成率・所属チームメンバー一覧
+    var myTm = tm || {};
+    var TEAM = { name: teamRow ? teamRow.name : '', myRate: myTm.achievement_rate || 0, members: [] };
+    if (tm) {
+      raw.team_members.filter(function (m) { return m.team_id === tm.team_id; }).forEach(function (m) {
+        var p = prof[m.profile_id]; if (!p) return;
+        TEAM.members.push({ name: p.full_name, role: m.role_in_team === 'leader' ? '上長' : '従業員', rate: m.achievement_rate || 0, isMe: m.profile_id === uid });
+      });
+      TEAM.members.sort(function (a, b) { return b.rate - a.rate; });
+      TEAM.rate = TEAM.members.length ? Math.round(TEAM.members.reduce(function (a, m) { return a + m.rate; }, 0) / TEAM.members.length) : 0;
+    }
+    // 自分のCSF別KPI進捗（タスク平均 → 無ければ達成率）
+    var myTasks = raw.tasks.filter(function (t) { return t.assignee_id === uid; });
+    var KPIS = ((CHARTS['self_q3'] || {}).subs || []).slice(0, 4).map(function (s) {
+      var rel = myTasks.filter(function (t) { return t.related_kgi === s; });
+      var p = rel.length ? Math.round(rel.reduce(function (a, t) { return a + (t.progress || 0); }, 0) / rel.length) : (myTm.achievement_rate || 0);
+      return { n: s, p: Math.max(0, Math.min(100, p)) };
+    });
+    var STATS = {
+      rate: myTm.achievement_rate || 0,
+      done: myTasks.filter(function (t) { return t.status === 'done'; }).length,
+      wip: myTasks.filter(function (t) { return t.status === 'wip'; }).length,
+      late: myTasks.filter(function (t) { return t.status === 'late'; }).length
+    };
+
+    return { CHARTS: CHARTS, FEEDBACK: FEEDBACK, ASSIGNMENTS: ASSIGNMENTS, ASSIGN_HISTORY: ASSIGN_HISTORY, PREPORTS: PREPORTS, TEAM: TEAM, KPIS: KPIS, STATS: STATS };
   }
 
   // 統括画面は MND/EMP のみ利用（loadAdminData を流用）
@@ -707,6 +761,7 @@
     loadLeaderData: loadLeaderData,
     addTeamMember: addTeamMember,
     removeTeamMember: removeTeamMember,
+    updateTeam: updateTeam,
     assignTask: assignTask,
     updateTask: updateTask,
     saveDailyReport: saveDailyReport,
@@ -719,6 +774,7 @@
     upsertSelfEval: upsertSelfEval,
     saveMemberKpiEdits: saveMemberKpiEdits,
     upsertMemberChart: upsertMemberChart,
+    updateChart: updateChart,
     loadPersonalData: loadPersonalData,
     loadTokatsuData: loadTokatsuData,
     createAccount: createAccount,

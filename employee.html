@@ -225,15 +225,15 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <!-- 進捗ダッシュボード -->
 <div id="tc-progress" class="tab-content active">
   <div class="g4">
-    <div class="stat-card"><div class="s-lbl">自分の達成率</div><div class="s-val" style="color:var(--accent)">72%</div><div class="s-trend up">▲ 4pt 先月比</div></div>
-    <div class="stat-card"><div class="s-lbl">今週完了タスク</div><div class="s-val" style="color:var(--green)">6</div><div class="s-trend up">▲ 2 先週比</div></div>
-    <div class="stat-card"><div class="s-lbl">進行中タスク</div><div class="s-val">3</div><div class="s-trend" style="color:var(--text3)">個人タスク</div></div>
-    <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)">1</div><div class="s-trend down">▲ 1 先週比</div></div>
+    <div class="stat-card"><div class="s-lbl">自分の達成率</div><div class="s-val" style="color:var(--accent)" id="ep-stat-rate">72%</div><div class="s-trend up" id="ep-stat-rate-sub">▲ 4pt 先月比</div></div>
+    <div class="stat-card"><div class="s-lbl">完了タスク</div><div class="s-val" style="color:var(--green)" id="ep-stat-done">6</div><div class="s-trend up" id="ep-stat-done-sub">▲ 2 先週比</div></div>
+    <div class="stat-card"><div class="s-lbl">進行中タスク</div><div class="s-val" id="ep-stat-wip">3</div><div class="s-trend" style="color:var(--text3)">個人タスク</div></div>
+    <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)" id="ep-stat-late">1</div><div class="s-trend down" id="ep-stat-late-sub">▲ 1 先週比</div></div>
   </div>
   <div class="g2">
     <div class="card">
-      <div class="card-hd"><div><div class="card-title">自分のKGI / KPI 進捗</div><div class="card-sub">Q3個人売上 ¥15M達成</div></div><span style="font-size:20px;font-weight:800;color:var(--accent)">72%</span></div>
-      <div class="card-body">
+      <div class="card-hd"><div><div class="card-title">自分のKGI / KPI 進捗</div><div class="card-sub" id="ep-kgi-name">Q3個人売上 ¥15M達成</div></div><span style="font-size:20px;font-weight:800;color:var(--accent)" id="ep-kgi-pct">72%</span></div>
+      <div class="card-body" id="ep-kpi-rows">
         <div class="team-row"><div class="tname" style="font-size:11px">新規顧客10社</div><div class="pw"><div class="pt"><div class="pf" style="width:70%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">70%</div></div></div>
         <div class="team-row"><div class="tname" style="font-size:11px">訪問件数30件</div><div class="pw"><div class="pt"><div class="pf" style="width:80%;background:var(--green)"></div></div><div class="pp" style="color:var(--green)">80%</div></div></div>
         <div class="team-row"><div class="tname" style="font-size:11px">受注率35%</div><div class="pw"><div class="pt"><div class="pf" style="width:60%;background:var(--amber)"></div></div><div class="pp" style="color:var(--amber)">60%</div></div></div>
@@ -241,8 +241,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       </div>
     </div>
     <div class="card">
-      <div class="card-hd"><div><div class="card-title">所属チームの進捗</div><div class="card-sub">営業チームA メンバー</div></div><span style="font-size:13px;font-weight:700;color:var(--accent)">82%</span></div>
-      <div class="card-body">
+      <div class="card-hd"><div><div class="card-title">所属チームの進捗</div><div class="card-sub" id="ep-team-name">営業チームA メンバー</div></div><span style="font-size:13px;font-weight:700;color:var(--accent)" id="ep-team-pct">82%</span></div>
+      <div class="card-body" id="ep-team-rows">
         <div class="team-row"><div class="tdot" style="background:var(--green)"></div><div class="tname" style="font-size:11px">田中 花子 <span style="font-size:9px;color:var(--text3)">上長</span></div><div class="pw"><div class="pt"><div class="pf" style="width:94%;background:var(--green)"></div></div><div class="pp" style="color:var(--green)">94%</div></div></div>
         <div class="team-row" style="background:rgba(13,148,136,.06);border-radius:6px;padding:7px 6px"><div class="tdot" style="background:var(--accent)"></div><div class="tname" style="font-size:11px">中村 健太 <span style="font-size:9px;color:var(--accent);font-weight:700">あなた</span></div><div class="pw"><div class="pt"><div class="pf" style="width:72%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">72%</div></div></div>
         <div class="team-row"><div class="tdot" style="background:var(--text3)"></div><div class="tname" style="font-size:11px">伊藤 さくら</div><div class="pw"><div class="pt"><div class="pf" style="width:68%;background:var(--text3)"></div></div><div class="pp" style="color:var(--text3)">68%</div></div></div>
@@ -250,8 +250,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
   </div>
   <div class="card">
-    <div class="card-hd"><div><div class="card-title">達成率ランキング</div><div class="card-sub">営業チームA · 今月のKPI達成率</div></div></div>
-    <div class="card-body">
+    <div class="card-hd"><div><div class="card-title">達成率ランキング</div><div class="card-sub" id="ep-rank-sub">営業チームA · 今月のKPI達成率</div></div></div>
+    <div class="card-body" id="ep-rank-rows">
       <div class="rank-row"><div class="rank-n">🥇</div><div class="rank-name">田中 花子</div><div class="rank-team">営業チームA</div><span class="badge b-manager">上長</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:94%;background:var(--green)"></div></div><div class="pp" style="color:var(--green)">94%</div></div></div>
       <div class="rank-row"><div class="rank-n">🥈</div><div class="rank-name">伊藤 さくら</div><div class="rank-team">営業チームA</div><span class="badge b-employee">従業員</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:78%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">78%</div></div></div>
       <div class="rank-row me"><div class="rank-n">🥉</div><div class="rank-name">中村 健太 <span style="font-size:9px;color:var(--accent);font-weight:700">あなた</span></div><div class="rank-team">営業チームA</div><span class="badge b-employee">従業員</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:72%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">72%</div></div></div>
@@ -263,7 +263,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <!-- タスク管理 -->
 <div id="tc-tasks" class="tab-content">
   <div class="sec-title">タスク管理 <span style="font-size:11px;font-weight:400;color:var(--text3)">あなたの個人タスクのみ</span></div>
-  <div class="filter-row">
+  <div class="filter-row" id="ep-task-filters">
     <button class="f-btn active" onclick="filterTasks('all',this)">全て (5)</button>
     <button class="f-btn" onclick="filterTasks('wip',this)">進行中 (2)</button>
     <button class="f-btn" onclick="filterTasks('done',this)">完了 (1)</button>
@@ -1447,14 +1447,19 @@ function submitTask(){
   const start=fmtDate(startRaw);
   const due=fmtDate(dueRaw);
   const pri=document.getElementById('tm-pri').value;
+  const task={id:null,name,kpi,meta:'関連KGI: '+kpi+' ／ カテゴリ: 自作',from:'🙋 自分で作成',fromClass:'',
+    start:startRaw?startRaw.replace(/-/g,'/'):'—',end:dueRaw?dueRaw.replace(/-/g,'/'):'—',pct:0,comment:'',status:'todo',pri,self:true};
   const API=window.VexumAPI;
-  if(API&&API.ready)API.assignTask({title:name,kpi:kpi!=='-'?kpi:null,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self'});
-  const priMap={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低']};
-  const tb=document.getElementById('task-tbody');
-  const tr=document.createElement('tr');
-  tr.className='task-row';tr.dataset.status='todo';
-  tr.innerHTML=`<td>${name}</td><td>${kpi}</td><td>${start}</td><td>${due}</td><td><span class="chip ${priMap[pri][0]}">${priMap[pri][1]}</span></td><td><span class="chip s-todo">未着手</span></td>`;
-  tb.appendChild(tr);
+  if(API&&API.ready){
+    API.assignTask({title:name,kpi:kpi!=='-'?kpi:null,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self'})
+      .then(res=>{
+        if(res&&res.error){alert('タスクの保存に失敗しました: '+res.error);return;}
+        if(res&&res.data)task.id=res.data.id;
+      });
+  }
+  ASSIGNMENTS.push(task);
+  renderTaskTable();renderAssign();updateAssignBadge();
+  if(typeof renderCmTasks==='function')renderCmTasks();
   document.getElementById('tm-name').value='';
   closeTaskCreate();
 }
@@ -1966,6 +1971,61 @@ async function ibSave(){
   ibClose();renderInbox();updateInboxBadge();
 }
 updateInboxBadge();
+
+/* ===== タスク管理タブ（実データ描画） ===== */
+function _epShortMD(d){if(!d||d==='—')return'-';const p=String(d).split('/');return p.length===3?(+p[1])+'/'+(+p[2]):d;}
+function renderTaskTable(){
+  const tb=document.getElementById('task-tbody');if(!tb)return;
+  const priMap={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低'],urgent:['s-hi','緊急']};
+  const stMap={wip:['s-wip','進行中'],done:['s-done','完了'],late:['s-late','遅延'],todo:['s-todo','未着手']};
+  const rows=[
+    ...ASSIGNMENTS.map(a=>({name:a.name,kpi:a.kpi||'—',start:a.start,end:a.end,pri:a.pri||'md',status:a.status||(a.pct>=100?'done':a.pct>0?'wip':'todo')})),
+    ...ASSIGN_HISTORY.map(a=>({name:a.name,kpi:a.kpi||'—',start:a.start,end:a.end,pri:a.pri||'md',status:'done'}))
+  ];
+  tb.innerHTML=rows.map(t=>{
+    const pc=priMap[t.pri]||priMap.md,sc=stMap[t.status]||stMap.todo;
+    const lateTd=t.status==='late'?` style="color:var(--red);font-weight:700"`:'';
+    return `<tr class="task-row" data-status="${t.status}"><td>${t.name}</td><td>${t.kpi}</td><td>${_epShortMD(t.start)}</td><td${lateTd}>${_epShortMD(t.end)}${t.status==='late'?' ⚠':''}</td><td><span class="chip ${pc[0]}">${pc[1]}</span></td><td><span class="chip ${sc[0]}">${sc[1]}</span></td></tr>`;
+  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text3);font-size:12px;padding:20px">タスクがありません</td></tr>';
+  const f=document.getElementById('ep-task-filters');
+  if(f){
+    const cnt=st=>st==='all'?rows.length:rows.filter(t=>t.status===st).length;
+    f.innerHTML=[['all','全て'],['wip','進行中'],['done','完了'],['late','遅延'],['todo','未着手']].map(([k,l],i)=>`<button class="f-btn${i===0?' active':''}" onclick="filterTasks('${k}',this)">${l} (${cnt(k)})</button>`).join('');
+  }
+}
+
+/* ===== 進捗ダッシュボード（実データ描画・Supabase接続時のみ） ===== */
+function renderProgressDash(){
+  const st=window._epStats;if(!st)return;
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  set('ep-stat-rate',st.rate+'%');set('ep-stat-done',st.done);set('ep-stat-wip',st.wip);set('ep-stat-late',st.late);
+  ['ep-stat-rate-sub','ep-stat-done-sub','ep-stat-late-sub'].forEach(id=>{const e=document.getElementById(id);if(e){e.className='s-trend';e.style.color='var(--text3)';e.textContent={'ep-stat-rate-sub':'チーム登録値','ep-stat-done-sub':'累計完了','ep-stat-late-sub':'要対応'}[id];}});
+  const kpis=window._epKpis||[];
+  const kgiName=(CHARTS.self_q3&&CHARTS.self_q3.center)?CHARTS.self_q3.center.replace(/\n/g,' '):'';
+  if(kgiName)set('ep-kgi-name',kgiName);
+  const kAvg=kpis.length?Math.round(kpis.reduce((a,k)=>a+k.p,0)/kpis.length):st.rate;
+  set('ep-kgi-pct',kAvg+'%');
+  const kr=document.getElementById('ep-kpi-rows');
+  if(kr&&kpis.length)kr.innerHTML=kpis.map(k=>{const col=k.p>=80?'var(--green)':k.p>=60?'var(--accent)':'var(--amber)';return `<div class="team-row"><div class="tname" style="font-size:11px">${k.n}</div><div class="pw"><div class="pt"><div class="pf" style="width:${k.p}%;background:${col}"></div></div><div class="pp" style="color:${col}">${k.p}%</div></div></div>`;}).join('');
+  const team=window._epTeam;
+  if(team&&team.members&&team.members.length){
+    set('ep-team-name',team.name+' メンバー');set('ep-team-pct',(team.rate||0)+'%');
+    const trows=team.members.map(m=>{
+      const col=m.isMe?'var(--accent)':m.rate>=80?'var(--green)':'var(--text3)';
+      const hl=m.isMe?' style="background:rgba(13,148,136,.06);border-radius:6px;padding:7px 6px"':'';
+      const tag=m.isMe?' <span style="font-size:9px;color:var(--accent);font-weight:700">あなた</span>':(m.role==='上長'?' <span style="font-size:9px;color:var(--text3)">上長</span>':'');
+      return `<div class="team-row"${hl}><div class="tdot" style="background:${col}"></div><div class="tname" style="font-size:11px">${m.name}${tag}</div><div class="pw"><div class="pt"><div class="pf" style="width:${m.rate}%;background:${col}"></div></div><div class="pp" style="color:${col}">${m.rate}%</div></div></div>`;
+    }).join('');
+    const tr=document.getElementById('ep-team-rows');if(tr)tr.innerHTML=trows;
+    set('ep-rank-sub',team.name+' · 今月のKPI達成率');
+    const medals=['🥇','🥈','🥉'];
+    const rr=document.getElementById('ep-rank-rows');
+    if(rr)rr.innerHTML=team.members.map((m,i)=>{
+      const col=m.rate>=80?'var(--green)':'var(--accent)';
+      return `<div class="rank-row${m.isMe?' me':''}"><div class="rank-n"${i>2?' style="color:var(--text3);font-size:11px"':''}>${medals[i]||i+1}</div><div class="rank-name">${m.name}${m.isMe?' <span style="font-size:9px;color:var(--accent);font-weight:700">あなた</span>':''}</div><div class="rank-team">${team.name}</div><span class="badge ${m.role==='上長'?'b-manager':'b-employee'}">${m.role}</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:${m.rate}%;background:${col}"></div></div><div class="pp" style="color:${col}">${m.rate}%</div></div></div>`;
+    }).join('');
+  }
+}
 </script>
 
 <!-- ===== Supabase 連携（未設定時は内蔵デモのまま動作） ===== -->
@@ -1983,6 +2043,9 @@ updateInboxBadge();
     if(!d) return;
     repl(CHARTS,d.CHARTS); repl(FEEDBACK,d.FEEDBACK);
     replArr(ASSIGNMENTS,d.ASSIGNMENTS); replArr(ASSIGN_HISTORY,d.ASSIGN_HISTORY); replArr(PREPORTS,d.PREPORTS);
+    window._epTeam=d.TEAM; window._epKpis=d.KPIS; window._epStats=d.STATS;
+    if(typeof renderProgressDash==='function') renderProgressDash();
+    if(typeof renderTaskTable==='function') renderTaskTable();
     if(typeof renderEval==='function') renderEval();
     if(typeof renderAssign==='function') renderAssign();
     if(typeof updateAssignBadge==='function') updateAssignBadge();

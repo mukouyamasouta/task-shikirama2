@@ -221,23 +221,23 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <!-- 進捗 -->
 <div id="tc-progress" class="tab-content active">
   <div class="g4">
-    <div class="stat-card"><div class="s-lbl">全体達成率</div><div class="s-val" style="color:var(--accent)">68%</div><div class="s-trend up">▲ 5pt 先月比</div></div>
-    <div class="stat-card"><div class="s-lbl">稼働メンバー</div><div class="s-val">24名</div><div class="s-trend" style="color:var(--text3)">3チーム</div></div>
-    <div class="stat-card"><div class="s-lbl">今週完了タスク</div><div class="s-val" style="color:var(--green)">47</div><div class="s-trend up">▲ 8 先週比</div></div>
-    <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)">5</div><div class="s-trend down">▲ 2 先週比</div></div>
+    <div class="stat-card"><div class="s-lbl">全体達成率</div><div class="s-val" style="color:var(--accent)" id="ad-stat-rate">68%</div><div class="s-trend up" id="ad-stat-rate-sub">▲ 5pt 先月比</div></div>
+    <div class="stat-card"><div class="s-lbl">稼働メンバー</div><div class="s-val" id="ad-stat-members">24名</div><div class="s-trend" style="color:var(--text3)" id="ad-stat-teams">3チーム</div></div>
+    <div class="stat-card"><div class="s-lbl">完了タスク</div><div class="s-val" style="color:var(--green)" id="ad-stat-done">47</div><div class="s-trend up" id="ad-stat-done-sub">▲ 8 先週比</div></div>
+    <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)" id="ad-stat-late">5</div><div class="s-trend down" id="ad-stat-late-sub">▲ 2 先週比</div></div>
   </div>
   <div class="g2">
     <div class="card">
       <div class="card-hd"><div><div class="card-title">チーム別達成率</div><div class="card-sub">今月 KPI 達成状況</div></div><button class="card-btn" onclick="swTab('team',null)">詳細 →</button></div>
-      <div class="card-body">
+      <div class="card-body" id="ad-team-rates">
         <div class="team-row"><div class="tdot" style="background:var(--accent)"></div><div class="tname">営業チーム A</div><div class="pw"><div class="pt"><div class="pf" style="width:82%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">82%</div></div></div>
         <div class="team-row"><div class="tdot" style="background:var(--pink)"></div><div class="tname">開発チーム B</div><div class="pw"><div class="pt"><div class="pf" style="width:61%;background:var(--pink)"></div></div><div class="pp" style="color:var(--pink)">61%</div></div></div>
         <div class="team-row"><div class="tdot" style="background:var(--amber)"></div><div class="tname">マーケチーム C</div><div class="pw"><div class="pt"><div class="pf" style="width:55%;background:var(--amber)"></div></div><div class="pp" style="color:var(--amber)">55%</div></div></div>
       </div>
     </div>
     <div class="card">
-      <div class="card-hd"><div class="card-title">最近の活動</div><button class="card-btn">すべて →</button></div>
-      <div class="card-body">
+      <div class="card-hd"><div class="card-title">最近の活動</div><button class="card-btn" onclick="swTab('tasks',null)">すべて →</button></div>
+      <div class="card-body" id="ad-activities">
         <div class="act-row"><div class="act-ico" style="background:#DAEEE9;color:var(--accent)">★</div><div><div style="font-size:12px">田中さんの評価が入力されました</div><div style="font-size:10px;color:var(--text3);margin-top:2px">30分前</div></div></div>
         <div class="act-row"><div class="act-ico" style="background:#FEE2E2;color:var(--red)">⚠</div><div><div style="font-size:12px">鈴木さんのタスクが期限超過</div><div style="font-size:10px;color:var(--text3);margin-top:2px">1時間前</div></div></div>
         <div class="act-row"><div class="act-ico" style="background:#D1FAE5;color:var(--green)">✓</div><div><div style="font-size:12px">顧客ヒアリング資料が完了</div><div style="font-size:10px;color:var(--text3);margin-top:2px">3時間前</div></div></div>
@@ -246,8 +246,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
   </div>
   <div class="card">
-    <div class="card-hd"><div><div class="card-title">メンバー達成率ランキング</div><div class="card-sub">今月の KPI 達成率</div></div><button class="card-btn">全員表示 →</button></div>
-    <div class="card-body">
+    <div class="card-hd"><div><div class="card-title">メンバー達成率ランキング</div><div class="card-sub">今月の KPI 達成率</div></div><button class="card-btn" onclick="swTab('users',null)">全員表示 →</button></div>
+    <div class="card-body" id="ad-ranking">
       <div class="rank-row"><div class="rank-n">🥇</div><div class="rank-name">田中 花子</div><div class="rank-team">営業チームA</div><span class="badge b-manager">上長</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:94%;background:var(--green)"></div></div><div class="pp" style="color:var(--green)">94%</div></div></div>
       <div class="rank-row"><div class="rank-n">🥈</div><div class="rank-name">鈴木 一郎</div><div class="rank-team">開発チームB</div><span class="badge b-employee">従業員</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:88%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">88%</div></div></div>
       <div class="rank-row"><div class="rank-n">🥉</div><div class="rank-name">佐藤 美咲</div><div class="rank-team">マーケチームC</div><span class="badge b-manager">上長</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:81%;background:var(--cyan)"></div></div><div class="pp" style="color:var(--cyan)">81%</div></div></div>
@@ -258,8 +258,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- タスク -->
 <div id="tc-tasks" class="tab-content">
-  <div class="sec-title">タスク管理 <button class="f-submit" style="padding:8px 16px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit">＋ 新規タスク</button></div>
-  <div class="filter-row">
+  <div class="sec-title">タスク管理 <button class="f-submit" style="padding:8px 16px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit" onclick="gotoCreatePane('task')">＋ 新規タスク</button></div>
+  <div class="filter-row" id="ad-task-filters">
     <button class="f-btn active" onclick="filterTasks('all',this)">全て (8)</button>
     <button class="f-btn" onclick="filterTasks('wip',this)">進行中 (3)</button>
     <button class="f-btn" onclick="filterTasks('done',this)">完了 (2)</button>
@@ -269,7 +269,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="card" style="overflow:auto">
     <table class="tbl" style="min-width:700px">
       <thead><tr><th>タスク名</th><th>担当者</th><th>チーム</th><th>開始日</th><th>期限</th><th>優先度</th><th>ステータス</th></tr></thead>
-      <tbody>
+      <tbody id="ad-task-tbody">
         <tr class="task-row" data-status="wip"><td>Q2 売上レポート作成</td><td>田中 花子</td><td>営業チームA</td><td>5/20</td><td>5/30</td><td><span class="chip s-hi">高</span></td><td><span class="chip s-wip">進行中</span></td></tr>
         <tr class="task-row" data-status="late"><td>新機能リリース準備</td><td>鈴木 一郎</td><td>開発チームB</td><td>5/10</td><td style="color:var(--red);font-weight:700">5/25 ⚠</td><td><span class="chip" style="background:#FEE2E2;color:var(--red)">緊急</span></td><td><span class="chip s-late">遅延</span></td></tr>
         <tr class="task-row" data-status="todo"><td>SNS 広告プランニング</td><td>佐藤 美咲</td><td>マーケチームC</td><td>5/28</td><td>6/5</td><td><span class="chip s-md">中</span></td><td><span class="chip s-todo">未着手</span></td></tr>
@@ -286,6 +286,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <!-- 目標 -->
 <div id="tc-goals" class="tab-content">
   <div class="sec-title">目標管理（KGI / KPI）</div>
+  <div id="ad-goals">
   <div class="kgi-card"><div class="kgi-hd open" onclick="toggleKgi('kgi1',this)"><span class="karrow open">▶</span><div style="flex:1"><div class="kgi-title">KGI-1 &nbsp;月間売上目標 ¥1,000万</div><div style="font-size:10px;color:var(--text3);margin-top:2px">担当: 田中 花子 ／ 2025年 Q2</div></div><div class="pw" style="min-width:160px"><div class="pt"><div class="pf" style="width:92%;background:var(--green)"></div></div><div class="pp" style="color:var(--green)">92%</div></div><span class="chip s-wip" style="margin-left:10px">進行中</span></div>
     <div id="kgi1" class="kgi-body open"><div class="kpi-row"><div class="kpi-name">KPI 1-1 &nbsp;新規商談数 50件</div><div class="kpi-who">担当: 中村 健太</div><div class="kpi-prog"><div class="pt"><div class="pf" style="width:96%;background:var(--green)"></div></div><span class="pp" style="color:var(--green)">96%</span><span style="font-size:10px;color:var(--text3)">48/50件</span></div></div><div class="kpi-row"><div class="kpi-name">KPI 1-2 &nbsp;成約率 40%</div><div class="kpi-who">担当: 田中 花子</div><div class="kpi-prog"><div class="pt"><div class="pf" style="width:88%;background:var(--accent)"></div></div><span class="pp" style="color:var(--accent)">88%</span><span style="font-size:10px;color:var(--text3)">35%/40%</span></div></div><div class="kpi-row"><div class="kpi-name">KPI 1-3 &nbsp;リピート率 70%</div><div class="kpi-who">担当: 伊藤 さくら</div><div class="kpi-prog"><div class="pt"><div class="pf" style="width:93%;background:var(--cyan)"></div></div><span class="pp" style="color:var(--cyan)">93%</span><span style="font-size:10px;color:var(--text3)">65%/70%</span></div></div></div>
   </div>
@@ -296,16 +297,15 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div id="kgi3" class="kgi-body"><div class="kpi-row"><div class="kpi-name">KPI 3-1 &nbsp;NPS スコア 50</div><div class="kpi-who">担当: 佐藤 美咲</div><div class="kpi-prog"><div class="pt"><div class="pf" style="width:50%;background:var(--red)"></div></div><span class="pp" style="color:var(--red)">50%</span><span style="font-size:10px;color:var(--text3)">25/50</span></div></div><div class="kpi-row"><div class="kpi-name">KPI 3-2 &nbsp;サポート解決率 95%</div><div class="kpi-who">担当: 山本 浩二</div><div class="kpi-prog"><div class="pt"><div class="pf" style="width:80%;background:var(--amber)"></div></div><span class="pp" style="color:var(--amber)">80%</span><span style="font-size:10px;color:var(--text3)">76%/95%</span></div></div></div>
   </div>
 </div>
+</div>
 
 <!-- 評価 -->
 <div id="tc-reviews" class="tab-content">
   <div class="sec-title">評価管理 <button class="f-submit" style="padding:8px 16px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit" onclick="swTab('evalin',null)">＋ 評価入力</button></div>
-  <div class="card" style="overflow:auto"><table class="tbl" style="min-width:700px"><thead><tr><th>被評価者</th><th>評価者</th><th>期間</th><th>達成度</th><th>業務力</th><th>チームワーク</th><th>成長力</th><th>総合</th><th>ステータス</th></tr></thead><tbody>
-    <tr><td>田中 花子</td><td>山田 太郎</td><td>Q1 2025</td><td style="font-weight:700;color:var(--green)">95</td><td style="font-weight:700;color:var(--green)">90</td><td style="font-weight:700;color:var(--green)">92</td><td style="font-weight:700;color:var(--green)">90</td><td style="font-size:16px;font-weight:800;color:var(--green)">92</td><td><span class="chip s-done">完了</span></td></tr>
-    <tr><td>鈴木 一郎</td><td>田中 花子</td><td>Q1 2025</td><td style="font-weight:700;color:var(--accent)">80</td><td style="font-weight:700;color:var(--green)">85</td><td style="font-weight:700;color:var(--amber)">70</td><td style="font-weight:700;color:var(--accent)">78</td><td style="font-size:16px;font-weight:800;color:var(--accent)">78</td><td><span class="chip s-done">完了</span></td></tr>
-    <tr><td>佐藤 美咲</td><td>山田 太郎</td><td>Q1 2025</td><td style="font-weight:700;color:var(--green)">88</td><td style="font-weight:700;color:var(--accent)">82</td><td style="font-weight:700;color:var(--green)">86</td><td style="font-weight:700;color:var(--accent)">80</td><td style="font-size:16px;font-weight:800;color:var(--accent)">84</td><td><span class="chip s-done">完了</span></td></tr>
-    <tr><td>中村 健太</td><td>田中 花子</td><td>Q1 2025</td><td style="font-weight:700;color:var(--amber)">75</td><td style="font-weight:700;color:var(--amber)">70</td><td style="font-weight:700;color:var(--green)">80</td><td style="font-weight:700;color:var(--amber)">68</td><td style="font-size:16px;font-weight:800;color:var(--amber)">71</td><td><span class="chip s-done">完了</span></td></tr>
-    <tr><td>伊藤 さくら</td><td>田中 花子</td><td>Q2 2025</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td><span class="chip s-todo">未入力</span></td></tr>
+  <div class="card" style="overflow:auto"><table class="tbl" style="min-width:700px"><thead><tr><th>被評価者</th><th>評価者</th><th>役割</th><th>期間</th><th>KGI評価</th><th>コメント</th></tr></thead><tbody id="ad-reviews-tbody">
+    <tr><td>中村 健太</td><td>田中 花子</td><td><span class="badge b-manager">リーダー</span></td><td>2025年 Q2</td><td style="color:var(--amber);font-weight:700">★★★★☆</td><td style="font-size:11px;color:var(--text2)">行動量は十分で訪問件数は目標超え。クロージング力を磨こう。</td></tr>
+    <tr><td>中村 健太</td><td>木村 雅人</td><td><span class="badge b-admin">幹部</span></td><td>2025年 Q2</td><td style="color:var(--amber);font-weight:700">★★★★☆</td><td style="font-size:11px;color:var(--text2)">成長意欲が高く今後が期待できる。標準化にも貢献を。</td></tr>
+    <tr><td>営業チームA</td><td>田中 花子</td><td><span class="badge b-manager">リーダー</span></td><td>2025年 Q2</td><td style="color:var(--amber);font-weight:700">★★★★☆</td><td style="font-size:11px;color:var(--text2)">チーム全体として目標に向けた動きができている。</td></tr>
   </tbody></table></div>
 </div>
 
@@ -319,17 +319,17 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="ctab" onclick="swCreate('kpi',this)">◎ KPI 設定</button>
     <button class="ctab" onclick="swCreate('task',this)">📋 タスク割当</button>
   </div>
-  <div id="cp-account" class="cpane active"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">アカウント発行</h3><div class="fr"><div class="fg"><label class="fl">氏名</label><input class="fi" placeholder="山田 太郎"></div><div class="fg"><label class="fl">メールアドレス</label><input class="fi" placeholder="yamada@vexum.co.jp"></div></div><div class="fr"><div class="fg"><label class="fl">ロール</label><select class="fs"><option>従業員 (employee)</option><option>上長 (manager)</option><option>役員 (executive)</option><option>管理者 (admin)</option></select></div><div class="fg"><label class="fl">部門</label><input class="fi" placeholder="営業部"></div></div><div class="fg"><label class="fl">所属チーム</label><select class="fs"><option>—（未所属）</option><option>営業チーム A</option><option>開発チーム B</option><option>マーケチーム C</option></select></div><button class="f-submit">招待メールを送信</button></div></div>
-  <div id="cp-team" class="cpane"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">チーム編成</h3><div class="fr"><div class="fg"><label class="fl">チーム名</label><input class="fi" placeholder="営業チーム D"></div><div class="fg"><label class="fl">カラー</label><input class="fi" type="color" value="#6366F1" style="height:42px;padding:4px"></div></div><div class="fg"><label class="fl">チームリーダー</label><select class="fs"><option>田中 花子</option><option>佐藤 美咲</option><option>鈴木 一郎</option></select></div><div class="fg"><label class="fl">メンバー追加</label><select class="fs" multiple style="height:90px"><option>中村 健太</option><option>伊藤 さくら</option><option>山本 浩二</option></select></div><button class="f-submit">チームを作成</button></div></div>
-  <div id="cp-kgi" class="cpane"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">KGI 設定</h3><div class="fg"><label class="fl">KGI タイトル</label><input class="fi" placeholder="Q3 売上目標 ¥1,200万"></div><div class="fr"><div class="fg"><label class="fl">担当者</label><select class="fs"><option>田中 花子</option><option>佐藤 美咲</option></select></div><div class="fg"><label class="fl">目標値</label><input class="fi" placeholder="12000000"></div></div><div class="fr"><div class="fg"><label class="fl">開始日</label><input class="fi" type="date"></div><div class="fg"><label class="fl">終了日</label><input class="fi" type="date"></div></div><button class="f-submit">KGI を作成</button></div></div>
-  <div id="cp-kpi" class="cpane"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">KPI 設定</h3><div class="fg"><label class="fl">紐づく KGI</label><select class="fs"><option>KGI-1 月間売上目標 ¥1,000万</option><option>KGI-2 新規顧客獲得 20社</option><option>KGI-3 顧客満足度 4.5</option></select></div><div class="fg"><label class="fl">KPI タイトル</label><input class="fi" placeholder="新規商談数 50件"></div><div class="fr"><div class="fg"><label class="fl">担当者</label><select class="fs"><option>中村 健太</option><option>田中 花子</option></select></div><div class="fg"><label class="fl">目標値</label><input class="fi" placeholder="50"></div></div><div class="fr"><div class="fg"><label class="fl">単位</label><input class="fi" placeholder="件"></div><div class="fg"><label class="fl">測定頻度</label><select class="fs"><option>週次</option><option>月次</option><option>四半期</option></select></div></div><button class="f-submit">KPI を作成</button></div></div>
-  <div id="cp-task" class="cpane"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">タスク割当</h3><div class="fg"><label class="fl">タスク名</label><input class="fi" placeholder="Q3 提案書作成"></div><div class="fr"><div class="fg"><label class="fl">担当者</label><select class="fs"><option>田中 花子</option><option>鈴木 一郎</option><option>佐藤 美咲</option><option>中村 健太</option></select></div><div class="fg"><label class="fl">チーム</label><select class="fs"><option>営業チーム A</option><option>開発チーム B</option><option>マーケチーム C</option></select></div></div><div class="fr"><div class="fg"><label class="fl">開始日</label><input class="fi" type="date"></div><div class="fg"><label class="fl">期限</label><input class="fi" type="date"></div></div><div class="fg"><label class="fl">優先度</label><select class="fs"><option>高</option><option>中</option><option>低</option><option>緊急</option></select></div><button class="f-submit">タスクを割当</button></div></div>
+  <div id="cp-account" class="cpane active"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">アカウント発行</h3><div class="fr"><div class="fg"><label class="fl">氏名</label><input class="fi" id="ad-ac-name" placeholder="山田 太郎"></div><div class="fg"><label class="fl">メールアドレス</label><input class="fi" id="ad-ac-email" placeholder="yamada@vexum.co.jp"></div></div><div class="fr"><div class="fg"><label class="fl">ロール</label><select class="fs" id="ad-ac-role"><option value="メンバー">従業員 (member)</option><option value="リーダー">リーダー (leader)</option><option value="幹部">幹部 (executive)</option><option value="管理者">管理者 (admin)</option></select></div><div class="fg"><label class="fl">部門</label><input class="fi" id="ad-ac-dept" placeholder="営業部"></div></div><div class="fg"><label class="fl">所属チーム</label><select class="fs" id="ad-ac-team"><option value="">—（未所属）</option></select></div><button class="f-submit" onclick="adCreateAccount(this)">アカウントを発行（初期PWを表示）</button></div></div>
+  <div id="cp-team" class="cpane"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">チーム編成</h3><div class="fr"><div class="fg"><label class="fl">チーム名</label><input class="fi" id="ad-tm-name" placeholder="営業チーム D"></div><div class="fg"><label class="fl">カラー</label><input class="fi" id="ad-tm-color" type="color" value="#6366F1" style="height:42px;padding:4px"></div></div><div class="fg"><label class="fl">チームリーダー</label><select class="fs" id="ad-tm-leader"><option>田中 花子</option><option>佐藤 美咲</option><option>鈴木 一郎</option></select></div><div class="fg"><label class="fl">メンバー追加</label><select class="fs" id="ad-tm-members" multiple style="height:90px"><option>中村 健太</option><option>伊藤 さくら</option><option>山本 浩二</option></select></div><button class="f-submit" onclick="adCreateTeam(this)">チームを作成</button></div></div>
+  <div id="cp-kgi" class="cpane"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">KGI 設定 <span style="font-size:10px;font-weight:400;color:var(--text3)">担当者の曼荼羅チャート（中心目標）として作成されます</span></h3><div class="fg"><label class="fl">KGI タイトル</label><input class="fi" id="ad-kg-title" placeholder="Q3 売上目標 ¥1,200万"></div><div class="fr"><div class="fg"><label class="fl">担当者</label><select class="fs" id="ad-kg-owner"><option>田中 花子</option><option>佐藤 美咲</option></select></div><div class="fg"><label class="fl">目標値（任意）</label><input class="fi" id="ad-kg-target" placeholder="12000000"></div></div><div class="fr"><div class="fg"><label class="fl">開始日</label><input class="fi" id="ad-kg-start" type="date"></div><div class="fg"><label class="fl">終了日</label><input class="fi" id="ad-kg-end" type="date"></div></div><button class="f-submit" onclick="adCreateKgi(this)">KGI を作成</button></div></div>
+  <div id="cp-kpi" class="cpane"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">KPI 設定 <span style="font-size:10px;font-weight:400;color:var(--text3)">チャートのCSF配下にKPIを登録し、担当者のタスクも作成します</span></h3><div class="fg"><label class="fl">紐づく KGI（チャート）</label><select class="fs" id="ad-kp-chart" onchange="adKpUpdateCsf()"><option>KGI-1 月間売上目標 ¥1,000万</option><option>KGI-2 新規顧客獲得 20社</option><option>KGI-3 顧客満足度 4.5</option></select></div><div class="fg"><label class="fl">紐づく CSF</label><select class="fs" id="ad-kp-csf"><option>—</option></select></div><div class="fg"><label class="fl">KPI タイトル</label><input class="fi" id="ad-kp-title" placeholder="新規商談数 50件"></div><div class="fr"><div class="fg"><label class="fl">担当者</label><select class="fs" id="ad-kp-owner"><option>中村 健太</option><option>田中 花子</option></select></div><div class="fg"><label class="fl">目標値</label><input class="fi" id="ad-kp-target" placeholder="50"></div></div><div class="fr"><div class="fg"><label class="fl">単位</label><input class="fi" id="ad-kp-unit" placeholder="件"></div><div class="fg"><label class="fl">測定頻度</label><select class="fs" id="ad-kp-freq"><option>週次</option><option>月次</option><option>四半期</option></select></div></div><button class="f-submit" onclick="adCreateKpi(this)">KPI を作成</button></div></div>
+  <div id="cp-task" class="cpane"><div class="form-card"><h3 style="font-size:14px;font-weight:700;margin-bottom:18px">タスク割当</h3><div class="fg"><label class="fl">タスク名</label><input class="fi" id="ad-tk-name" placeholder="Q3 提案書作成"></div><div class="fr"><div class="fg"><label class="fl">担当者</label><select class="fs" id="ad-tk-member"><option>田中 花子</option><option>鈴木 一郎</option><option>佐藤 美咲</option><option>中村 健太</option></select></div><div class="fg"><label class="fl">チーム</label><select class="fs" id="ad-tk-team"><option value="">—</option></select></div></div><div class="fr"><div class="fg"><label class="fl">開始日</label><input class="fi" id="ad-tk-start" type="date"></div><div class="fg"><label class="fl">期限</label><input class="fi" id="ad-tk-due" type="date"></div></div><div class="fg"><label class="fl">優先度</label><select class="fs" id="ad-tk-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option><option value="urgent">緊急</option></select></div><button class="f-submit" onclick="adAssignTask('ad-tk',this)">タスクを割当</button></div></div>
 </div>
 
 <!-- チームダッシュボード -->
 <div id="tc-team" class="tab-content">
   <div class="sec-title">チームダッシュボード</div>
-  <div class="g3">
+  <div class="g3" id="ad-team-grid">
     <div class="card"><div class="card-hd" style="border-left:4px solid var(--accent)"><div><div class="card-title">営業チーム A</div><div class="card-sub">リーダー: 田中 花子 / 8名</div></div><span style="font-size:20px;font-weight:800;color:var(--accent)">82%</span></div><div class="card-body" style="padding:10px 14px"><div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">田中 花子</div><div class="pw"><div class="pt"><div class="pf" style="width:94%;background:var(--green)"></div></div><div class="pp" style="color:var(--green)">94%</div></div></div><div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">中村 健太</div><div class="pw"><div class="pt"><div class="pf" style="width:72%;background:var(--amber)"></div></div><div class="pp" style="color:var(--amber)">72%</div></div></div><div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">伊藤 さくら</div><div class="pw"><div class="pt"><div class="pf" style="width:68%;background:var(--text3)"></div></div><div class="pp" style="color:var(--text3)">68%</div></div></div><div style="text-align:right;padding-top:6px"><button class="card-btn" onclick="openMandala('A')" style="font-size:11px;color:var(--accent)">🧿 曼荼羅チャートを見る</button></div></div></div>
     <div class="card"><div class="card-hd" style="border-left:4px solid var(--pink)"><div><div class="card-title">開発チーム B</div><div class="card-sub">リーダー: 鈴木 一郎 / 9名</div></div><span style="font-size:20px;font-weight:800;color:var(--pink)">61%</span></div><div class="card-body" style="padding:10px 14px"><div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">鈴木 一郎</div><div class="pw"><div class="pt"><div class="pf" style="width:88%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">88%</div></div></div><div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">山本 浩二</div><div class="pw"><div class="pt"><div class="pf" style="width:55%;background:var(--pink)"></div></div><div class="pp" style="color:var(--pink)">55%</div></div></div><div style="text-align:right;padding-top:6px"><button class="card-btn" onclick="openMandala('B')" style="font-size:11px;color:var(--pink)">🧿 曼荼羅チャートを見る</button></div></div></div>
     <div class="card"><div class="card-hd" style="border-left:4px solid var(--amber)"><div><div class="card-title">マーケチーム C</div><div class="card-sub">リーダー: 佐藤 美咲 / 7名</div></div><span style="font-size:20px;font-weight:800;color:var(--amber)">55%</span></div><div class="card-body" style="padding:10px 14px"><div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">佐藤 美咲</div><div class="pw"><div class="pt"><div class="pf" style="width:81%;background:var(--cyan)"></div></div><div class="pp" style="color:var(--cyan)">81%</div></div></div><div style="text-align:right;padding-top:6px"><button class="card-btn" onclick="openMandala('C')" style="font-size:11px;color:var(--amber)">🧿 曼荼羅チャートを見る</button></div></div></div>
@@ -338,8 +338,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- アカウント管理 -->
 <div id="tc-users" class="tab-content">
-  <div class="sec-title">アカウント管理 <button class="f-submit" style="padding:8px 16px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit" onclick="swTab('create',null)">＋ アカウント発行</button></div>
-  <div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>チーム</th><th>部門</th><th>操作</th></tr></thead><tbody>
+  <div class="sec-title">アカウント管理 <button class="f-submit" style="padding:8px 16px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit" onclick="gotoCreatePane('account')">＋ アカウント発行</button></div>
+  <div class="card" style="overflow:auto"><table class="tbl"><thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>チーム</th><th>部門</th><th>操作</th></tr></thead><tbody id="ad-users-tbody">
     <tr><td>山田 太郎</td><td>yamada@vexum.co.jp</td><td><span class="badge b-admin">admin</span></td><td style="color:var(--text3)">—</td><td>経営企画部</td><td><button class="card-btn">編集</button></td></tr>
     <tr><td>田中 花子</td><td>tanaka@vexum.co.jp</td><td><span class="badge b-manager">manager</span></td><td>営業チームA</td><td>営業部</td><td><button class="card-btn">編集</button></td></tr>
     <tr><td>鈴木 一郎</td><td>suzuki@vexum.co.jp</td><td><span class="badge b-employee">employee</span></td><td>開発チームB</td><td>開発部</td><td><button class="card-btn">編集</button></td></tr>
@@ -354,12 +354,14 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <div id="tc-assign" class="tab-content">
   <div class="sec-title">タスク割当</div>
   <div class="g2">
-    <div class="card"><div class="card-hd"><div class="card-title">未割当タスク</div></div>
-      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12px;font-weight:600">インフラ移行計画書作成</div><div style="font-size:10px;color:var(--text3)">期限: 6/20 ／ 優先度: 高</div></div><button class="card-btn">割当</button></div>
-      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12px;font-weight:600">SNS 広告クリエイティブ制作</div><div style="font-size:10px;color:var(--text3)">期限: 6/15 ／ 優先度: 中</div></div><button class="card-btn">割当</button></div>
-      <div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12px;font-weight:600">顧客向け FAQ 更新</div><div style="font-size:10px;color:var(--text3)">期限: 6/30 ／ 優先度: 低</div></div><button class="card-btn">割当</button></div>
+    <div class="card"><div class="card-hd"><div class="card-title">未割当タスク</div><span style="font-size:10px;color:var(--text3)">担当者未設定のタスク</span></div>
+      <div id="ad-unassigned">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12px;font-weight:600">インフラ移行計画書作成</div><div style="font-size:10px;color:var(--text3)">期限: 6/20 ／ 優先度: 高</div></div><button class="card-btn" onclick="adPickUnassigned('インフラ移行計画書作成')">割当</button></div>
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12px;font-weight:600">SNS 広告クリエイティブ制作</div><div style="font-size:10px;color:var(--text3)">期限: 6/15 ／ 優先度: 中</div></div><button class="card-btn" onclick="adPickUnassigned('SNS 広告クリエイティブ制作')">割当</button></div>
+      <div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12px;font-weight:600">顧客向け FAQ 更新</div><div style="font-size:10px;color:var(--text3)">期限: 6/30 ／ 優先度: 低</div></div><button class="card-btn" onclick="adPickUnassigned('顧客向け FAQ 更新')">割当</button></div>
+      </div>
     </div>
-    <div class="form-card" style="border:1px solid var(--border);box-shadow:var(--shadow)"><h3 style="font-size:14px;font-weight:700;margin-bottom:16px">タスクを割当</h3><div class="fg"><label class="fl">タスク名</label><input class="fi" placeholder="タスク名を入力"></div><div class="fg"><label class="fl">担当者</label><select class="fs"><option>田中 花子</option><option>鈴木 一郎</option><option>佐藤 美咲</option><option>中村 健太</option></select></div><div class="fr"><div class="fg"><label class="fl">開始日</label><input class="fi" type="date"></div><div class="fg"><label class="fl">期限</label><input class="fi" type="date"></div></div><div class="fg"><label class="fl">優先度</label><select class="fs"><option>高</option><option>中</option><option>低</option><option>緊急</option></select></div><button class="f-submit">割当する</button></div>
+    <div class="form-card" style="border:1px solid var(--border);box-shadow:var(--shadow)"><h3 style="font-size:14px;font-weight:700;margin-bottom:16px">タスクを割当</h3><div class="fg"><label class="fl">タスク名</label><input class="fi" id="ad-as-name" placeholder="タスク名を入力"></div><div class="fg"><label class="fl">担当者</label><select class="fs" id="ad-as-member"><option>田中 花子</option><option>鈴木 一郎</option><option>佐藤 美咲</option><option>中村 健太</option></select></div><div class="fr"><div class="fg"><label class="fl">開始日</label><input class="fi" id="ad-as-start" type="date"></div><div class="fg"><label class="fl">期限</label><input class="fi" id="ad-as-due" type="date"></div></div><div class="fg"><label class="fl">優先度</label><select class="fs" id="ad-as-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option><option value="urgent">緊急</option></select></div><button class="f-submit" onclick="adAssignTask('ad-as',this)">割当する</button></div>
   </div>
 </div>
 
@@ -367,26 +369,24 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <div id="tc-evalin" class="tab-content">
   <div class="sec-title">メンバー評価入力</div>
   <div class="form-card" style="max-width:600px;border:1px solid var(--border);box-shadow:var(--shadow)">
-    <div class="fr"><div class="fg"><label class="fl">被評価者</label><select class="fs"><option>田中 花子</option><option>鈴木 一郎</option><option>佐藤 美咲</option><option>中村 健太</option><option>伊藤 さくら</option><option>山本 浩二</option></select></div><div class="fg"><label class="fl">評価期間</label><select class="fs"><option>2025年 Q2</option><option>2025年 Q1</option><option>2024年 Q4</option></select></div></div>
+    <div class="fr"><div class="fg"><label class="fl">被評価者</label><select class="fs" id="ad-ev-target"><option>田中 花子</option><option>鈴木 一郎</option><option>佐藤 美咲</option><option>中村 健太</option><option>伊藤 さくら</option><option>山本 浩二</option></select></div><div class="fg"><label class="fl">評価期間</label><select class="fs" id="ad-ev-period"><option>2025年 Q2</option><option>2025年 Q1</option><option>2024年 Q4</option></select></div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-      <div class="fg"><label class="fl">目標達成度 (0–100)</label><input class="fi" type="number" placeholder="85"></div>
-      <div class="fg"><label class="fl">業務遂行力 (0–100)</label><input class="fi" type="number" placeholder="80"></div>
-      <div class="fg"><label class="fl">チームワーク (0–100)</label><input class="fi" type="number" placeholder="90"></div>
-      <div class="fg"><label class="fl">成長・学習意欲 (0–100)</label><input class="fi" type="number" placeholder="75"></div>
+      <div class="fg"><label class="fl">KGI 達成度 (0–5)</label><input class="fi" id="ad-ev-kgi" type="number" min="0" max="5" step="0.5" placeholder="4.0" oninput="adEvTotal()"></div>
+      <div class="fg"><label class="fl">CSF 平均 (0–5)</label><input class="fi" id="ad-ev-csf" type="number" min="0" max="5" step="0.5" placeholder="3.5" oninput="adEvTotal()"></div>
+      <div class="fg"><label class="fl">タスク評価 (0–5)</label><input class="fi" id="ad-ev-task" type="number" min="0" max="5" step="0.5" placeholder="4.0" oninput="adEvTotal()"></div>
+      <div class="fg"><label class="fl">総合（自動計算）</label><input class="fi" id="ad-ev-total" readonly placeholder="—" style="background:#F9FAFB;font-weight:700;color:var(--accent)"></div>
     </div>
-    <div class="fg"><label class="fl">総合コメント</label><textarea class="fi" rows="3" placeholder="評価コメントを入力…" style="resize:vertical"></textarea></div>
-    <button class="f-submit">評価を保存</button>
+    <div class="fg"><label class="fl">総合コメント</label><textarea class="fi" id="ad-ev-comment" rows="3" placeholder="評価コメントを入力…" style="resize:vertical"></textarea></div>
+    <button class="f-submit" onclick="adSaveEval(this)">評価を保存</button>
   </div>
 </div>
 
 <!-- 評価記録 -->
 <div id="tc-evalrec" class="tab-content">
   <div class="sec-title">評価記録</div>
-  <div class="card" style="overflow:auto"><table class="tbl" style="min-width:700px"><thead><tr><th>被評価者</th><th>評価者</th><th>期間</th><th>達成度</th><th>業務力</th><th>チームワーク</th><th>成長力</th><th>総合</th><th>状態</th></tr></thead><tbody>
-    <tr><td>田中 花子</td><td>山田 太郎</td><td>Q1 2025</td><td style="font-weight:700;color:var(--green)">95</td><td style="font-weight:700;color:var(--green)">90</td><td style="font-weight:700;color:var(--green)">92</td><td style="font-weight:700;color:var(--green)">90</td><td style="font-size:16px;font-weight:800;color:var(--green)">92</td><td><span class="chip s-done">完了</span></td></tr>
-    <tr><td>鈴木 一郎</td><td>田中 花子</td><td>Q1 2025</td><td style="font-weight:700;color:var(--accent)">80</td><td style="font-weight:700;color:var(--green)">85</td><td style="font-weight:700;color:var(--amber)">70</td><td style="font-weight:700;color:var(--accent)">78</td><td style="font-size:16px;font-weight:800;color:var(--accent)">78</td><td><span class="chip s-done">完了</span></td></tr>
-    <tr><td>佐藤 美咲</td><td>山田 太郎</td><td>Q1 2025</td><td style="font-weight:700;color:var(--green)">88</td><td style="font-weight:700;color:var(--accent)">82</td><td style="font-weight:700;color:var(--green)">86</td><td style="font-weight:700;color:var(--accent)">80</td><td style="font-size:16px;font-weight:800;color:var(--accent)">84</td><td><span class="chip s-done">完了</span></td></tr>
-    <tr><td>伊藤 さくら</td><td>田中 花子</td><td>Q2 2025</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td><td><span class="chip s-todo">未入力</span></td></tr>
+  <div class="card" style="overflow:auto"><table class="tbl" style="min-width:700px"><thead><tr><th>被評価者</th><th>評価者</th><th>期間</th><th>KGI</th><th>CSF平均</th><th>タスク平均</th><th>総合</th><th>コメント</th><th>状態</th></tr></thead><tbody id="ad-evalrec-tbody">
+    <tr><td>中村 健太</td><td>田中 花子</td><td>2025年 Q1</td><td style="font-weight:700;color:var(--accent)">4.0</td><td style="font-weight:700;color:var(--accent)">3.5</td><td style="font-weight:700;color:var(--accent)">4.0</td><td style="font-size:15px;font-weight:800;color:var(--accent)">3.8</td><td style="font-size:11px;color:var(--text2)">行動量は十分。クロージング力強化が課題。</td><td><span class="chip s-done">完了</span></td></tr>
+    <tr><td>伊藤 さくら</td><td>田中 花子</td><td>2025年 Q1</td><td style="font-weight:700;color:var(--amber)">3.0</td><td style="font-weight:700;color:var(--amber)">3.2</td><td style="font-weight:700;color:var(--amber)">3.0</td><td style="font-size:15px;font-weight:800;color:var(--amber)">3.1</td><td style="font-size:11px;color:var(--text2)">着実に成長中。提案資料の質を上げたい。</td><td><span class="chip s-done">完了</span></td></tr>
   </tbody></table></div>
 </div>
 
@@ -410,7 +410,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
             </select>
           </div>
           <div class="fg"><label class="fl">テンプレート適用（任意）</label>
-            <select class="fs" onchange="applyMndTemplate(this.value)">
+            <select class="fs" id="mnd-tpl-sel" onchange="applyMndTemplate(this.value)">
               <option value="">— 空白から作成 —</option>
               <option value="A">営業チームA テンプレート</option>
               <option value="B">開発チームB テンプレート</option>
@@ -762,7 +762,10 @@ function downloadAllCSV(){
 /* ===== 一覧レンダリング ===== */
 function renderMandalaList(){
   const con=document.getElementById('mnd-list-container');if(!con)return;
-  const groups=[{label:'チーム',keys:['A','B','C']},{label:'個人',keys:['tanaka','suzuki','sato','nakamura']}];
+  const groups=[
+    {label:'チーム',keys:Object.keys(MND).filter(k=>!k.startsWith('__'))},
+    {label:'個人',keys:Object.keys(EMP_MND).filter(k=>!k.startsWith('__'))}
+  ];
   const all=getAllMnd();
   let h='';
   groups.forEach(({label,keys})=>{
@@ -847,7 +850,7 @@ function updateMndPreview(){
 function previewMndFull(){
   const center=(document.getElementById('mnd-center-input')||{}).value||'（未入力）';
   const subs=Array.from({length:8},(_,i)=>(document.getElementById(`mnd-sub-${i+1}`)||{}).value||`サブ目標${i+1}`);
-  getAllMnd()['__preview__']={name:'送信プレビュー',team:'—',color:'#0D9488',bg:'#CCEDE9',center,subs,acts:subs.map(()=>Array(8).fill('—'))};
+  MND['__preview__']={name:'送信プレビュー',team:'—',color:'#0D9488',bg:'#CCEDE9',center,subs,acts:subs.map(()=>Array(8).fill('—'))};
   openMandala('__preview__',false);
 }
 
@@ -862,6 +865,7 @@ async function sendMandala(){
     const subs=Array.from({length:8},(_,i)=>(document.getElementById(`mnd-sub-${i+1}`)||{}).value||'');
     let toPid=null;
     Object.keys(API.MEMBER_KEY).forEach(id=>{if(API.MEMBER_KEY[id]===toKey)toPid=id;});
+    if(!toPid&&/^[0-9a-f-]{36}$/i.test(toKey))toPid=toKey; // ライブデータはoption値が直接UUID
     const res=await API.createSend({center,title:center,subs,acts:subs.map(()=>Array(8).fill('')),toName,toPid});
     if(res&&res.error){alert('送信の保存に失敗しました: '+res.error);return;}
   }
@@ -869,6 +873,386 @@ async function sendMandala(){
   const msgTxt=document.getElementById('mnd-send-success-msg');
   if(msgTxt)msgTxt.textContent=`「${center}」を ${toName} に送信しました`;
   if(msg){msg.style.display='flex';setTimeout(()=>{msg.style.display='none';},5000);}
+}
+</script>
+
+<!-- ===== アカウント編集モーダル ===== -->
+<div id="ad-user-modal" onclick="if(event.target===this)adCloseUser()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9995;align-items:flex-start;justify-content:center;padding:60px 16px">
+  <div style="background:#fff;border-radius:12px;padding:20px;width:100%;max-width:440px;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:14px;font-weight:800;color:#1a1a2e">アカウント編集</div>
+      <button onclick="adCloseUser()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div class="fg"><label class="fl">氏名</label><input class="fi" id="ad-um-name"></div>
+    <div class="fg"><label class="fl">メールアドレス</label><input class="fi" id="ad-um-email"></div>
+    <div class="fg"><label class="fl">ロール</label><select class="fs" id="ad-um-role"><option value="メンバー">メンバー</option><option value="リーダー">リーダー</option><option value="幹部">幹部</option><option value="管理者">管理者</option></select></div>
+    <div id="ad-um-msg" style="font-size:11px;color:var(--green);min-height:16px;margin-bottom:8px"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="f-submit" style="flex:1" onclick="adSaveUser(this)">💾 保存</button>
+      <button class="f-submit" style="flex:1;background:var(--amber)" onclick="adResetPw(this)">🔑 PW再発行</button>
+      <button class="f-submit" style="flex:1;background:var(--red)" onclick="adDeleteUser(this)">🗑 削除</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== 統括ライブ接続（Supabase接続時に実データへ置換） ===== */
+const AD={ready:false,raw:null,TEAMS:{},MEMBERS:{}};
+let _adUnassignedPick=null;
+function adBtnDone(btn,label){if(!btn)return;const o=btn.textContent;btn.textContent=label||'✓ 保存しました';setTimeout(()=>{btn.textContent=o;},2000);}
+function gotoCreatePane(pane){
+  const sb=[...document.querySelectorAll('.sb-item')].find(b=>(b.getAttribute('onclick')||'').includes("'create'"));
+  swTab('create',sb||null);
+  const ct=[...document.querySelectorAll('.ctab')].find(b=>(b.getAttribute('onclick')||'').includes("'"+pane+"'"));
+  swCreate(pane,ct||null);
+}
+function adFmtMD(d){if(!d)return'-';const p=String(d).split('-');return p.length===3?(+p[1])+'/'+(+p[2]):d;}
+function adStars(n){n=Math.round(+n||0);return '★'.repeat(Math.min(5,n))+'☆'.repeat(Math.max(0,5-n));}
+const AD_PRI={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低'],urgent:['','緊急']};
+const AD_ST={wip:['s-wip','進行中'],done:['s-done','完了'],late:['s-late','遅延'],todo:['s-todo','未着手']};
+function adPriChip(p){const c=AD_PRI[p]||AD_PRI.md;return p==='urgent'?'<span class="chip" style="background:#FEE2E2;color:var(--red)">緊急</span>':`<span class="chip ${c[0]}">${c[1]}</span>`;}
+function adStChip(st){const c=AD_ST[st]||AD_ST.todo;return `<span class="chip ${c[0]}">${c[1]}</span>`;}
+function adRoleBadge(r){return r==='admin'?'<span class="badge b-admin">admin</span>':r==='executive'?'<span class="badge b-admin">executive</span>':r==='leader'?'<span class="badge b-manager">leader</span>':'<span class="badge b-employee">member</span>';}
+function adProfName(pid){const p=(AD.raw?AD.raw.profiles:[]).find(x=>x.id===pid);return p?p.full_name:'—';}
+function adTeamName(tid){const t=(AD.raw?AD.raw.teams:[]).find(x=>x.id===tid);return t?t.name:'—';}
+
+/* ---- 描画（ライブ時のみ） ---- */
+function adRenderDashboard(){
+  if(!AD.ready)return;
+  const raw=AD.raw,T=AD.TEAMS;
+  const teamKeys=Object.keys(T);
+  const rates=teamKeys.map(k=>T[k].rate||0);
+  const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):0;
+  const done=raw.tasks.filter(t=>t.status==='done').length;
+  const late=raw.tasks.filter(t=>t.status==='late').length;
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  set('ad-stat-rate',avg+'%');set('ad-stat-rate-sub','全チーム平均');
+  set('ad-stat-members',raw.profiles.length+'名');set('ad-stat-teams',teamKeys.length+'チーム');
+  set('ad-stat-done',done);set('ad-stat-done-sub','累計完了');
+  set('ad-stat-late',late);set('ad-stat-late-sub','要対応');
+  ['ad-stat-rate-sub','ad-stat-done-sub','ad-stat-late-sub'].forEach(id=>{const e=document.getElementById(id);if(e){e.className='s-trend';e.style.color='var(--text3)';}});
+  const tr=document.getElementById('ad-team-rates');
+  if(tr)tr.innerHTML=teamKeys.map(k=>{const t=T[k];return `<div class="team-row"><div class="tdot" style="background:${t.color}"></div><div class="tname">${t.name}</div><div class="pw"><div class="pt"><div class="pf" style="width:${t.rate}%;background:${t.color}"></div></div><div class="pp" style="color:${t.color}">${t.rate}%</div></div></div>`;}).join('')||'<div style="font-size:12px;color:var(--text3);padding:10px">チームがありません</div>';
+  const acts=raw.tasks.slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))).slice(0,4);
+  const av=document.getElementById('ad-activities');
+  if(av)av.innerHTML=acts.map(t=>{
+    const who=adProfName(t.assignee_id);
+    if(t.status==='done')return `<div class="act-row"><div class="act-ico" style="background:#D1FAE5;color:var(--green)">✓</div><div><div style="font-size:12px">「${t.title}」が完了（${who}）</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${t.completed_date||''}</div></div></div>`;
+    if(t.status==='late')return `<div class="act-row"><div class="act-ico" style="background:#FEE2E2;color:var(--red)">⚠</div><div><div style="font-size:12px">「${t.title}」が期限超過（${who}）</div><div style="font-size:10px;color:var(--text3);margin-top:2px">期限 ${adFmtMD(t.due_date)}</div></div></div>`;
+    return `<div class="act-row"><div class="act-ico" style="background:#DAEEE9;color:var(--accent)">📋</div><div><div style="font-size:12px">「${t.title}」を${who}に割当</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${adFmtMD(t.start_date)}〜${adFmtMD(t.due_date)}</div></div></div>`;
+  }).join('')||'<div style="font-size:12px;color:var(--text3);padding:10px">活動はまだありません</div>';
+  const rk=document.getElementById('ad-ranking');
+  if(rk){
+    const tmByPid={};raw.team_members.forEach(m=>{tmByPid[m.profile_id]=m;});
+    const rows=raw.profiles.filter(p=>tmByPid[p.id]).map(p=>({name:p.full_name,rate:tmByPid[p.id].achievement_rate||0,team:adTeamName(tmByPid[p.id].team_id),lead:tmByPid[p.id].role_in_team==='leader'})).sort((a,b)=>b.rate-a.rate);
+    const medals=['🥇','🥈','🥉'];
+    rk.innerHTML=rows.map((m,i)=>{
+      const col=m.rate>=80?'var(--green)':m.rate>=60?'var(--accent)':'var(--amber)';
+      return `<div class="rank-row"><div class="rank-n"${i>2?' style="color:var(--text3);font-size:11px"':''}>${medals[i]||i+1}</div><div class="rank-name">${m.name}</div><div class="rank-team">${m.team}</div><span class="badge ${m.lead?'b-manager':'b-employee'}">${m.lead?'リーダー':'従業員'}</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:${m.rate}%;background:${col}"></div></div><div class="pp" style="color:${col}">${m.rate}%</div></div></div>`;
+    }).join('')||'<div style="font-size:12px;color:var(--text3);padding:10px">所属メンバーがいません</div>';
+  }
+}
+function adRenderTasks(){
+  if(!AD.ready)return;
+  const raw=AD.raw;
+  const tb=document.getElementById('ad-task-tbody');if(!tb)return;
+  const rows=raw.tasks.slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  tb.innerHTML=rows.map(t=>`<tr class="task-row" data-status="${t.status}"><td>${t.title}</td><td>${adProfName(t.assignee_id)}</td><td>${adTeamName(t.team_id)}</td><td>${adFmtMD(t.start_date)}</td><td${t.status==='late'?' style="color:var(--red);font-weight:700"':''}>${adFmtMD(t.due_date)}${t.status==='late'?' ⚠':''}</td><td>${adPriChip(t.priority)}</td><td>${adStChip(t.status)}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--text3);font-size:12px;padding:20px">タスクがありません</td></tr>';
+  const f=document.getElementById('ad-task-filters');
+  if(f){
+    const cnt=st=>st==='all'?rows.length:rows.filter(t=>t.status===st).length;
+    f.innerHTML=[['all','全て'],['wip','進行中'],['done','完了'],['late','遅延'],['todo','未着手']].map(([k,l],i)=>`<button class="f-btn${i===0?' active':''}" onclick="filterTasks('${k}',this)">${l} (${cnt(k)})</button>`).join('');
+  }
+}
+function adRenderGoals(){
+  if(!AD.ready)return;
+  const con=document.getElementById('ad-goals');if(!con)return;
+  const raw=AD.raw,T=AD.TEAMS;
+  let h='',n=0;
+  Object.keys(T).forEach(k=>{
+    const t=T[k];const c=raw.mandala_charts.find(x=>x.owner_type==='team'&&x.owner_team_id===t.uid);
+    if(!c)return;n++;
+    const col=t.rate>=80?'var(--green)':t.rate>=60?'var(--accent)':'var(--amber)';
+    const teamTasks=raw.tasks.filter(x=>x.team_id===t.uid);
+    const kpiRows=(c.subs||[]).map((s,i)=>{
+      const rel=teamTasks.filter(x=>x.related_kgi===s);
+      const p=rel.length?Math.round(rel.reduce((a,x)=>a+(x.progress||0),0)/rel.length):t.rate;
+      const pc=p>=80?'var(--green)':p>=60?'var(--accent)':'var(--amber)';
+      const owner=rel.length?adProfName(rel[0].assignee_id):t.leaderName||'—';
+      return `<div class="kpi-row"><div class="kpi-name">KPI ${n}-${i+1} &nbsp;${s}</div><div class="kpi-who">担当: ${owner}</div><div class="kpi-prog"><div class="pt"><div class="pf" style="width:${p}%;background:${pc}"></div></div><span class="pp" style="color:${pc}">${p}%</span><span style="font-size:10px;color:var(--text3)">${rel.length?rel.length+'タスク':'達成率準拠'}</span></div></div>`;
+    }).join('');
+    h+=`<div class="kgi-card"><div class="kgi-hd${n===1?' open':''}" onclick="toggleKgi('adkgi${n}',this)"><span class="karrow${n===1?' open':''}">▶</span><div style="flex:1"><div class="kgi-title">KGI-${n} &nbsp;${(c.center||'').replace(/\n/g,' ')}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">担当: ${t.leaderName||'—'}（${t.name}） ／ ${c.period||''}</div></div><div class="pw" style="min-width:160px"><div class="pt"><div class="pf" style="width:${t.rate}%;background:${col}"></div></div><div class="pp" style="color:${col}">${t.rate}%</div></div><span class="chip ${t.rate>=100?'s-done':'s-wip'}" style="margin-left:10px">${t.rate>=100?'達成':'進行中'}</span></div><div id="adkgi${n}" class="kgi-body${n===1?' open':''}">${kpiRows}</div></div>`;
+  });
+  con.innerHTML=h||'<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">チームの曼荼羅チャートがありません</div></div>';
+}
+function adRenderReviews(){
+  if(!AD.ready)return;
+  const raw=AD.raw;
+  const tb=document.getElementById('ad-reviews-tbody');if(!tb)return;
+  const rows=raw.evaluations.slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))).slice(0,50);
+  tb.innerHTML=rows.map(ev=>{
+    const target=ev.target_type==='team'?adTeamName(ev.target_team_id):adProfName(ev.target_user_id);
+    const self=ev.evaluator_id&&ev.evaluator_id===ev.target_user_id;
+    const roleB=self?'<span class="badge b-employee">自己評価</span>':ev.evaluator_role==='executive'?'<span class="badge b-admin">幹部</span>':'<span class="badge b-manager">リーダー</span>';
+    return `<tr><td>${target}</td><td>${adProfName(ev.evaluator_id)}</td><td>${roleB}</td><td>${ev.period||'—'}</td><td style="color:var(--amber);font-weight:700">${adStars(ev.kgi_stars)}</td><td style="font-size:11px;color:var(--text2)">${(ev.kgi_comment||'').slice(0,40)}</td></tr>`;
+  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text3);font-size:12px;padding:20px">評価はまだありません</td></tr>';
+}
+function adRenderEvalRecs(){
+  if(!AD.ready)return;
+  const tb=document.getElementById('ad-evalrec-tbody');if(!tb)return;
+  const rows=AD.raw.eval_records.slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  tb.innerHTML=rows.map(r=>{
+    const total=Math.round(((+r.kgi||0)+(+r.csf_avg||0)+(+r.task_avg||0))/3*10)/10;
+    const col=total>=4?'var(--green)':total>=3?'var(--accent)':'var(--amber)';
+    return `<tr><td>${r.evaluatee_name||''}</td><td>${r.evaluator_name||''}</td><td>${r.period||''}</td><td style="font-weight:700;color:${col}">${(+r.kgi||0).toFixed(1)}</td><td style="font-weight:700;color:${col}">${(+r.csf_avg||0).toFixed(1)}</td><td style="font-weight:700;color:${col}">${(+r.task_avg||0).toFixed(1)}</td><td style="font-size:15px;font-weight:800;color:${col}">${total.toFixed(1)}</td><td style="font-size:11px;color:var(--text2)">${(r.comment||'').slice(0,30)}</td><td><span class="chip s-done">完了</span></td></tr>`;
+  }).join('')||'<tr><td colspan="9" style="text-align:center;color:var(--text3);font-size:12px;padding:20px">評価記録はまだありません</td></tr>';
+}
+function adRenderTeamGrid(){
+  if(!AD.ready)return;
+  const con=document.getElementById('ad-team-grid');if(!con)return;
+  const raw=AD.raw,T=AD.TEAMS;
+  con.innerHTML=Object.keys(T).map(k=>{
+    const t=T[k];
+    const mems=raw.team_members.filter(m=>m.team_id===t.uid).sort((a,b)=>(b.achievement_rate||0)-(a.achievement_rate||0)).slice(0,4);
+    const rows=mems.map(m=>{const r=m.achievement_rate||0;const col=r>=80?'var(--green)':r>=60?'var(--accent)':'var(--amber)';return `<div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">${adProfName(m.profile_id)}</div><div class="pw"><div class="pt"><div class="pf" style="width:${r}%;background:${col}"></div></div><div class="pp" style="color:${col}">${r}%</div></div></div>`;}).join('');
+    return `<div class="card"><div class="card-hd" style="border-left:4px solid ${t.color}"><div><div class="card-title">${t.name}</div><div class="card-sub">リーダー: ${t.leaderName||'—'} / ${t.members.length}名</div></div><span style="font-size:20px;font-weight:800;color:${t.color}">${t.rate}%</span></div><div class="card-body" style="padding:10px 14px">${rows}<div style="text-align:right;padding-top:6px"><button class="card-btn" onclick="openMandala('${k}')" style="font-size:11px;color:${t.color}">🧿 曼荼羅チャートを見る</button></div></div></div>`;
+  }).join('')||'<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">チームがありません</div></div>';
+}
+function adRenderUsers(){
+  if(!AD.ready)return;
+  const tb=document.getElementById('ad-users-tbody');if(!tb)return;
+  const raw=AD.raw;
+  const tmByPid={};raw.team_members.forEach(m=>{tmByPid[m.profile_id]=m;});
+  tb.innerHTML=raw.profiles.map(p=>{
+    const tm=tmByPid[p.id];
+    return `<tr><td>${p.full_name}</td><td>${p.email}</td><td>${adRoleBadge(p.role)}</td><td${tm?'':' style="color:var(--text3)"'}>${tm?adTeamName(tm.team_id):'—'}</td><td>${p.department||'—'}</td><td><button class="card-btn" onclick="adEditUser('${p.id}')">編集</button></td></tr>`;
+  }).join('');
+}
+function adRenderUnassigned(){
+  if(!AD.ready)return;
+  const con=document.getElementById('ad-unassigned');if(!con)return;
+  const rows=AD.raw.tasks.filter(t=>!t.assignee_id&&t.status!=='done');
+  con.innerHTML=rows.map((t,i)=>`<div style="padding:12px 16px;${i<rows.length-1?'border-bottom:1px solid var(--border);':''}display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:12px;font-weight:600">${t.title}</div><div style="font-size:10px;color:var(--text3)">期限: ${adFmtMD(t.due_date)} ／ 優先度: ${(AD_PRI[t.priority]||AD_PRI.md)[1]}</div></div><button class="card-btn" onclick="adPickUnassigned('${t.id}')">割当</button></div>`).join('')||'<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">未割当タスクはありません</div>';
+}
+function adPopulateSelects(){
+  if(!AD.ready)return;
+  const raw=AD.raw;
+  const profOpts=raw.profiles.map(p=>`<option value="${p.id}">${p.full_name}</option>`).join('');
+  ['ad-tm-leader','ad-kg-owner','ad-kp-owner','ad-tk-member','ad-as-member','ad-ev-target'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML=profOpts;});
+  const tmm=document.getElementById('ad-tm-members');if(tmm)tmm.innerHTML=profOpts;
+  const teamOpts=raw.teams.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  const act=document.getElementById('ad-ac-team');if(act)act.innerHTML='<option value="">—（未所属）</option>'+teamOpts;
+  const tkt=document.getElementById('ad-tk-team');if(tkt)tkt.innerHTML='<option value="">—</option>'+teamOpts;
+  const kpc=document.getElementById('ad-kp-chart');
+  if(kpc){kpc.innerHTML=raw.mandala_charts.map(c=>`<option value="${c.id}">${c.name} — ${(c.center||'').replace(/\n/g,' ')}</option>`).join('');adKpUpdateCsf();}
+  const sendTo=document.getElementById('mnd-send-to');
+  if(sendTo){
+    const tmByPid={};raw.team_members.forEach(m=>{tmByPid[m.profile_id]=m;});
+    sendTo.innerHTML=raw.profiles.filter(p=>p.role==='leader'||p.role==='member').map(p=>{
+      const tm=tmByPid[p.id];
+      return `<option value="${p.id}">${p.full_name}（${tm?adTeamName(tm.team_id):'未所属'} · ${p.role==='leader'?'リーダー':'従業員'}）</option>`;
+    }).join('');
+  }
+  const tpl=document.getElementById('mnd-tpl-sel');
+  if(tpl)tpl.innerHTML='<option value="">— 空白から作成 —</option>'+Object.keys(MND).filter(k=>!k.startsWith('__')).map(k=>`<option value="${k}">${MND[k].name} テンプレート</option>`).join('');
+}
+function adRenderAll(){adRenderDashboard();adRenderTasks();adRenderGoals();adRenderReviews();adRenderEvalRecs();adRenderTeamGrid();adRenderUsers();adRenderUnassigned();adPopulateSelects();}
+async function adReload(){
+  const API=window.VexumAPI;if(!(API&&API.ready))return;
+  const[d,raw]=await Promise.all([API.loadAdminData(),API.fetchAll()]);
+  if(d){AD.TEAMS=d.TEAMS;AD.MEMBERS=d.MEMBERS;}
+  if(raw){AD.raw=raw;AD.ready=true;}
+  adRenderAll();
+}
+
+/* ---- フォーム処理 ---- */
+async function adCreateAccount(btn){
+  const name=(document.getElementById('ad-ac-name').value||'').trim();
+  const email=(document.getElementById('ad-ac-email').value||'').trim();
+  if(!name||!email){alert('氏名とメールアドレスを入力してください');return;}
+  const role=document.getElementById('ad-ac-role').value;
+  const dept=document.getElementById('ad-ac-dept').value;
+  const teamUuid=document.getElementById('ad-ac-team').value||null;
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const res=await API.createAccount({name,email,role,department:dept,teamUuid});
+    if(res&&res.error){alert('発行失敗: '+res.error);return;}
+    if(res.loginEnabled)alert('✅ アカウントを発行しました。\n\nメール: '+email+'\n初期パスワード: '+res.password+'\n\n本人に共有し、初回ログイン後の変更を案内してください。');
+    else alert('✅ プロフィールを作成しました（ログイン有効化は失敗。再度PW再発行をお試しください）');
+    await adReload();
+  }
+  document.getElementById('ad-ac-name').value='';document.getElementById('ad-ac-email').value='';
+  adBtnDone(btn,'✓ 発行しました');
+}
+async function adCreateTeam(btn){
+  const name=(document.getElementById('ad-tm-name').value||'').trim();
+  if(!name){alert('チーム名を入力してください');return;}
+  const color=document.getElementById('ad-tm-color').value;
+  const leaderPid=document.getElementById('ad-tm-leader').value;
+  const members=[...document.getElementById('ad-tm-members').selectedOptions].map(o=>({pid:o.value}));
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    if(!members.some(m=>m.pid===leaderPid))members.push({pid:leaderPid});
+    const res=await API.createTeamRemote({name,color,leaderPid,members});
+    if(res&&res.error){alert('作成失敗: '+res.error);return;}
+    await adReload();
+  }
+  document.getElementById('ad-tm-name').value='';
+  adBtnDone(btn,'✓ 作成しました');
+}
+async function adCreateKgi(btn){
+  const title=(document.getElementById('ad-kg-title').value||'').trim();
+  if(!title){alert('KGIタイトルを入力してください');return;}
+  const owner=document.getElementById('ad-kg-owner').value;
+  const target=document.getElementById('ad-kg-target').value;
+  const start=document.getElementById('ad-kg-start').value;
+  const end=document.getElementById('ad-kg-end').value;
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const res=await API.upsertMemberChart({
+      pid:owner,id:'user_'+owner+'_'+Date.now(),
+      name:title.slice(0,20),center:title+(target?'\n目標 '+target:''),
+      subs:Array(8).fill(''),acts:Array.from({length:8},()=>Array(8).fill(''))
+    });
+    if(res&&res.error){alert('作成失敗: '+res.error);return;}
+    if(start||end)await API.updateChart(res.data.id,{period:(start||'')+'〜'+(end||''),start_date:start||null});
+    await adReload();
+  }
+  document.getElementById('ad-kg-title').value='';
+  adBtnDone(btn,'✓ 作成しました');
+}
+function adKpUpdateCsf(){
+  if(!AD.ready)return;
+  const cid=document.getElementById('ad-kp-chart').value;
+  const c=AD.raw.mandala_charts.find(x=>x.id===cid);
+  const sel=document.getElementById('ad-kp-csf');if(!sel)return;
+  sel.innerHTML=c?(c.subs||[]).map((s,i)=>`<option value="${i}">CSF-${i+1} ${s||'（未設定）'}</option>`).join(''):'<option>—</option>';
+}
+async function adCreateKpi(btn){
+  const title=(document.getElementById('ad-kp-title').value||'').trim();
+  if(!title){alert('KPIタイトルを入力してください');return;}
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const cid=document.getElementById('ad-kp-chart').value;
+    const si=+document.getElementById('ad-kp-csf').value||0;
+    const owner=document.getElementById('ad-kp-owner').value;
+    const target=document.getElementById('ad-kp-target').value,unit=document.getElementById('ad-kp-unit').value,freq=document.getElementById('ad-kp-freq').value;
+    const c=AD.raw.mandala_charts.find(x=>x.id===cid);
+    if(!c){alert('チャートを選択してください');return;}
+    const acts=(c.acts||[]).map(r=>[...(r||[])]);
+    while(acts.length<8)acts.push(Array(8).fill(''));
+    const slot=acts[si].findIndex(v=>!v);
+    if(slot<0){alert('このCSFのKPI枠（8件）は満杯です');return;}
+    acts[si][slot]=title+(target?`（目標${target}${unit||''}・${freq}）`:'');
+    const r1=await API.updateChart(cid,{acts});
+    if(r1&&r1.error){alert('チャート更新失敗: '+r1.error);return;}
+    const csfName=(c.subs||[])[si]||'';
+    const r2=await API.assignTask({title,kpi:csfName||null,assigneePid:owner,priority:'md'});
+    if(r2&&r2.error){alert('タスク作成失敗: '+r2.error);return;}
+    await adReload();
+  }
+  document.getElementById('ad-kp-title').value='';
+  adBtnDone(btn,'✓ 作成しました');
+}
+function adPickUnassigned(idOrName){
+  if(AD.ready){
+    const t=AD.raw.tasks.find(x=>String(x.id)===String(idOrName));
+    if(t){_adUnassignedPick=t;document.getElementById('ad-as-name').value=t.title;
+      if(t.start_date)document.getElementById('ad-as-start').value=t.start_date;
+      if(t.due_date)document.getElementById('ad-as-due').value=t.due_date;
+      document.getElementById('ad-as-pri').value=t.priority||'md';}
+  }else{
+    document.getElementById('ad-as-name').value=idOrName;
+  }
+  document.getElementById('ad-as-name').focus();
+}
+async function adAssignTask(prefix,btn){
+  const name=(document.getElementById(prefix+'-name').value||'').trim();
+  if(!name){alert('タスク名を入力してください');return;}
+  const member=document.getElementById(prefix+'-member').value;
+  const start=document.getElementById(prefix+'-start').value||null;
+  const due=document.getElementById(prefix+'-due').value||null;
+  const pri=document.getElementById(prefix+'-pri').value||'md';
+  const teamEl=document.getElementById(prefix+'-team');
+  const teamUuid=teamEl?(teamEl.value||null):null;
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    let res;
+    if(prefix==='ad-as'&&_adUnassignedPick&&_adUnassignedPick.title===name){
+      res=await API.updateTask(_adUnassignedPick.id,{assigneePid:member,start,due,priority:pri,status:'todo'});
+      _adUnassignedPick=null;
+    }else{
+      res=await API.assignTask({title:name,assigneePid:member,teamUuid,start,due,priority:pri,source:'executive'});
+    }
+    if(res&&res.error){alert('割当失敗: '+res.error);return;}
+    await adReload();
+  }
+  document.getElementById(prefix+'-name').value='';
+  adBtnDone(btn,'✓ 割当しました');
+}
+function adEvTotal(){
+  const g=+document.getElementById('ad-ev-kgi').value||0;
+  const c=+document.getElementById('ad-ev-csf').value||0;
+  const t=+document.getElementById('ad-ev-task').value||0;
+  const e=document.getElementById('ad-ev-total');
+  if(e)e.value=(g||c||t)?(Math.round((g+c+t)/3*10)/10).toFixed(1):'';
+}
+async function adSaveEval(btn){
+  const g=+document.getElementById('ad-ev-kgi').value||0;
+  const c=+document.getElementById('ad-ev-csf').value||0;
+  const t=+document.getElementById('ad-ev-task').value||0;
+  if(!g&&!c&&!t){alert('評価値を入力してください');return;}
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const sel=document.getElementById('ad-ev-target');
+    const res=await API.saveEvalRecord({
+      evaluateePid:sel.value,evaluateeName:sel.options[sel.selectedIndex].text,
+      period:document.getElementById('ad-ev-period').value,
+      kgi:g,csf:c,task:t,comment:document.getElementById('ad-ev-comment').value||''
+    });
+    if(res&&res.error){alert('保存失敗: '+res.error);return;}
+    await adReload();
+  }
+  document.getElementById('ad-ev-comment').value='';
+  adBtnDone(btn,'✓ 保存しました');
+}
+/* ---- アカウント編集モーダル ---- */
+let _adEditPid=null;
+function adEditUser(pid){
+  if(!AD.ready){alert('Supabase未接続のため編集できません（デモ表示）');return;}
+  const p=AD.raw.profiles.find(x=>x.id===pid);if(!p)return;
+  _adEditPid=pid;
+  document.getElementById('ad-um-name').value=p.full_name;
+  document.getElementById('ad-um-email').value=p.email;
+  document.getElementById('ad-um-role').value=p.role==='admin'?'管理者':p.role==='executive'?'幹部':p.role==='leader'?'リーダー':'メンバー';
+  document.getElementById('ad-um-msg').textContent='';
+  document.getElementById('ad-user-modal').style.display='flex';
+}
+function adCloseUser(){document.getElementById('ad-user-modal').style.display='none';_adEditPid=null;}
+async function adSaveUser(btn){
+  if(!_adEditPid)return;
+  const API=window.VexumAPI;
+  const res=await API.updateAccount(_adEditPid,{name:document.getElementById('ad-um-name').value,email:document.getElementById('ad-um-email').value,role:document.getElementById('ad-um-role').value});
+  if(res&&res.error){alert('更新失敗: '+res.error);return;}
+  document.getElementById('ad-um-msg').textContent='✓ 保存しました';
+  await adReload();
+}
+async function adResetPw(btn){
+  if(!_adEditPid)return;
+  const API=window.VexumAPI;
+  const email=document.getElementById('ad-um-email').value;
+  const res=await API.resetPassword(email);
+  if(res&&res.error){alert('再発行失敗: '+res.error);return;}
+  alert('🔑 新しいパスワード: '+res.password+'\n\n本人に共有してください。');
+}
+async function adDeleteUser(btn){
+  if(!_adEditPid)return;
+  if(!confirm('このアカウントを削除しますか？（関連タスク・評価も削除されます）'))return;
+  const API=window.VexumAPI;
+  const res=await API.deleteAccount(_adEditPid);
+  if(res&&res.error){alert('削除失敗: '+res.error);return;}
+  adCloseUser();
+  await adReload();
 }
 </script>
 
@@ -887,6 +1271,8 @@ async function sendMandala(){
     if(typeof renderMandalaList==='function') renderMandalaList();
     console.log('[VEXUM] Supabaseデータを反映しました');
   }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:',e); });
+  // 統括コンソール全タブのライブ化（ダッシュボード/タスク/目標/評価/チーム/アカウント/割当/フォーム選択肢）
+  if(typeof adReload==='function') adReload().catch(function(e){ console.warn('[VEXUM] 統括ライブ化失敗:',e); });
 })();
 </script>
 </body>

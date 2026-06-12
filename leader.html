@@ -995,9 +995,15 @@ function renderTeamEdit(){
   </div></div>`;
   con.innerHTML=h;
 }
-function saveTeamInfo(){
+async function saveTeamInfo(){
   const n=val('te-name');if(!n){alert('チーム名を入力してください');return;}
-  teamMeta.name=n;teamMeta.color=document.getElementById('te-color').value;
+  const color=document.getElementById('te-color').value;
+  const API=window.VexumAPI;
+  if(API&&API.ready&&teamMeta.uid){
+    const res=await API.updateTeam(teamMeta.uid,{name:n,color});
+    if(res&&res.error){alert('保存失敗: '+res.error);return;}
+  }
+  teamMeta.name=n;teamMeta.color=color;
   DASH_IDS.forEach(id=>{if(MEMBERS[id])MEMBERS[id].team=n;});
   updateTeamLabel();renderTeamEdit();renderDashboard();showToast('te-saved');
 }
@@ -1013,13 +1019,26 @@ async function addFromRoster(id){
   DASH_IDS.push(id);EVAL_IDS.push(id);
   populateSelects();updateTeamLabel();renderTeamEdit();renderDashboard();showToast('te-added');
 }
-function addTeamMember(){
+async function addTeamMember(){
   const name=val('te-mname');if(!name){alert('氏名を入力してください');return;}
   const role=document.getElementById('te-mrole').value;
   const email=val('te-memail')||'—';
   let rate=parseInt(document.getElementById('te-mrate').value,10);if(isNaN(rate))rate=50;rate=Math.max(0,Math.min(100,rate));
+  const API=window.VexumAPI;
+  let pid=null;
+  if(API&&API.ready){
+    if(!email||email==='—'){alert('メールアドレスを入力してください（ログイン発行に必要です）');return;}
+    const res=await API.createAccount({name,email,role:role==='リーダー'?'リーダー':'メンバー',teamUuid:teamMeta.uid,rate});
+    if(res&&res.error){
+      alert('新規アカウントの発行は幹部・統括のみ可能です。\n既存メンバーは「登録アカウントから追加」をご利用ください。\n\n（詳細: '+res.error+'）');
+      return;
+    }
+    pid=res.pid;
+    if(res.loginEnabled)alert('✅ アカウントを発行しチームに追加しました。\n\nメール: '+email+'\n初期パスワード: '+res.password+'\n\n本人に共有してください。');
+  }
   const id='m'+Date.now().toString(36);
   MEMBERS[id]=makeMember(name,role,email,rate,TEAM_COLORS[DASH_IDS.length%TEAM_COLORS.length],teamMeta.name);
+  if(pid)MEMBERS[id].pid=pid;
   DASH_IDS.push(id);EVAL_IDS.push(id);
   populateSelects();updateTeamLabel();renderTeamEdit();renderDashboard();showToast('te-madded');
 }
