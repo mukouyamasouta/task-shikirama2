@@ -15,9 +15,10 @@ web/
   ├ config.example.js   … config.js の雛形（URL/anonキー）
   └ INTEGRATION.md      … 連携の技術詳細
 supabase/
-  ├ REBUILD.sql              … バックエンド一括構築（テーブル/RLS/RPC/シード/Auth）
-  ├ 15_backend_complete.sql  … 既存DB用 同期パッチ（冪等）
-  └ 12〜14_*.sql             … 過去の個別パッチ（履歴・15が包含）
+  ├ REBUILD.sql                 … バックエンド一括構築（テーブル/RLS/RPC/シード/Auth）
+  ├ 15_backend_complete.sql     … 既存DB用 同期パッチ（冪等）
+  ├ 16_one_account_one_role.sql … 1人=1アカウント=1ロール 正規化（冪等）
+  └ 12〜14_*.sql                … 過去の個別パッチ（履歴・15/16が包含）
 vercel.json             … 静的ホスティング設定
 ```
 **動作原理**: 画面は内蔵デモで描画 → `web/config.js` 設定時のみ Supabase 実データで上書き再描画。
@@ -29,18 +30,22 @@ vercel.json             … 静的ホスティング設定
 1. https://supabase.com でプロジェクト作成（リージョンは Tokyo 推奨）。
 2. **SQL Editor** で以下を順に貼り付けて実行（SQL Editor は service_role 権限で動くため RLS を気にせず投入可）:
    1. `supabase/REBUILD.sql` … 全テーブル/RLS/RPC/シード/Authユーザーを一括作成（既存データは破棄）
-   2. `supabase/15_backend_complete.sql` … adminログイン復旧＋列の最終確認（冪等）
-3. 15 の末尾の確認クエリが `1 / 1 / 1 / 1` を返せば完了。
+   2. `supabase/15_backend_complete.sql` … 列の最終確認（冪等）
+   3. `supabase/16_one_account_one_role.sql` … 1人=1アカウント=1ロールの正規化（冪等）
+3. 16 の末尾の確認クエリが `4 / 0 / 0 / 0` を返せば完了
+   （既存DBに16だけ当てる場合も同じ。「別の人の名前で表示される」症状は16で解消）。
 
 ---
 
 ## 2. ログインアカウント（REBUILD が自動作成 / 共通PW: vexum2025）
 認証ユーザーは REBUILD.sql が profiles と紐付けて自動作成します。手動作成は不要です。
+**1人=1アカウント=1ロール=1画面**: 各画面は該当ロール専用で、別ロールのURLを開いても
+自分の画面へ自動リダイレクトされます。切替はサイドバーの「⎋ ログアウト」から。
 
 | 氏名 | メール | role | 遷移先 |
 |---|---|---|---|
 | 山田 太郎 | yamada@com | admin | 統括画面 |
-| 山本（幹部） | yamamoto@com | executive | 幹部画面 |
+| 山本 雅人 | yamamoto@com | executive | 幹部画面 |
 | 田中 花子 | tanaka@vexum.co.jp | leader | リーダー画面（営業チームA） |
 | 中村 健太 | nakamura@vexum.co.jp | member | 個人画面 |
 
@@ -91,6 +96,9 @@ git push origin design-d-migration         # 確認後に main へマージ/上�
 
 ## 5. 動作確認チェックリスト
 - [ ] `/` で tanaka@vexum.co.jp でログイン → リーダー画面に遷移
+- [ ] 4アカウントそれぞれでログイン → サイドバーに**本人の氏名・メール**が表示される
+- [ ] ログイン中に他ロールのURL（例: member で `/admin`）を開く → 自分の画面へ自動リダイレクト
+- [ ] サイドバー「⎋ ログアウト」→ ログイン画面へ戻り、別アカウントで入り直せる
 - [ ] 各画面でブラウザのコンソールに `[VEXUM] Supabaseデータを反映しました` が出る
 - [ ] 幹部画面: アカウント管理にチーム・メンバーが表示／アカウント発行でPWが表示される
 - [ ] リーダー画面: ダッシュボード/評価/日報カレンダーに実データ
@@ -125,6 +133,8 @@ git push origin design-d-migration         # 確認後に main へマージ/上�
 
 - 統括画面: 全タブのライブ化（ダッシュボード/タスク/目標/評価/チームDB/アカウント編集・PW再発行・削除/
   未割当タスクの割当/評価入力/チャート送信）。KPI進捗はタスク実績から自動導出。
+- アカウント体系: 1人=1アカウント=1ロール=1画面（ロールガード/全画面ログアウト/
+  メールCI一意制約/紐付け正規化 = 16_one_account_one_role.sql）。
 
 **既知の制限**
 - なし（残課題はすべて解消済み。新規要望は Issues へ）

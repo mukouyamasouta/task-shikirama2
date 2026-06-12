@@ -45,6 +45,9 @@ create table profiles (
   color        text default '#0D9488',
   created_at   timestamptz default now()
 );
+-- 1人=1アカウント=1ロール: email は大文字小文字を区別せず一意、
+-- auth_user_id unique で1ログイン=1プロフィール、role は enum 単一列で1ロールのみ
+create unique index uq_profiles_email_ci on profiles (lower(email));
 create table teams (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
@@ -339,8 +342,8 @@ for each row execute function handle_new_user();
 -- ========== 6. SEED: アカウント / チーム / 所属 ==========
 -- ---- profiles（16アカウント） ----
 insert into profiles (id, full_name, email, role, department, color) values
-('a0000000-0000-4000-8000-000000000001','山田 太郎','yamada@vexum.co.jp',   'admin',    '経営企画部','#0D9488'),
-('a0000000-0000-4000-8000-000000000002','木村 雅人','kimura@vexum.co.jp',   'executive','経営管理本部','#0D9488'),
+('a0000000-0000-4000-8000-000000000001','山田 太郎','yamada@com',           'admin',    '経営企画部','#0D9488'),
+('a0000000-0000-4000-8000-000000000002','山本 雅人','yamamoto@com',         'executive','経営管理本部','#0D9488'),
 ('a0000000-0000-4000-8000-000000000003','田中 花子','tanaka@vexum.co.jp',   'leader',   '営業部',  '#0D9488'),
 ('a0000000-0000-4000-8000-000000000004','中村 健太','nakamura@vexum.co.jp', 'member',   '営業部',  '#06B6D4'),
 ('a0000000-0000-4000-8000-000000000005','伊藤 さくら','ito@vexum.co.jp',    'member',   '営業部',  '#F59E0B'),

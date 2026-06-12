@@ -191,7 +191,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <aside class="sidebar">
   <div class="sb-logo"><div class="sb-brand">VEXUM</div><div class="sb-brand-sub">TASK MANAGEMENT SYSTEM</div></div>
   <div class="sb-role"><span class="sb-role-dot"></span><span class="sb-role-lbl">★ ADMIN / 統合管理</span></div>
-  <div class="sb-user"><div class="sb-uname">山田 太郎</div><div class="sb-uemail">yamada@vexum.co.jp</div></div>
+  <div class="sb-user"><div class="sb-uname" id="sb-uname">山田 太郎</div><div class="sb-uemail" id="sb-uemail">yamada@com</div><button onclick="vexumLogout()" style="margin-top:6px;font-size:10px;color:var(--text3);background:none;border:1px solid var(--sb-border);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit">⎋ ログアウト</button></div>
   <div class="sb-nav">
     <div class="sb-sec">統合管理コンソール</div>
     <button class="sb-item active" onclick="swTab('progress',this)"><span class="sb-icon">◇</span>進捗ダッシュボード</button>
@@ -1261,9 +1261,22 @@ async function adDeleteUser(btn){
 <script src="./web/config.js" onerror="this.dataset.miss=1"></script>
 <script src="./web/api.js"></script>
 <script>
+function vexumLogout(){
+  var API=window.VexumAPI;
+  var done=function(){ location.replace('./index.html'); };
+  if(API&&API.ready){ try{ API.sb.auth.signOut().then(done).catch(done); }catch(e){ done(); } }
+  else done();
+}
 (function(){
   var API=window.VexumAPI; if(!API||!API.ready) return;
-  API.currentProfile().then(function(_m){ if(!_m){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); } });
+  // ロールガード: この画面は admin 専用。他ロールは自分の画面へ（1アカウント=1ロール=1画面）
+  var DEST={admin:'./admin.html',executive:'./executive.html',leader:'./leader.html',member:'./employee.html'};
+  API.currentProfile().then(function(p){
+    if(!p){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); return; }
+    if(p.role!=='admin'){ location.replace(DEST[p.role]||'./index.html'); return; }
+    var un=document.getElementById('sb-uname'); if(un)un.textContent=p.full_name;
+    var ue=document.getElementById('sb-uemail'); if(ue)ue.textContent=p.email;
+  });
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   API.loadTokatsuData().then(function(d){
     if(!d) return;

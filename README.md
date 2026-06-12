@@ -29,15 +29,22 @@ VEXUM
 
 ## 2. アカウント一覧（現行・共通パスワード: `vexum2025`）
 
+> **原則: 1人=1アカウント=1ロール=1画面。**
+> メールは一意（DB制約）・ログインとプロフィールは1対1・ロールは
+> admin / executive / leader / member のどれか1つだけ（enum単一列）。
+> 各画面は該当ロール専用で、別ロールでURLを開いても自分の画面へ自動遷移します。
+> アカウントの切替はサイドバーの「⎋ ログアウト」から行います。
+
 | 氏名 | メール | ロール | 担当画面 |
 |---|---|---|---|
 | 山田 太郎 | yamada@com | admin | 統括画面 |
-| 山本（幹部） | yamamoto@com | executive | 幹部画面 |
+| 山本 雅人 | yamamoto@com | executive | 幹部画面 |
 | 田中 花子 | tanaka@vexum.co.jp | leader | リーダー画面（営業チームA） |
 | 中村 健太 | nakamura@vexum.co.jp | member | 個人画面 |
 
 > 追加アカウントは ①幹部画面の「アカウント発行」（即ログイン可・PW自動発行）
 > ②ログイン画面の「新規登録」（セルフ登録 → member）のどちらでも作成できます。
+> ※ 既存メールでの再発行は同一アカウントの更新になり、二重アカウントは作られません。
 
 ---
 
@@ -126,8 +133,8 @@ VEXUM
 1. [supabase.com](https://supabase.com) でプロジェクト作成
 2. SQL Editor で `supabase/REBUILD.sql` を実行
    → テーブル・RLS・RPC・シード・ログイン用Authユーザー（PW: `vexum2025`）まで一括作成
-3. 続けて `supabase/15_backend_complete.sql` を実行
-   → 統括(admin)ログインの復旧と列の最終確認
+3. 続けて `supabase/15_backend_complete.sql` → `supabase/16_one_account_one_role.sql` を実行
+   → 列の最終確認＋「1人=1アカウント=1ロール」の正規化（確認クエリが `4 / 0 / 0 / 0`）
 4. `web/config.js` に URL と anon key を設定:
    ```js
    window.SUPABASE_CONFIG = {
@@ -138,10 +145,13 @@ VEXUM
 5. Vercel に config.js をプッシュ → 自動デプロイ
 
 ### 既存プロジェクト（REBUILD実行済み）の場合
-- `supabase/15_backend_complete.sql` のみ実行（冪等・再実行安全）。
-  自己評価の提出フラグ・KPI本人編集列・adminログインが揃います。
+- `supabase/15_backend_complete.sql` → `supabase/16_one_account_one_role.sql` の順に実行
+  （どちらも冪等・再実行安全）。
+  15: 自己評価の提出フラグ・KPI本人編集列。
+  16: アカウントの正規化（同名・二重アカウントの解消、ログインと名前の紐付け修復、
+      メール一意制約）。**「別の人の名前で表示される」症状はこれで解消します。**
 - `12_add_submitted.sql` / `13_change_exec_email.sql` / `14_kpi_edits.sql` は
-  過去の個別パッチ（履歴）。15 がすべて包含します（13のメール変更を除く）。
+  過去の個別パッチ（履歴）。15・16 がすべて包含します。
 
 > **デモモード**: config.js 未設定のままでも全機能がデモデータで動作します。
 
@@ -174,11 +184,12 @@ VEXUM
 │   ├── config.js       # Supabase接続設定（要設定・anonキーのみ）
 │   └── config.example.js
 └── supabase/
-    ├── REBUILD.sql               # バックエンド一括構築（テーブル/RLS/RPC/シード/Auth）
-    ├── 15_backend_complete.sql   # 既存DB用 同期パッチ（冪等）
-    ├── 12_add_submitted.sql      # （履歴）自己評価 提出フラグ
-    ├── 13_change_exec_email.sql  # （履歴）幹部メール変更
-    └── 14_kpi_edits.sql          # （履歴）KPI本人編集列
+    ├── REBUILD.sql                  # バックエンド一括構築（テーブル/RLS/RPC/シード/Auth）
+    ├── 15_backend_complete.sql      # 既存DB用 同期パッチ（冪等）
+    ├── 16_one_account_one_role.sql  # 1人=1アカウント=1ロール 正規化（冪等）
+    ├── 12_add_submitted.sql         # （履歴）自己評価 提出フラグ
+    ├── 13_change_exec_email.sql     # （履歴）幹部メール変更
+    └── 14_kpi_edits.sql             # （履歴）KPI本人編集列
 ```
 
 ---

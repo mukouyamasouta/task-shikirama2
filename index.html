@@ -55,6 +55,16 @@ button:disabled{opacity:.6}
   var API = window.VexumAPI || {};
   if(!API.ready){ document.getElementById('warn').style.display='block'; }
   var DEST = { admin:'./admin.html', executive:'./executive.html', leader:'./leader.html', member:'./employee.html' };
+  // ログイン済みなら自分のロールの画面へ自動遷移（1アカウント=1ロール=1画面）
+  if(API.ready){
+    API.currentProfile().then(function(p){
+      if(p && DEST[p.role]){
+        var msg=document.getElementById('msg'); msg.className='msg ok';
+        msg.textContent=p.full_name+'（'+p.role+'）でログイン中です。遷移します…';
+        location.replace(DEST[p.role]);
+      }
+    }).catch(function(){});
+  }
   document.getElementById('login').addEventListener('submit', async function(e){
     e.preventDefault();
     var msg=document.getElementById('msg'); msg.className='msg'; msg.textContent='';
@@ -63,11 +73,13 @@ button:disabled{opacity:.6}
     try{
       var email=document.getElementById('email').value.trim();
       var password=document.getElementById('password').value;
+      try{ await API.sb.auth.signOut(); }catch(_e){}  // 前のセッションを破棄してから認証（名前の取り違え防止）
       var res=await API.sb.auth.signInWithPassword({ email:email, password:password });
       if(res.error){ throw res.error; }
       var prof=await API.currentProfile();
       var role=(prof&&prof.role)||'member';
-      msg.className='msg ok'; msg.textContent=(prof?prof.full_name:'')+' としてログインしました。遷移します…';
+      var ROLE_JP={admin:'統括',executive:'幹部',leader:'リーダー',member:'メンバー'};
+      msg.className='msg ok'; msg.textContent=(prof?prof.full_name:'')+'（'+(ROLE_JP[role]||role)+'）としてログインしました。遷移します…';
       location.href = DEST[role] || DEST.member;
     }catch(ex){
       msg.className='msg err'; msg.textContent='ログイン失敗: '+(ex.message||ex);
