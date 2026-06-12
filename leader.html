@@ -147,6 +147,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div class="sb-sec">チームリーダーメニュー</div>
     <button class="sb-item active" onclick="swTab('dashboard',this);renderDashboard()"><span class="sb-icon">▣</span>チームダッシュボード</button>
     <button class="sb-item" onclick="swTab('assign',this);renderAssignedTasks()"><span class="sb-icon">📋</span>タスク割当</button>
+    <button class="sb-item" onclick="swTab('inbox',this);renderInbox()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="inbox-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('teamedit',this);renderTeamEdit()"><span class="sb-icon">⚙</span>チーム編集</button>
     <button class="sb-item" onclick="swTab('evalin',this);renderMemberEval()"><span class="sb-icon">📝</span>メンバー評価入力</button>
     <button class="sb-item" onclick="swTab('evalrec',this);renderEvalRec()"><span class="sb-icon">📊</span>評価記録</button>
@@ -208,6 +209,15 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       </div>
     </div>
   </div>
+</div>
+
+<!-- 受信ボックス -->
+<div id="tc-inbox" class="tab-content">
+  <div class="sec-title">受信ボックス <span style="font-size:11px;font-weight:400;color:var(--text3)">幹部・統括から送信された曼荼羅チャート</span></div>
+  <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
+    <span style="font-size:14px">💡</span><span>「📤 タスクを振り分け」で受信チャートのKPIをメンバーのタスクとして割り当てられます。割り当てたタスクは各メンバーの個人画面（割り当て・チャート管理）に表示されます。</span>
+  </div>
+  <div id="inbox-list"></div>
 </div>
 
 <!-- メンバー評価入力 -->
@@ -473,7 +483,7 @@ function getEvalProgress(k){const st=evalStates[k]||{};return Math.round(Object.
 
 <script>
 /* ===== タブ切替・共通 ===== */
-const TITLES={dashboard:['チームダッシュボード','チームリーダーメニュー / チームDB'],assign:['タスク割当','チームリーダーメニュー / タスク割当'],evalin:['メンバー評価入力','チームリーダーメニュー / 評価入力'],evalrec:['評価記録','チームリーダーメニュー / 評価記録'],report:['日報','チームリーダーメニュー / 日報'],teamedit:['チーム編集','チームリーダーメニュー / チーム編集']};
+const TITLES={dashboard:['チームダッシュボード','チームリーダーメニュー / チームDB'],assign:['タスク割当','チームリーダーメニュー / タスク割当'],inbox:['受信ボックス','チームリーダーメニュー / 受信ボックス'],evalin:['メンバー評価入力','チームリーダーメニュー / 評価入力'],evalrec:['評価記録','チームリーダーメニュー / 評価記録'],report:['日報','チームリーダーメニュー / 日報'],teamedit:['チーム編集','チームリーダーメニュー / チーム編集']};
 function swTab(id,btn){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.getElementById('tc-'+id).classList.add('active');
@@ -1056,6 +1066,158 @@ renderEvalRec();
 renderReports();
 </script>
 
+<!-- ===== 受信ボックス 振り分けモーダル ===== -->
+<div id="ib-assign-modal" onclick="if(event.target===this)ibClose()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9993;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:860px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+      <div><div id="ib-title" style="font-size:15px;font-weight:800;color:#1a1a2e">タスクを振り分け</div>
+      <div id="ib-meta" style="font-size:10px;color:#9ca3af;margin-top:2px">—</div></div>
+      <button onclick="ibClose()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div style="background:var(--accent-l);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:var(--text2)">① KPI（外周）セルをクリックして選択 → ② 担当メンバーと期間を設定 → ③「振り分ける」。<strong style="color:#92400E">黄色</strong>=割当済み／<strong style="color:var(--accent)">緑枠</strong>=選択中</div>
+    <div style="overflow-x:auto;margin-bottom:14px"><div id="ib-grid" style="min-width:520px"></div></div>
+    <div style="border:1px solid var(--border);border-radius:10px;padding:14px">
+      <div id="iba-kpilabel" style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px">KPI未選択 — グリッドのKPIセルをクリックしてください</div>
+      <div class="fr">
+        <div class="fg"><label class="fl">タスク名</label><input class="fi" id="iba-name" placeholder="KPIセルを選択すると自動入力"></div>
+        <div class="fg"><label class="fl">担当メンバー</label><select class="fs" id="iba-member"></select></div>
+      </div>
+      <div class="fr">
+        <div class="fg"><label class="fl">開始日</label><input class="fi" id="iba-start" type="date"></div>
+        <div class="fg"><label class="fl">期限</label><input class="fi" id="iba-due" type="date"></div>
+        <div class="fg"><label class="fl">優先度</label><select class="fs" id="iba-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select></div>
+      </div>
+      <button class="f-submit" style="width:100%" onclick="ibAssign()">📤 このKPIをタスクとして振り分ける</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== 受信ボックス（幹部・統括からのチャート送信 → メンバーへ振り分け） ===== */
+const INBOX=(()=>{ // デモ用: Supabase接続時は実データで置換
+  const src=MEMBERS[DASH_IDS[0]]||{subs:[],acts:[]};
+  return [{id:'demo-ib-1',center:'Q3 全社目標\n売上120%',subs:(src.subs||[]).slice(),acts:(src.acts||[]).map(r=>(r||[]).slice()),
+    sent_by_name:'木村 雅人（幹部）',sent_at:'2025-06-01',status:'sent',progress:0,cell_status:{},edited_by:{}}];
+})();
+let _ibCur=null,_ibSel=null;
+function updateInboxBadge(){
+  const b=document.getElementById('inbox-badge');if(!b)return;
+  const n=INBOX.filter(s=>s.status!=='done').length;
+  b.textContent=n;b.style.display=n?'':'none';
+}
+function renderInbox(){
+  const con=document.getElementById('inbox-list');if(!con)return;
+  if(!INBOX.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">受信したチャートはありません。幹部・統括が送信すると、ここに表示されます。</div></div>';return;}
+  const st={sent:['s-todo','未着手'],in_progress:['s-wip','振り分け中'],done:['s-done','完了']};
+  let h='';
+  INBOX.forEach(s=>{
+    const sc=st[s.status]||st.sent;
+    const asg=Object.values(s.cell_status||{}).filter(c=>c&&c.assignedTo).length;
+    h+=`<div class="card" style="margin-bottom:12px">
+      <div class="card-hd"><div><div class="card-title">${(s.center||'').replace(/\n/g,' ')}</div>
+      <div class="card-sub">送信者: ${s.sent_by_name||'—'} ／ 受信日: ${(s.sent_at||'').slice(0,10)} ／ 振り分け済みKPI: ${asg}件</div></div>
+      <span class="chip ${sc[0]}">${sc[1]}</span></div>
+      <div class="card-body">
+        <div class="pw" style="margin-bottom:10px"><div class="pt"><div class="pf" style="width:${s.progress||0}%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">${s.progress||0}%</div></div>
+        <div style="text-align:right"><button class="card-btn" onclick="ibOpen('${s.id}')">📤 タスクを振り分け</button></div>
+      </div></div>`;
+  });
+  con.innerHTML=h;
+}
+function ibBuildGrid(){
+  const G=Array.from({length:9},()=>Array(9).fill(null));
+  G[4][4]={t:'center'};
+  SP_MAP.forEach(({cr,cc,oc,si})=>{
+    G[cr][cc]={t:'sub',si};G[oc[0]][oc[1]]={t:'sub',si};
+    let ai=0;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(dr===0&&dc===0)continue;const r=oc[0]+dr,c=oc[1]+dc;if(r>=0&&r<9&&c>=0&&c<9&&!G[r][c])G[r][c]={t:'action',si,ai};ai++;}
+  });
+  return G;
+}
+function ibRenderGrid(){
+  const s=_ibCur;if(!s)return;
+  const G=ibBuildGrid();
+  let h='<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:2px;background:#D1D5DB;border-radius:6px;overflow:hidden">';
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const cell=G[r][c];
+    let sty='min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.3;padding:3px 2px;word-break:break-all;position:relative;box-sizing:border-box;';
+    if(c===2||c===5)sty+='border-right:3px solid #9CA3AF;';
+    if(r===2||r===5)sty+='border-bottom:3px solid #9CA3AF;';
+    let oc2='',tx='';
+    if(cell&&cell.t==='center'){sty+='background:var(--accent);color:#fff;font-weight:800;font-size:10px;';tx=(s.center||'').replace(/\n/g,'<br>');}
+    else if(cell&&cell.t==='sub'){sty+='background:var(--accent-l);color:var(--accent);font-weight:700;';tx=(s.subs||[])[cell.si]||'';}
+    else if(cell&&cell.t==='action'){
+      const key=cell.si+'-'+cell.ai,cs=(s.cell_status||{})[key];
+      const sel=_ibSel&&_ibSel.si===cell.si&&_ibSel.ai===cell.ai;
+      const base=((s.acts||[])[cell.si]||[])[cell.ai]||'';
+      if(cs&&cs.assignedTo){sty+='background:#FEF3C7;color:#92400E;border:1.5px solid #F59E0B;cursor:pointer;';tx=`${base}<span style="font-size:7px;color:#D97706;margin-top:1px">→ ${cs.assignedTo}</span>`;}
+      else if(cs){sty+='background:#FEF3C7;color:#92400E;border:1.5px solid #F59E0B;cursor:pointer;';tx=`<span style="font-size:7px;position:absolute;top:1px;right:2px;color:#D97706">✏</span>${base}`;}
+      else{sty+='background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;cursor:pointer;';tx=base;}
+      if(sel)sty+='outline:2.5px solid var(--accent);outline-offset:-2.5px;';
+      oc2=`onclick="ibPick(${cell.si},${cell.ai})"`;
+    }else{sty+='background:#E5E7EB;';}
+    h+=`<div ${oc2} style="${sty}">${tx}</div>`;
+  }
+  h+='</div>';
+  document.getElementById('ib-grid').innerHTML=h;
+}
+function ibOpen(id){
+  const s=INBOX.find(x=>String(x.id)===String(id));if(!s)return;
+  _ibCur=s;_ibSel=null;
+  document.getElementById('ib-title').textContent=(s.center||'').replace(/\n/g,' ')+' — タスク振り分け';
+  document.getElementById('ib-meta').textContent='送信者: '+(s.sent_by_name||'—')+' ／ 受信日: '+((s.sent_at||'').slice(0,10));
+  document.getElementById('iba-kpilabel').textContent='KPI未選択 — グリッドのKPIセルをクリックしてください';
+  document.getElementById('iba-name').value='';
+  const ms=document.getElementById('iba-member');
+  ms.innerHTML=(EVAL_IDS.length?EVAL_IDS:DASH_IDS).map(mid=>`<option value="${mid}">${MEMBERS[mid]?MEMBERS[mid].name:mid}</option>`).join('');
+  ibRenderGrid();
+  document.getElementById('ib-assign-modal').style.display='flex';
+}
+function ibClose(){document.getElementById('ib-assign-modal').style.display='none';_ibCur=null;_ibSel=null;}
+function ibPick(si,ai){
+  const s=_ibCur;if(!s)return;
+  _ibSel={si,ai};
+  const kpi=((s.acts||[])[si]||[])[ai]||'';
+  document.getElementById('iba-kpilabel').textContent=`選択中: CSF-${si+1}「${(s.subs||[])[si]||''}」 ／ KPI ${si+1}-${ai+1}「${kpi}」`;
+  document.getElementById('iba-name').value=kpi;
+  ibRenderGrid();
+}
+function ibFmtMD(d){if(!d)return'-';const p=d.split('-');return p.length===3?(+p[1])+'/'+(+p[2]):d;}
+async function ibAssign(){
+  const s=_ibCur;if(!s)return;
+  if(!_ibSel){alert('振り分けるKPIセルをクリックして選択してください');return;}
+  const name=(document.getElementById('iba-name').value||'').trim();
+  if(!name){alert('タスク名を入力してください');return;}
+  const mid=document.getElementById('iba-member').value;
+  if(!mid){alert('メンバーを選択してください');return;}
+  const m=MEMBERS[mid];
+  const start=document.getElementById('iba-start').value||null;
+  const due=document.getElementById('iba-due').value||null;
+  const pri=document.getElementById('iba-pri').value||'md';
+  const csf=(s.subs||[])[_ibSel.si]||'—';
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const res=await API.assignTask({title:name,kpi:csf,assigneePid:pidOf(mid),teamUuid:teamMeta.uid,start,due,priority:pri});
+    if(res&&res.error){alert('割当失敗: '+res.error);return;}
+  }
+  const key=_ibSel.si+'-'+_ibSel.ai;
+  s.cell_status=s.cell_status||{};s.edited_by=s.edited_by||{};
+  s.cell_status[key]={assignedTo:m?m.name:mid};
+  s.edited_by[key]=(m?m.name:mid)+' に割当';
+  if(s.status==='sent')s.status='in_progress';
+  if(API&&API.ready&&!String(s.id).startsWith('demo-')){
+    API.updateSend(s.id,{cell_status:s.cell_status,edited_by:s.edited_by,status:s.status});
+  }
+  if(!MEMBER_TASKS[mid])MEMBER_TASKS[mid]=[];
+  MEMBER_TASKS[mid].push({name,kpi:csf,start:ibFmtMD(start),due:ibFmtMD(due),pri,status:'todo'});
+  if(typeof renderAssignedTasks==='function')renderAssignedTasks();
+  _ibSel=null;document.getElementById('iba-name').value='';
+  document.getElementById('iba-kpilabel').textContent='KPI未選択 — グリッドのKPIセルをクリックしてください';
+  ibRenderGrid();renderInbox();updateInboxBadge();
+  alert('✅ 「'+name+'」を '+(m?m.name:'')+' に振り分けました。個人画面（割り当て・チャート管理）に表示されます。');
+}
+updateInboxBadge();
+</script>
+
 <!-- ===== Supabase 連携（未設定時は内蔵デモのまま動作） ===== -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./web/config.js" onerror="this.dataset.miss=1"></script>
@@ -1086,6 +1248,13 @@ renderReports();
   // 評価記録(履歴)をDBから再取得して最新化
   API.loadEvalHistory().then(function(rows){
     if(rows&&rows.length){replArr(EVAL_RECORDS,rows);if(typeof renderEvalRec==='function')renderEvalRec();}
+  }).catch(function(){});
+  // 受信ボックス（自分・自チーム宛てのチャート送信）
+  API.loadMyInbox().then(function(rows){
+    if(!rows) return;
+    replArr(INBOX, rows);
+    if(typeof renderInbox==='function') renderInbox();
+    if(typeof updateInboxBadge==='function') updateInboxBadge();
   }).catch(function(){});
   // 自己評価マーカー
   if(typeof updateSelfEvalMarkers==='function')updateSelfEvalMarkers();

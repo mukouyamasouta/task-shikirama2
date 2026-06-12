@@ -644,6 +644,23 @@
     if (r.error) return { error: r.error.message };
     return { data: r.data };
   }
+  // 受信ボックス: 自分宛て（リーダーは自チーム宛ての個人未指定分も含む）の送信を取得
+  async function loadMyInbox() {
+    if (!sb) return null;
+    var me = await currentProfile(); if (!me) return null;
+    var r = await sb.from('chart_sends').select('*').order('sent_at', { ascending: false });
+    if (r.error) { err('inbox', r.error); return null; }
+    var myTeams = {};
+    try {
+      var t = await sb.from('teams').select('id,name').eq('leader_id', me.id);
+      (t.data || []).forEach(function (x) { if (TEAM_KEY[x.id]) myTeams[TEAM_KEY[x.id]] = 1; myTeams[x.name] = 1; });
+    } catch (e) {}
+    return (r.data || []).filter(function (s) {
+      if (s.to_profile_id === me.id) return true;
+      if (!s.to_profile_id && s.to_team && myTeams[s.to_team]) return true;
+      return false;
+    });
+  }
   async function updateSend(id, patch) {
     if (!sb) return { error: 'Supabase未接続' };
     patch.updated_at = new Date().toISOString();
@@ -714,6 +731,7 @@
     createTemplate: createTemplate,
     deleteTemplate: deleteTemplate,
     loadSends: loadSends,
+    loadMyInbox: loadMyInbox,
     createSend: createSend,
     updateSend: updateSend,
     deleteSend: deleteSend,
