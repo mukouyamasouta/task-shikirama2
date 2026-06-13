@@ -230,20 +230,20 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)" id="ep-d-late">—</div><div class="s-trend" style="color:var(--text3)">期限超過・未完了</div></div>
     <div class="stat-card"><div class="s-lbl">合計作業時間</div><div class="s-val" style="color:var(--accent)" id="ep-d-hours">—</div><div class="s-trend" style="color:var(--text3)">全タスク累計工数</div></div>
   </div>
-  <!-- 本日対応が必要・未完了タスク -->
+  <!-- 自分のKGI / KPI 進捗（最上部） -->
   <div class="card">
-    <div class="card-hd"><div><div class="card-title">🎯 本日対応が必要・未完了タスク</div><div class="card-sub">期限内／遅延を明示。進捗・期限・優先度・工数つき</div></div><span id="ep-d-open-count" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div>
+    <div class="card-hd"><div><div class="card-title">自分のKGI / KPI 進捗</div><div class="card-sub" id="ep-kgi-name">Q3個人売上 ¥15M達成</div></div><span style="font-size:20px;font-weight:800;color:var(--accent)" id="ep-kgi-pct">—</span></div>
+    <div class="card-body" id="ep-kpi-rows"></div>
+  </div>
+  <!-- 本日対応が必要・未完了タスク（期限が迫っている順） -->
+  <div class="card">
+    <div class="card-hd"><div><div class="card-title">🎯 本日対応が必要・未完了タスク</div><div class="card-sub">期限が迫っている順。期限内／遅延を明示・進捗・優先度・工数つき</div></div><span id="ep-d-open-count" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div>
     <div class="card-body" id="ep-d-open-list"><div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">読み込み中…</div></div>
   </div>
-  <div class="g2">
-    <div class="card">
-      <div class="card-hd"><div><div class="card-title">自分のKGI / KPI 進捗</div><div class="card-sub" id="ep-kgi-name">Q3個人売上 ¥15M達成</div></div><span style="font-size:20px;font-weight:800;color:var(--accent)" id="ep-kgi-pct">—</span></div>
-      <div class="card-body" id="ep-kpi-rows"></div>
-    </div>
-    <div class="card">
-      <div class="card-hd"><div><div class="card-title">✅ 完了済みタスク</div><div class="card-sub">合計工数つき</div></div><span id="ep-d-done-count" style="font-size:13px;font-weight:700;color:var(--green)"></span></div>
-      <div class="card-body" id="ep-d-done-list"><div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">—</div></div>
-    </div>
+  <!-- 完了済みタスク -->
+  <div class="card">
+    <div class="card-hd"><div><div class="card-title">✅ 完了済みタスク</div><div class="card-sub">合計工数つき</div></div><span id="ep-d-done-count" style="font-size:13px;font-weight:700;color:var(--green)"></span></div>
+    <div class="card-body" id="ep-d-done-list"><div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">—</div></div>
   </div>
   <!-- チーム進捗（参考・優先度を下げて折りたたみ） -->
   <details class="card" style="padding:0">
@@ -492,30 +492,17 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="f-submit" style="background:var(--amber)" onclick="saveCmKpiEdits()">💾 KPI変更を保存</button>
     <div style="font-size:10px;color:var(--text2);max-width:180px;line-height:1.5">編集したKPIは<b style="color:var(--amber)">黄色</b>表示され、<b>リーダー画面にも反映</b>されます</div>
   </div>
-  <div class="g2">
-    <div>
-      <div class="card">
-        <div class="card-hd">
-          <div><div class="card-title">曼荼羅チャート</div><div class="card-sub">KGI/CSF: 表示のみ ／ KPI（外周）: クリックで編集・進捗入力</div></div>
-          <button class="card-btn" onclick="(function(){const k=document.getElementById('cm-chart-sel').value;if(k&&CHARTS[k])openMandala(k,false);})()">⛶ 全画面</button>
-        </div>
-        <div class="card-body" style="padding:8px"><div id="cm-kpi-grid" style="overflow-x:auto"></div></div>
+  <div class="card">
+    <div class="card-hd">
+      <div><div class="card-title">曼荼羅チャート</div><div class="card-sub" id="cm-grid-sub">基本表示：中心(KGI)＋CSF 8項目。「KPIを表示」で外周の施策まで展開・編集できます</div></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button id="cm-kpi-toggle" class="card-btn" style="background:var(--accent-l);color:var(--accent);border-color:var(--accent);font-weight:700" onclick="toggleCmKpi()">＋ KPIを表示</button>
+        <button class="card-btn" onclick="(function(){const k=document.getElementById('cm-chart-sel').value;if(k&&CHARTS[k])openMandala(k,false);})()">⛶ 全画面</button>
       </div>
     </div>
-    <div>
-      <div class="card">
-        <div class="card-hd" style="flex-direction:column;align-items:flex-start;gap:8px">
-          <div><div class="card-title">タスク一覧</div><div class="card-sub">割り当て済み ＋ 自分で作成したタスク</div></div>
-          <div class="filter-row" style="margin:0">
-            <button class="f-btn active" id="cm-f-all" onclick="cmFilter('all',this)">全て</button>
-            <button class="f-btn" id="cm-f-wip" onclick="cmFilter('wip',this)">進行中</button>
-            <button class="f-btn" id="cm-f-todo" onclick="cmFilter('todo',this)">未着手</button>
-            <button class="f-btn" id="cm-f-done" onclick="cmFilter('done',this)">完了</button>
-            <button class="f-btn" id="cm-f-late" onclick="cmFilter('late',this)">遅延</button>
-          </div>
-        </div>
-        <div id="cm-task-list" style="padding:10px 14px;max-height:600px;overflow-y:auto"></div>
-      </div>
+    <div class="card-body" style="padding:10px">
+      <div id="cm-kpi-grid-simple"></div>
+      <div id="cm-kpi-grid" style="overflow-x:auto;display:none"></div>
     </div>
   </div>
 </div>
@@ -535,28 +522,23 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="g2">
     <div>
       <div class="form-card">
-        <h3 style="font-size:14px;font-weight:700;margin-bottom:6px" id="prep-form-title">本日の日報（始業の計画 → 終業の報告）</h3>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:14px">朝に「始業の計画」を保存し、退勤時に「終業の報告」を提出します。<span id="prep-edit-note" style="display:none;color:var(--accent);font-weight:700"></span></div>
-        <div class="fr"><div class="fg"><label class="fl">日付</label><input class="fi" type="date" id="prep-date"></div><div class="fg"><label class="fl">本日の合計作業時間</label><input class="fi" id="prep-hours" placeholder="例: 8.0"></div></div>
-        <!-- 始業（計画） -->
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:6px" id="prep-form-title">本日の日報（始業 → 終業）</h3>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:14px">出勤時に「始業」を、退勤時に「終業」を入力します。<span id="prep-edit-note" style="display:none;color:var(--accent);font-weight:700"></span></div>
+        <div class="fg"><label class="fl">日付</label><input class="fi" type="date" id="prep-date"></div>
+        <!-- 始業 -->
         <div style="background:#FFF7ED;border:1px solid #FDBA74;border-radius:8px;padding:12px;margin-bottom:12px">
-          <div style="font-size:12px;font-weight:800;color:#C2410C;margin-bottom:8px">🌅 始業（今日の計画・朝礼）</div>
-          <div class="fg"><label class="fl">本日の業務内容</label><textarea class="fi" id="prep-plantasks" rows="2" placeholder="今日取り組む業務を記入…" style="resize:vertical"></textarea></div>
-          <div class="fg"><label class="fl">業務ごとの予定時間</label><input class="fi" id="prep-planhours" placeholder="例: 提案書3h / 訪問2h / 事務1h"></div>
-          <div class="fg"><label class="fl">本日の目標・朝礼共有</label><textarea class="fi" id="prep-goal" rows="2" placeholder="今日のゴール・チームへの共有事項…" style="resize:vertical"></textarea></div>
-          <button class="card-btn" style="width:100%;background:#FFEDD5;color:#C2410C;border-color:#FDBA74;font-weight:700;padding:9px" onclick="reportSaveMorning()">🌅 始業の計画を保存（今日の予定を送る）</button>
+          <div style="font-size:12px;font-weight:800;color:#C2410C;margin-bottom:8px">🌅 始業（出勤時）</div>
+          <div class="fg"><label class="fl">出勤時間</label><input class="fi" id="prep-clockin" type="time"></div>
+          <div class="fg"><label class="fl">今日やること</label><textarea class="fi" id="prep-plantasks" rows="2" placeholder="今日取り組むことを簡単に…" style="resize:vertical"></textarea></div>
+          <button class="card-btn" style="width:100%;background:#FFEDD5;color:#C2410C;border-color:#FDBA74;font-weight:700;padding:9px" onclick="reportSaveMorning()">🌅 始業を保存</button>
           <span id="report-morning-msg" style="display:none;margin-left:8px;color:var(--green);font-size:11px;font-weight:700">✅ 保存しました</span>
         </div>
-        <!-- 終業（報告） -->
+        <!-- 終業 -->
         <div style="background:#EFF6FF;border:1px solid #93C5FD;border-radius:8px;padding:12px">
-          <div style="font-size:12px;font-weight:800;color:#1D4ED8;margin-bottom:8px">🌇 終業（今日の振り返り・実績）</div>
-          <div class="fg"><label class="fl">本日の達成タスク・実績</label><textarea class="fi" id="prep-done" rows="3" placeholder="完了したタスク・進捗を記入…（タスクごとの工数は各タスクの「本日の作業時間」で記録）" style="resize:vertical"></textarea></div>
-          <div class="fg"><label class="fl">振り返り・明日の予定</label><textarea class="fi" id="prep-plan" rows="2" placeholder="今日の振り返り・明日取り組む内容…" style="resize:vertical"></textarea></div>
-          <div class="fg"><label class="fl">課題・相談事項</label><textarea class="fi" id="prep-issue" rows="2" placeholder="困っていること・上長への相談…" style="resize:vertical"></textarea></div>
-          <div class="fg"><label class="fl">本日の気分・コンディション</label>
-            <select class="fs" id="prep-cond"><option value="great">😀 とても良い</option><option value="good" selected>🙂 良い</option><option value="normal">😐 普通</option><option value="bad">😟 やや不調</option><option value="poor">😣 不調</option></select>
-          </div>
-          <button class="f-submit" style="margin-top:0" onclick="reportSubmit()">🌇 終業の報告を提出（リーダーへ通知）</button>
+          <div style="font-size:12px;font-weight:800;color:#1D4ED8;margin-bottom:8px">🌇 終業（退勤時）</div>
+          <div class="fg"><label class="fl">かかった時間（h）</label><input class="fi" id="prep-hours" type="number" min="0" step="0.5" placeholder="例: 8.0"></div>
+          <div class="fg"><label class="fl">振り返り</label><textarea class="fi" id="prep-reflect" rows="3" placeholder="今日の振り返りを記入…" style="resize:vertical"></textarea></div>
+          <button class="f-submit" style="margin-top:0" onclick="reportSubmit()">🌇 終業を提出（リーダーへ通知）</button>
           <span id="report-msg" style="display:none;margin-left:12px;color:var(--green);font-size:12px;font-weight:700">✅ 提出しました</span>
         </div>
         <div id="prep-edit-actions" style="display:none;margin-top:10px;text-align:right"><button class="card-btn" onclick="resetReportForm()">＋ 新規日報に切替</button></div>
@@ -742,10 +724,12 @@ function renderAssign(){
 }
 function _prepGather(){
   const g=id=>{const e=document.getElementById(id);return e?e.value:'';};
-  return {date:g('prep-date'),hours:g('prep-hours')||'—',
-    planTasks:g('prep-plantasks'),planHours:g('prep-planhours'),goal:g('prep-goal'),
-    done:g('prep-done')||'—',plan:g('prep-plan')||'—',issue:g('prep-issue')||'—',cond:g('prep-cond'),
-    actualHours:(parseFloat(g('prep-hours'))||null)};
+  const hrs=g('prep-hours');
+  // 始業: 出勤時間(clockin)・やること(planTasks) ／ 終業: かかった時間(hours)・振り返り(reflect→done)
+  return {date:g('prep-date'),hours:hrs?hrs+'h':'—',
+    planTasks:g('prep-plantasks'),planHours:g('prep-clockin'),  /* plan_hours列を出勤時間に流用 */
+    done:g('prep-reflect')||'—',cond:'normal',
+    actualHours:(parseFloat(hrs)||null)};
 }
 function _prepStore(rec){
   const i=PREPORTS.findIndex(r=>r.date===rec.date);
@@ -783,9 +767,8 @@ function editPReport(ds){
   const r=PREPORTS.find(x=>x.date===ds);if(!r)return;
   const s=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v||'';};
   s('prep-date',r.date);s('prep-hours',r.hours&&r.hours!=='—'?String(r.hours).replace('h',''):'');
-  s('prep-plantasks',r.planTasks);s('prep-planhours',r.planHours);s('prep-goal',r.goal);
-  s('prep-done',r.done==='—'?'':r.done);s('prep-plan',r.plan==='—'?'':r.plan);s('prep-issue',r.issue==='—'?'':r.issue);
-  const c=document.getElementById('prep-cond');if(c)c.value=r.cond||'good';
+  s('prep-clockin',r.planHours);s('prep-plantasks',r.planTasks);
+  s('prep-reflect',r.done==='—'?'':r.done);
   const note=document.getElementById('prep-edit-note');if(note){note.style.display='inline';note.textContent='（'+r.date+' を編集中）';}
   document.getElementById('prep-edit-actions').style.display='block';
   window.scrollTo({top:0,behavior:'smooth'});
@@ -802,8 +785,7 @@ async function deletePReport(ds){
   prepSel='';document.getElementById('prep-detail').innerHTML='';renderPReportCalendar();
 }
 function resetReportForm(){
-  ['prep-hours','prep-plantasks','prep-planhours','prep-goal','prep-done','prep-plan','prep-issue'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-  const c=document.getElementById('prep-cond');if(c)c.value='good';
+  ['prep-hours','prep-clockin','prep-plantasks','prep-reflect'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   const note=document.getElementById('prep-edit-note');if(note)note.style.display='none';
   document.getElementById('prep-edit-actions').style.display='none';
 }
@@ -1671,25 +1653,22 @@ function renderPReportCalendar(){
 function showPReportDetail(ds){
   prepSel=ds;renderPReportCalendar();
   const r=prepByDate(ds);if(!r){document.getElementById('prep-detail').innerHTML='';return;}
-  const c=PCOND[r.cond]||PCOND.normal;
   const p=ds.split('-');const dow=['日','月','火','水','木','金','土'][new Date(+p[0],+p[1]-1,+p[2]).getDay()];
-  const hasMorning=r.planTasks||r.planHours||r.goal;
-  const sub=(r.submitted?'終業提出済み':'始業のみ')+(r.hours&&r.hours!=='—'?' ／ 稼働 '+r.hours:'');
-  const morning=hasMorning?`<div style="grid-column:1/3;background:#FFF7ED;border-radius:6px;padding:8px 10px">
-        <div style="font-size:10px;font-weight:800;color:#C2410C;margin-bottom:4px">🌅 始業（計画）</div>
-        ${r.planTasks?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>業務:</b> ${r.planTasks}</div>`:''}
-        ${r.planHours?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>予定時間:</b> ${r.planHours}</div>`:''}
-        ${r.goal?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>目標/朝礼:</b> ${r.goal}</div>`:''}
+  const sub=(r.submitted?'終業提出済み':'始業のみ')+(r.hours&&r.hours!=='—'?' ／ かかった時間 '+r.hours:'');
+  const morning=(r.planHours||r.planTasks)?`<div style="grid-column:1/2;background:#FFF7ED;border-radius:6px;padding:8px 10px">
+        <div style="font-size:10px;font-weight:800;color:#C2410C;margin-bottom:4px">🌅 始業</div>
+        ${r.planHours?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>出勤:</b> ${r.planHours}</div>`:''}
+        ${r.planTasks?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>やること:</b> ${r.planTasks}</div>`:''}
       </div>`:'';
-  const h=`<div class="card"><div class="card-hd" style="border-left:4px solid ${c[2]}">
+  const evening=`<div style="grid-column:${morning?'2/3':'1/3'};background:#EFF6FF;border-radius:6px;padding:8px 10px">
+        <div style="font-size:10px;font-weight:800;color:#1D4ED8;margin-bottom:4px">🌇 終業</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.6"><b>かかった時間:</b> ${r.hours&&r.hours!=='—'?r.hours:'—'}</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.6"><b>振り返り:</b> ${r.done&&r.done!=='—'?r.done:'—'}</div>
+      </div>`;
+  const h=`<div class="card"><div class="card-hd" style="border-left:4px solid var(--accent)">
       <div><div class="card-title">${+p[0]}/${+p[1]}/${+p[2]} (${dow}) の日報</div><div class="card-sub">${sub}</div></div>
-      <span style="font-size:12px;font-weight:700;color:${c[2]}">${c[0]} ${c[1]}</span>
     </div><div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      ${morning}
-      <div style="grid-column:1/3;font-size:10px;font-weight:800;color:#1D4ED8;border-top:1px solid var(--border);padding-top:8px">🌇 終業（報告）</div>
-      <div><div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:3px">✅ 達成タスク・実績</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.done}</div></div>
-      <div><div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:3px">📅 振り返り・明日の予定</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.plan}</div></div>
-      <div style="grid-column:1/3"><div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:3px">⚠ 課題・相談事項</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.issue}</div></div>
+      ${morning}${evening}
       <div style="grid-column:1/3;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:10px">
         <button class="card-btn" onclick="editPReport('${ds}')">✏ 編集</button>
         <button class="card-btn" style="color:var(--red);border-color:var(--red)" onclick="deletePReport('${ds}')">🗑 削除</button>
@@ -1753,7 +1732,29 @@ function updateCmEditCount(k){
   const el=document.getElementById('cm-edit-count');if(el)el.textContent=cnt+'件';
 }
 
+// チャート管理の簡素表示（中心KGI + CSF8 の3x3）
+let _cmKpiOn=false;
+function renderCmSimpleGrid(k){
+  const d=CHARTS[k];if(!d)return;
+  const order=[0,1,2,7,-1,3,6,5,4];
+  let h='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:560px;margin:0 auto">';
+  order.forEach(si=>{
+    if(si===-1){h+=`<div style="min-height:90px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:13px;font-weight:800;color:#fff;background:${d.color};border-radius:10px;padding:8px;line-height:1.4">${(d.center||'').replace(/\n/g,'<br>')}</div>`;}
+    else{const label=(d.subs||[])[si]||'';h+=`<div style="min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:${d.color};background:${d.bg};border:1.5px solid ${d.color};border-radius:10px;padding:8px;line-height:1.4"><div style="font-size:8px;color:var(--text3);font-weight:600;margin-bottom:2px">CSF ${si+1}</div>${label}</div>`;}
+  });
+  h+='</div>';
+  const con=document.getElementById('cm-kpi-grid-simple');if(con)con.innerHTML=h;
+}
+function _cmApplyView(){
+  const full=document.getElementById('cm-kpi-grid'),simple=document.getElementById('cm-kpi-grid-simple');
+  const tg=document.getElementById('cm-kpi-toggle'),sub=document.getElementById('cm-grid-sub');
+  if(!full||!simple)return;
+  if(_cmKpiOn){full.style.display='';simple.style.display='none';if(tg)tg.textContent='− KPIを隠す';if(sub)sub.textContent='中心(KGI)＋CSF＋外周KPI。KPIセルをクリックで編集・進捗入力（黄色=編集済み）';}
+  else{full.style.display='none';simple.style.display='';if(tg)tg.textContent='＋ KPIを表示';if(sub)sub.textContent='基本表示：中心(KGI)＋CSF 8項目。「KPIを表示」で外周の施策まで展開・編集できます';}
+}
+function toggleCmKpi(){_cmKpiOn=!_cmKpiOn;_cmApplyView();}
 function renderCmKpiGrid(k){
+  renderCmSimpleGrid(k);_cmApplyView();
   const d=CHARTS[k];if(!d)return;
   const edits=kpiEdits[k]||{};
   const G=buildMndGrid(k);
