@@ -1473,13 +1473,13 @@ window.vxNotifSource=function(){
   // メンバーからの通知（完了/遅延/日報提出）= notifications テーブル由来（最優先で表示）
   if(Array.isArray(window._leaderNotifs)){
     window._leaderNotifs.slice(0,8).forEach(n=>{
-      const ic=n.type==='task_done'?'✅':n.type==='report_submitted'?'📓':'⚠';
-      const bg=n.type==='task_done'?'#D1FAE5':n.type==='report_submitted'?'#EDE9FE':'#FEE2E2';
-      const col=n.type==='task_done'?'var(--green)':n.type==='report_submitted'?'#7C3AED':'var(--red)';
+      const ic=n.type==='task_done'?'✅':n.type==='report_submitted'?'📓':n.type==='chart_edit'?'✏':'⚠';
+      const bg=n.type==='task_done'?'#D1FAE5':n.type==='report_submitted'?'#EDE9FE':n.type==='chart_edit'?'#FEF3C7':'#FEE2E2';
+      const col=n.type==='task_done'?'var(--green)':n.type==='report_submitted'?'#7C3AED':n.type==='chart_edit'?'#D97706':'var(--red)';
       out.push({icon:ic,bg:bg,color:col,
         text:(n.actor_name?n.actor_name+'：':'')+(n.body||n.title||'通知'),
         time:(n.created_at||'').slice(0,16).replace('T',' '),
-        tab:n.type==='report_submitted'?'report':'assign'});
+        tab:n.type==='report_submitted'?'report':n.type==='chart_edit'?'dashboard':'assign'});
     });
   }
   if(typeof INBOX!=='undefined'&&Array.isArray(INBOX)){

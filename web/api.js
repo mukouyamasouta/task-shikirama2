@@ -566,13 +566,31 @@
     return { ok: true };
   }
   // メンバー自身のKPI編集を保存（member_kpi_edits列 + acts更新）
-  async function saveMemberKpiEdits(chartId, edits, newActs) {
+  async function saveMemberKpiEdits(chartId, edits, newActs, extra) {
     if (!sb) return { error: 'Supabase未接続' };
     var payload = { member_kpi_edits: edits };
     if (newActs) payload.acts = newActs;
+    if (extra && extra.center != null) payload.center = extra.center;   // KGI中心の編集
+    if (extra && extra.subs) payload.subs = extra.subs;                 // CSFの編集
     var r = await sb.from('mandala_charts').update(payload).eq('id', chartId);
     if (r.error) return { error: friendlyErr(r.error.message) };
     return { ok: true };
+  }
+  // 個人がチャート（KGI/CSF/KPI）を更新した旨を自チームのリーダーへ通知
+  async function notifyLeaderChartEdit(summary) {
+    if (!sb) return;
+    var me = await currentProfile(); if (!me) return;
+    var leaderId = null, teamId = null;
+    var tm = await sb.from('team_members').select('team_id').eq('profile_id', me.id).maybeSingle();
+    if (tm.data) { teamId = tm.data.team_id; var tr = await sb.from('teams').select('leader_id').eq('id', teamId).maybeSingle(); leaderId = tr.data && tr.data.leader_id; }
+    if (!leaderId || leaderId === me.id) return;  // リーダー本人なら通知不要
+    try {
+      await sb.from('notifications').insert({
+        to_user_id: leaderId, to_team_id: teamId, type: 'chart_edit',
+        title: 'チャート更新', body: (summary || 'メンバーが曼荼羅チャートを更新しました'),
+        actor_id: me.id, actor_name: me.full_name
+      });
+    } catch (e) {}
   }
 
   // 特定メンバーが持つ全曼荼羅チャート（評価対象選択用）
@@ -1022,6 +1040,7 @@
     loadMySelfEval: loadMySelfEval,
     upsertSelfEval: upsertSelfEval,
     saveMemberKpiEdits: saveMemberKpiEdits,
+    notifyLeaderChartEdit: notifyLeaderChartEdit,
     upsertMemberChart: upsertMemberChart,
     updateChart: updateChart,
     loadPersonalData: loadPersonalData,
