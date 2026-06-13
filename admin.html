@@ -1303,6 +1303,12 @@ function vexumLogout(){
   }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:',e); });
   // 統括コンソール全タブのライブ化（ダッシュボード/タスク/目標/評価/チーム/アカウント/割当/フォーム選択肢）
   if(typeof adReload==='function') adReload().catch(function(e){ console.warn('[VEXUM] 統括ライブ化失敗:',e); });
+  // リアルタイム反映: タスク・チャートの変更で全タブを自動更新
+  if(API.subscribeLive){
+    API.subscribeLive(['tasks','chart_sends'],function(){
+      if(typeof adReload==='function') adReload().catch(function(){});
+    });
+  }
 })();
 </script>
 </body>

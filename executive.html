@@ -1048,8 +1048,12 @@ function renderSendHistory(){
 }
 function viewSendChart(id){
   const s=SENDS.find(x=>String(x.id)===String(id));if(!s)return;
-  EXTRA['__sendview__']={name:(s.center||'').replace(/\n/,' '),team:'送信先: '+(s.to_name||'—'),color:'#0D9488',bg:'#CCEDE9',
-    center:s.center||'',subs:s.subs||[],acts:s.acts||[]};
+  // セルごとの担当者・進捗（リーダー振り分け／個人記入の結果）を重ねて表示
+  const cs=s.cell_status||{};
+  const subs=(s.subs||[]).map((t,si)=>{const c=cs['csf-'+si];return c&&c.assignedTo?t+'｜→'+c.assignedTo+(c.progress!=null?' '+c.progress+'%':''):t;});
+  const acts=(s.acts||[]).map((row,si)=>(row||[]).map((a,ai)=>{const c=cs[si+'-'+ai];return c&&(c.assignedTo||c.progress!=null)?a+'｜→'+(c.assignedTo||'記入済')+(c.progress!=null?' '+c.progress+'%':''):a;}));
+  EXTRA['__sendview__']={name:(s.center||'').replace(/\n/,' '),team:'送信先: '+(s.to_name||'—')+' ／ 進捗 '+(s.progress||0)+'%',color:'#0D9488',bg:'#CCEDE9',
+    center:s.center||'',subs:subs,acts:acts};
   openMandala('__sendview__');
 }
 
@@ -1492,6 +1496,16 @@ function vexumLogout(){
     if(typeof renderSendHistory==='function')renderSendHistory();
     if(window.VexumUI)VexumUI.refresh();
   }).catch(function(){});
+  // リアルタイム反映: リーダーの振り分け・メンバーの記入を送信履歴へ自動反映
+  if(API.subscribeLive){
+    API.subscribeLive(['chart_sends','tasks'],function(){
+      API.loadSends().then(function(rows){
+        SENDS=rows||[];
+        if(typeof renderSendHistory==='function')renderSendHistory();
+        if(window.VexumUI)VexumUI.refresh();
+      }).catch(function(){});
+    });
+  }
   // 評価履歴読込
   API.loadEvalHistory().then(function(rows){
     EVAL_HISTORY=rows||[];

@@ -182,7 +182,8 @@
     raw.tasks.forEach(function (t) {
       var key = memKey(t.assignee_id); if (!key || !MEMBERS[key]) return;
       (MEMBER_TASKS[key] = MEMBER_TASKS[key] || []).push({
-        name: t.title, kpi: t.related_kgi || '—', start: fmtMD(t.start_date), due: fmtMD(t.due_date), pri: t.priority, status: t.status
+        id: t.id, name: t.title, kpi: t.related_kgi || '—', start: fmtMD(t.start_date), due: fmtMD(t.due_date), pri: t.priority, status: t.status,
+        pct: t.progress || 0, chart: t.source_chart || null, sendId: t.source_send_id || null, cell: t.source_cell || null
       });
     });
 
@@ -248,14 +249,22 @@
   async function assignTask(o) {
     if (!sb) return { error: 'Supabase未接続' };
     var me = await currentProfile();
-    var r = await sb.from('tasks').insert({
+    var row = {
       title: o.title, related_kgi: o.kpi || null, category: o.category || null,
       assigner_id: me ? me.id : null,
       assignee_id: o.assigneePid || (me ? me.id : null),  // 未指定なら本人タスク（個人画面の自作）
       team_id: o.teamUuid || null,
       source: o.source || 'leader', start_date: o.start || null, due_date: o.due || null,
       priority: o.priority || 'md', progress: 0, status: 'todo'
-    }).select().single();
+    };
+    // 受信チャート由来のタスク: どのチャートのどのセルか（個人画面チップ表示・進捗の逆反映用）
+    if (o.sendId) { row.source_send_id = o.sendId; row.source_cell = o.cell || null; row.source_chart = o.chartTitle || null; }
+    var r = await sb.from('tasks').insert(row).select().single();
+    if (r.error && o.sendId && /source_send_id|source_cell|source_chart/.test(r.error.message)) {
+      // 17_chart_task_link.sql 未適用のDB: 紐付けなしで作成（後方互換）
+      delete row.source_send_id; delete row.source_cell; delete row.source_chart;
+      r = await sb.from('tasks').insert(row).select().single();
+    }
     if (r.error) return { error: friendlyErr(r.error.message) };
     return { data: r.data };
   }
@@ -275,7 +284,38 @@
     var r = await sb.from('tasks').update(up).eq('id', id).select('id');
     if (r.error) return { error: friendlyErr(r.error.message) };
     if (!r.data || r.data.length === 0) return { error: '更新できませんでした（権限不足の可能性）' };
+    // 受信チャート由来のタスクなら、チャート（chart_sends）の該当セルと全体進捗へ自動反映
+    try { await propagateTaskToSend(id); } catch (e) {}
     return { ok: true };
+  }
+  // タスク進捗 → chart_sends（送信チャート）への逆反映
+  // ・該当セル（cell_status[key]）に progress を記録
+  // ・チャート全体 progress = そのチャート由来タスクの平均進捗
+  // ・edited_by[key] に記入者名（幹部の送信履歴・リーダーの管理グリッドに表示）
+  async function propagateTaskToSend(taskId) {
+    if (!sb) return;
+    var t = await sb.from('tasks').select('id,progress,status,source_send_id,source_cell').eq('id', taskId).maybeSingle();
+    if (!t.data || !t.data.source_send_id) return;
+    var sendId = t.data.source_send_id;
+    var s = await sb.from('chart_sends').select('id,cell_status,edited_by').eq('id', sendId).maybeSingle();
+    if (!s.data) return;
+    var me = await currentProfile();
+    var cs = s.data.cell_status || {}, eb = s.data.edited_by || {};
+    var key = t.data.source_cell;
+    if (key) {
+      cs[key] = cs[key] || {};
+      cs[key].progress = t.data.progress || 0;
+      cs[key].taskStatus = t.data.status;
+      if (me) eb[key] = me.full_name;
+    }
+    var all = await sb.from('tasks').select('progress').eq('source_send_id', sendId);
+    var rows = all.data || [];
+    var avg = rows.length ? Math.round(rows.reduce(function (a, x) { return a + (x.progress || 0); }, 0) / rows.length) : (t.data.progress || 0);
+    await sb.from('chart_sends').update({
+      cell_status: cs, edited_by: eb, progress: avg,
+      status: avg >= 100 ? 'done' : 'in_progress',
+      updated_at: new Date().toISOString()
+    }).eq('id', sendId);
   }
   // 日報を保存（同一日付は上書き: author_id + report_date でupsert）
   async function saveDailyReport(o) {
@@ -481,12 +521,15 @@
       var assigner = prof[t.assigner_id] || {};
       var exec = t.source === 'executive';
       var self = t.source === 'self';
-      var meta = '関連KGI: ' + (t.related_kgi || '—') + ' ／ カテゴリ: ' + (t.category || '—');
+      var chart = t.source_chart || null;
+      var meta = chart
+        ? '📊 チャート: ' + chart + ' ／ CSF: ' + (t.related_kgi || '—')
+        : '関連KGI: ' + (t.related_kgi || '—') + ' ／ カテゴリ: ' + (t.category || '—');
       var from = self ? '🙋 自分で作成' : ('📌 ' + (exec ? '役員' : '上長') + ' · ' + (assigner.full_name || ''));
       if (t.status === 'done' || (t.progress || 0) >= 100) {
-        ASSIGN_HISTORY.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '', pri: t.priority || 'md' });
+        ASSIGN_HISTORY.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '', pri: t.priority || 'md', chart: chart });
       } else {
-        ASSIGNMENTS.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: self });
+        ASSIGNMENTS.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: self, chart: chart, sendId: t.source_send_id || null, cell: t.source_cell || null });
       }
     });
 
@@ -729,6 +772,33 @@
     return { ok: true };
   }
 
+  // ===== リアルタイム反映 =====
+  // tables の変更を購読して cb(table) を呼ぶ。Realtime未設定のDBでも
+  // 動くよう、タブ表示中のみのポーリング（45秒）も併用する。
+  function subscribeLive(tables, cb) {
+    if (!sb) return null;
+    var fire = debounce(function (tb) { try { cb(tb); } catch (e) {} }, 800);
+    try {
+      var ch = sb.channel('vexum-live-' + Math.random().toString(36).slice(2));
+      tables.forEach(function (tb) {
+        ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, function () { fire(tb); });
+      });
+      ch.subscribe();
+    } catch (e) {}
+    var iv = setInterval(function () {
+      if (document.visibilityState === 'visible') fire('*');
+    }, 45000);
+    return { stop: function () { try { sb.removeChannel(ch); } catch (e) {} clearInterval(iv); } };
+  }
+  function debounce(fn, ms) {
+    var tm = null;
+    return function () {
+      var args = arguments;
+      clearTimeout(tm);
+      tm = setTimeout(function () { fn.apply(null, args); }, ms);
+    };
+  }
+
   // 現在ログイン中ユーザーの profile（role 判定・リダイレクト用）
   async function currentProfile() {
     if (!sb) return null;
@@ -791,6 +861,7 @@
     createSend: createSend,
     updateSend: updateSend,
     deleteSend: deleteSend,
+    subscribeLive: subscribeLive,
     currentProfile: currentProfile,
     TEAM_KEY: TEAM_KEY,
     MEMBER_KEY: MEMBER_KEY

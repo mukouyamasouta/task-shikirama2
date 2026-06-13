@@ -675,8 +675,9 @@ function renderAssign(){
   if(assignView==='current'){
     if(!ASSIGNMENTS.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">現在の割り当てはありません。完了したタスクは「🕘 過去の履歴」で確認できます。</div></div>';return;}
     ASSIGNMENTS.forEach((a,i)=>{
+      const chartChip=a.chart?`<span style="font-size:9px;background:#EDE9FE;color:#7C3AED;padding:2px 8px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${a.chart}</span>`:'';
       h+=`<div class="asg-card">
-        <div class="asg-top"><div><div class="asg-name">${a.name}</div><div class="asg-meta">${a.meta}</div></div><span class="asg-from ${a.fromClass}">${a.from}</span></div>
+        <div class="asg-top"><div><div class="asg-name">${a.name}${chartChip}</div><div class="asg-meta">${a.meta}</div></div><span class="asg-from ${a.fromClass}">${a.from}</span></div>
         <div class="asg-dates"><span>開始期間 <b>${a.start}</b></span><span>終了期間 <b>${a.end}</b></span></div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
           <div style="flex:1"><div class="asg-prog-label"><span>達成度</span><span id="asg-v${i}" style="color:var(--accent);font-weight:700">${a.pct}%</span></div>
@@ -1979,13 +1980,15 @@ function renderTaskTable(){
   const priMap={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低'],urgent:['s-hi','緊急']};
   const stMap={wip:['s-wip','進行中'],done:['s-done','完了'],late:['s-late','遅延'],todo:['s-todo','未着手']};
   const rows=[
-    ...ASSIGNMENTS.map(a=>({name:a.name,kpi:a.kpi||'—',start:a.start,end:a.end,pri:a.pri||'md',status:a.status||(a.pct>=100?'done':a.pct>0?'wip':'todo')})),
-    ...ASSIGN_HISTORY.map(a=>({name:a.name,kpi:a.kpi||'—',start:a.start,end:a.end,pri:a.pri||'md',status:'done'}))
+    ...ASSIGNMENTS.map(a=>({name:a.name,kpi:a.kpi||'—',start:a.start,end:a.end,pri:a.pri||'md',status:a.status||(a.pct>=100?'done':a.pct>0?'wip':'todo'),chart:a.chart||null,pct:a.pct||0})),
+    ...ASSIGN_HISTORY.map(a=>({name:a.name,kpi:a.kpi||'—',start:a.start,end:a.end,pri:a.pri||'md',status:'done',chart:a.chart||null,pct:100}))
   ];
   tb.innerHTML=rows.map(t=>{
     const pc=priMap[t.pri]||priMap.md,sc=stMap[t.status]||stMap.todo;
     const lateTd=t.status==='late'?` style="color:var(--red);font-weight:700"`:'';
-    return `<tr class="task-row" data-status="${t.status}"><td>${t.name}</td><td>${t.kpi}</td><td>${_epShortMD(t.start)}</td><td${lateTd}>${_epShortMD(t.end)}${t.status==='late'?' ⚠':''}</td><td><span class="chip ${pc[0]}">${pc[1]}</span></td><td><span class="chip ${sc[0]}">${sc[1]}</span></td></tr>`;
+    const chartChip=t.chart?`<div style="margin-top:2px"><span style="font-size:9px;background:#EDE9FE;color:#7C3AED;padding:1px 7px;border-radius:8px;font-weight:700">📊 ${t.chart}</span></div>`:'';
+    const pctBadge=`<span style="font-size:10px;font-weight:700;color:${t.pct>=100?'var(--green)':t.pct>=40?'var(--accent)':'var(--amber)'};margin-left:6px">${t.pct}%</span>`;
+    return `<tr class="task-row" data-status="${t.status}"><td>${t.name}${chartChip}</td><td>${t.kpi}</td><td>${_epShortMD(t.start)}</td><td${lateTd}>${_epShortMD(t.end)}${t.status==='late'?' ⚠':''}</td><td><span class="chip ${pc[0]}">${pc[1]}</span></td><td><span class="chip ${sc[0]}">${sc[1]}</span>${pctBadge}</td></tr>`;
   }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text3);font-size:12px;padding:20px">タスクがありません</td></tr>';
   const f=document.getElementById('ep-task-filters');
   if(f){
@@ -2099,6 +2102,29 @@ function vexumLogout(){
     if(typeof updateInboxBadge==='function') updateInboxBadge();
     if(window.VexumUI)VexumUI.refresh();
   }).catch(function(){});
+  // リアルタイム反映: リーダーの振り分け・チャート更新を自動で再描画
+  if(API.subscribeLive){
+    API.subscribeLive(['tasks','chart_sends'],function(){
+      API.loadPersonalData().then(function(d){
+        if(!d)return;
+        repl(CHARTS,d.CHARTS);repl(FEEDBACK,d.FEEDBACK);
+        replArr(ASSIGNMENTS,d.ASSIGNMENTS);replArr(ASSIGN_HISTORY,d.ASSIGN_HISTORY);
+        window._epTeam=d.TEAM;window._epKpis=d.KPIS;window._epStats=d.STATS;
+        if(typeof renderProgressDash==='function')renderProgressDash();
+        if(typeof renderTaskTable==='function')renderTaskTable();
+        if(typeof renderAssign==='function')renderAssign();
+        if(typeof updateAssignBadge==='function')updateAssignBadge();
+        if(typeof renderCmTasks==='function')renderCmTasks();
+      }).catch(function(){});
+      API.loadMyInbox().then(function(rows){
+        if(!rows)return;
+        replArr(INBOX,rows);
+        if(typeof renderInbox==='function')renderInbox();
+        if(typeof updateInboxBadge==='function')updateInboxBadge();
+        if(window.VexumUI)VexumUI.refresh();
+      }).catch(function(){});
+    });
+  }
 })();
 </script>
 </body>

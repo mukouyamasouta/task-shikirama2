@@ -197,28 +197,34 @@
     } else { apply(); }
   }
 
-  // ---- トップバーの 🔔 / ⚙ を発見して配線 ----
+  // ---- トップバーの 🔔 / ⚙ を配線 ----
+  // クリックは document へのイベントデリゲーションで拾う（ボタンが
+  // 再描画されたり、他スクリプトのエラーがあっても確実に反応する）。
   function wire() {
     var icons = document.querySelectorAll('.topbar-actions .tb-icon, .topbar .tb-icon');
-    var bell = null, gear = null;
     Array.prototype.forEach.call(icons, function (b) {
       var t = (b.textContent || '').trim();
-      if (t.indexOf('🔔') >= 0) bell = b;
-      else if (t.indexOf('⚙') >= 0) gear = b;
+      if (t.indexOf('🔔') >= 0 && !b._vxWired) {
+        b._vxWired = true; b.id = 'vx-bell'; b.title = '通知';
+        var wrap = document.createElement('span'); wrap.className = 'vx-wrap';
+        b.parentNode.insertBefore(wrap, b); wrap.appendChild(b);
+        var dot = document.createElement('span'); dot.className = 'vx-dot'; dot.id = 'vx-dot';
+        wrap.appendChild(dot);
+      } else if (t.indexOf('⚙') >= 0 && !b._vxWired) {
+        b._vxWired = true; b.title = '設定';
+      }
     });
-    if (bell && !bell._vxWired) {
-      bell._vxWired = true; bell.id = 'vx-bell'; bell.title = '通知';
-      var wrap = document.createElement('span'); wrap.className = 'vx-wrap';
-      bell.parentNode.insertBefore(wrap, bell); wrap.appendChild(bell);
-      var dot = document.createElement('span'); dot.className = 'vx-dot'; dot.id = 'vx-dot';
-      wrap.appendChild(dot);
-      bell.addEventListener('click', toggle);
+    if (!document._vxDelegated) {
+      document._vxDelegated = true;
+      document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('.tb-icon') : null;
+        if (!btn) return;
+        var t = (btn.textContent || '').trim();
+        if (t.indexOf('🔔') >= 0) { e.stopPropagation(); wire(); toggle(); }
+        else if (t.indexOf('⚙') >= 0) { e.stopPropagation(); settingsOpen(); }
+      });
+      window.addEventListener('resize', function () { var p = $('vx-panel'); if (p && p.classList.contains('open')) position(); });
     }
-    if (gear && !gear._vxWired) {
-      gear._vxWired = true; gear.title = '設定';
-      gear.addEventListener('click', function (e) { e.stopPropagation(); settingsOpen(); });
-    }
-    window.addEventListener('resize', function () { var p = $('vx-panel'); if (p && p.classList.contains('open')) position(); });
   }
 
   function boot() {

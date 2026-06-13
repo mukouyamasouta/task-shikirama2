@@ -18,6 +18,7 @@ supabase/
   ├ REBUILD.sql                 … バックエンド一括構築（テーブル/RLS/RPC/シード/Auth）
   ├ 15_backend_complete.sql     … 既存DB用 同期パッチ（冪等）
   ├ 16_one_account_one_role.sql … 1人=1アカウント=1ロール 正規化（冪等）
+  ├ 17_chart_task_link.sql      … チャート⇄タスク連携＋Realtime有効化（冪等）
   └ 12〜14_*.sql                … 過去の個別パッチ（履歴・15/16が包含）
 vercel.json             … 静的ホスティング設定
 ```
@@ -32,8 +33,9 @@ vercel.json             … 静的ホスティング設定
    1. `supabase/REBUILD.sql` … 全テーブル/RLS/RPC/シード/Authユーザーを一括作成（既存データは破棄）
    2. `supabase/15_backend_complete.sql` … 列の最終確認（冪等）
    3. `supabase/16_one_account_one_role.sql` … 1人=1アカウント=1ロールの正規化（冪等）
-3. 16 の末尾の確認クエリが `4 / 0 / 0 / 0` を返せば完了
-   （既存DBに16だけ当てる場合も同じ。「別の人の名前で表示される」症状は16で解消）。
+   4. `supabase/17_chart_task_link.sql` … チャート⇄タスク連携＋Realtime有効化（冪等）
+3. 16 の確認クエリが `4 / 0 / 0 / 0`、17 の確認クエリが `3 / 2` を返せば完了
+   （既存DBに15〜17だけ当てる場合も同じ。「別の人の名前で表示される」症状は16で解消）。
 
 ---
 
