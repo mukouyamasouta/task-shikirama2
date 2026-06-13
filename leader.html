@@ -222,9 +222,15 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- 受信ボックス -->
 <div id="tc-inbox" class="tab-content">
-  <div class="sec-title">受信ボックス <span style="font-size:11px;font-weight:400;color:var(--text3)">幹部・統括から送信された曼荼羅チャート</span></div>
+  <div class="sec-title">受信ボックス <span style="font-size:11px;font-weight:400;color:var(--text3)">メンバーの記入（日報・タスク進捗・チャート更新）と幹部/統括からの受信チャート</span></div>
+  <!-- メンバーからの記入通知 -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-hd"><div><div class="card-title">🔔 メンバーからの記入・提出</div><div class="card-sub">日報の提出・タスク完了・チャート更新がここに届きます</div></div><span id="inbox-notif-count" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div>
+    <div class="card-body" id="inbox-notif-list" style="padding:0"><div style="padding:14px;text-align:center;color:var(--text3);font-size:12px">まだ通知はありません</div></div>
+  </div>
+  <div class="sec-title" style="font-size:13px;margin-top:4px">📥 幹部・統括からの受信チャート</div>
   <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
-    <span style="font-size:14px">💡</span><span>「📤 タスクを振り分け」で受信チャートのKPIをメンバーのタスクとして割り当てられます。割り当てたタスクは各メンバーの個人画面（割り当て・チャート管理）に表示されます。</span>
+    <span style="font-size:14px">💡</span><span>「🧿 チャートを管理」で受信チャートのCSF/KPIをメンバーのタスクとして振り分けられます。割り当てたタスクは各メンバーの個人画面（割り当て）にオレンジ表示されます。</span>
   </div>
   <div id="inbox-list"></div>
 </div>
@@ -545,25 +551,49 @@ function renderDashboard(){
   });
   document.getElementById('dash-members').innerHTML=h;
 }
-function openMemberDash(id){
+async function openMemberDash(id){
   const m=MEMBERS[id];
   document.getElementById('md-name').textContent=m.name+'（'+m.role+'）';
   document.getElementById('md-team').textContent=m.team+' ／ 達成率 '+m.rate+'%';
-  let h=`<div class="g4" style="margin-bottom:14px">
-    <div class="stat-card" style="padding:14px"><div class="s-lbl">達成率</div><div class="s-val" style="font-size:22px;color:${rateColor(m.rate)}">${m.rate}%</div></div>
-    <div class="stat-card" style="padding:14px"><div class="s-lbl">完了</div><div class="s-val" style="font-size:22px;color:var(--green)">${m.stats.done}</div></div>
-    <div class="stat-card" style="padding:14px"><div class="s-lbl">進行中</div><div class="s-val" style="font-size:22px">${m.stats.wip}</div></div>
-    <div class="stat-card" style="padding:14px"><div class="s-lbl">遅延</div><div class="s-val" style="font-size:22px;color:var(--red)">${m.stats.late}</div></div>
-  </div>
-  <div class="card"><div class="card-hd"><div class="card-title">KPI進捗</div><div class="card-sub">KGI: ${(m.center||'').replace(/\n/,' ')}</div></div><div class="card-body">`;
-  m.kpis.forEach(kp=>{const c=kp.p>=80?'var(--green)':kp.p>=50?'var(--amber)':'var(--accent)';h+=`<div class="team-row" style="padding:7px 0"><div class="tname" style="font-size:11px">${kp.n}</div><div class="pw"><div class="pt"><div class="pf" style="width:${kp.p}%;background:${c}"></div></div><div class="pp" style="color:${c}">${kp.p}%</div></div></div>`;});
-  h+=`</div></div><div class="card"><div class="card-hd"><div class="card-title">割り当てタスク</div></div><div class="card-body" style="padding:0">`;
+  // タスクのサマリ（割り当てがどんな感じか把握）
   const tasks=MEMBER_TASKS[id]||[];
+  const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length;
+  const wip=tasks.filter(t=>t.status==='wip').length;
+  const late=tasks.filter(t=>t.status==='late').length;
+  const totalH=tasks.reduce((a,t)=>a+(t.hours||0),0);
+  let h=`<div class="g4" style="margin-bottom:14px">
+    <div class="stat-card" style="padding:14px"><div class="s-lbl">割り当て</div><div class="s-val" style="font-size:22px;color:var(--accent)">${tasks.length}</div></div>
+    <div class="stat-card" style="padding:14px"><div class="s-lbl">完了</div><div class="s-val" style="font-size:22px;color:var(--green)">${done}</div></div>
+    <div class="stat-card" style="padding:14px"><div class="s-lbl">進行中</div><div class="s-val" style="font-size:22px">${wip}</div></div>
+    <div class="stat-card" style="padding:14px"><div class="s-lbl">遅延</div><div class="s-val" style="font-size:22px;color:var(--red)">${late}</div></div>
+  </div>`;
+  // 曼荼羅チャートの種類プルダウン（複数チャートがあれば選択して表示）
+  let charts=[];const API=window.VexumAPI;
+  if(API&&API.ready&&m.pid){ try{charts=window._chartsCache[m.pid]||await API.loadChartsFor(m.pid);window._chartsCache[m.pid]=charts;}catch(e){charts=[];} }
+  window._mdCharts=charts;window._mdMemberId=id;
+  const chartSel=charts.length
+    ? `<select class="fs" id="md-chart-sel" style="flex:1;min-width:160px">${charts.map((c,i)=>`<option value="${i}">${c.name||'チャート'}（${c.scope_label||c.period||''}）</option>`).join('')}</select><button class="card-btn" onclick="mdViewChart()">🧿 表示</button>`
+    : `<button class="card-btn" onclick="openMandala('${id}',false)">🧿 曼荼羅チャートを見る</button>`;
+  h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div class="card-title">🧿 曼荼羅チャート</div><div class="card-sub">${charts.length>1?'複数のチャートから種類を選択して表示':'メンバーの曼荼羅チャート'}</div></div><div class="card-body" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${chartSel}</div></div>`;
+  // 割り当てタスク（どんな感じか: 進捗バー・工数・期間つき）
+  h+=`<div class="card"><div class="card-hd"><div class="card-title">割り当てタスクの状況</div><div class="card-sub">合計工数 ${Math.round(totalH*10)/10}h</div></div><div class="card-body" style="padding:0">`;
   if(!tasks.length)h+=`<div style="padding:14px;color:var(--text3);font-size:12px">割り当てタスクはありません</div>`;
-  tasks.forEach(t=>{const sc=statusChip(t.status),pc=priChip(t.pri);h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6"><div><div style="font-size:12px;font-weight:600">${t.name}</div><div style="font-size:10px;color:var(--text3)">関連KPI: ${t.kpi} ／ ${t.start}〜${t.due}</div></div><div style="display:flex;gap:6px"><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
-  h+=`</div></div><div style="text-align:right"><button class="card-btn" onclick="openMandala('${id}',false)">🧿 曼荼羅チャートを見る</button></div>`;
+  tasks.forEach(t=>{const sc=statusChip(t.status),pc=priChip(t.pri);const pct=t.pct!=null?t.pct:0;
+    const col=pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)';
+    const chartChip=t.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${t.chart}</span>`:'';
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${chartChip}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${t.hours?' ／ '+t.hours+'h':''}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
+  h+=`</div></div>`;
   document.getElementById('md-body').innerHTML=h;
   document.getElementById('member-modal').style.display='flex';
+}
+// メンバーDBで選択した種類の曼荼羅チャートを表示
+function mdViewChart(){
+  const charts=window._mdCharts||[];const sel=document.getElementById('md-chart-sel');
+  if(!charts.length){if(window._mdMemberId)openMandala(window._mdMemberId,false);return;}
+  const c=charts[+(sel?sel.value:0)]||charts[0];
+  const m=MEMBERS[window._mdMemberId]||{};
+  MEMBERS['__mdview__']={name:c.name||m.name,role:m.role,team:m.team,scopeLabel:c.scope_label||c.period||'',color:c.color||m.color||'#0D9488',bg:c.bg||'#CCEDE9',center:c.center||'',subs:c.subs||[],acts:c.acts||[]};
+  openMandala('__mdview__',false);
 }
 function closeMemberDash(){document.getElementById('member-modal').style.display='none';}
 
@@ -890,42 +920,71 @@ function saveMemberEval(){
   showToast('evalin-saved');renderEvalRec();
 }
 
-/* ===== 評価記録（メンバー選択→その人の全履歴） ===== */
+/* ===== 評価記録（メンバー選択→CSFまで網羅的に表示） ===== */
 let _evalRecSel='';
+function _evalRecMemberId(name){return EVAL_IDS.find(id=>MEMBERS[id]&&MEMBERS[id].name===name)||DASH_IDS.find(id=>MEMBERS[id]&&MEMBERS[id].name===name);}
 function renderEvalRec(){
   const con=document.getElementById('evalrec-container');if(!con)return;
-  // チーム内メンバー（リーダー除く）＋評価記録に存在する被評価者
   const names={};
   EVAL_IDS.forEach(id=>{if(MEMBERS[id])names[MEMBERS[id].name]=1;});
   EVAL_RECORDS.forEach(r=>{names[r.name]=1;});
   const list=Object.keys(names);
   if(!_evalRecSel&&list.length)_evalRecSel=list[0];
-  let h=`<div style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+  con.innerHTML=`<div style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
     <label class="fl" style="margin:0">メンバーを選択</label>
     <select class="fs" style="width:auto;min-width:200px" onchange="_evalRecSel=this.value;renderEvalRec()">
       ${list.map(n=>`<option value="${n}" ${n===_evalRecSel?'selected':''}>${n}</option>`).join('')}
     </select>
-  </div>`;
-  const recs=EVAL_RECORDS.filter(r=>r.name===_evalRecSel);
-  h+=`<div style="padding:14px 16px">`;
-  if(!list.length){h+='<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">評価記録がありません</div>';}
-  else if(!recs.length){h+=`<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">${_evalRecSel} さんの評価記録はまだありません</div>`;}
-  else{
-    h+=`<div style="font-size:12px;font-weight:700;margin-bottom:10px">${_evalRecSel} さんへの評価履歴（${recs.length}件）</div>`;
-    recs.forEach(r=>{
-      h+=`<div class="card" style="margin-bottom:10px"><div class="card-hd"><div><div class="card-title">${r.period}</div><div class="card-sub">評価者: ${r.evaluator||'—'}</div></div><span class="chip ${r.status==='done'?'s-done':'s-todo'}">${r.status==='done'?'完了':'未入力'}</span></div>
+    <span style="font-size:10px;color:var(--text3)">KGI・各CSF・タスクの★とコメントを網羅表示</span>
+  </div><div id="evalrec-detail" style="padding:14px 16px"><div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">読み込み中…</div></div>`;
+  _evalRecDetail();
+}
+async function _evalRecDetail(){
+  const box=document.getElementById('evalrec-detail');if(!box)return;
+  const id=_evalRecMemberId(_evalRecSel);const m=id?MEMBERS[id]:null;
+  const subs=(m&&m.subs)||[];
+  const API=window.VexumAPI;
+  // 接続時: evaluations から CSF 詳細を取得
+  if(API&&API.ready&&m&&m.pid){
+    let data;try{data=await API.loadEvaluationsFor(m.pid);}catch(e){data=null;}
+    const evs=data?[].concat(data.fromLeader||[],data.fromExec||[],data.fromSelf||[]):[];
+    if(!evs.length){box.innerHTML=`<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">${_evalRecSel} さんの評価記録はまだありません</div>`;return;}
+    evs.sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+    let h=`<div style="font-size:12px;font-weight:700;margin-bottom:10px">${_evalRecSel} さんへの評価（${evs.length}件・CSFまで網羅）</div>`;
+    evs.forEach(ev=>{
+      const roleJ=ev.evaluatorRole==='executive'?'幹部':'リーダー';
+      const csfArr=Array.isArray(ev.csf)?ev.csf:[];
+      const csfAvg=csfArr.length?(csfArr.reduce((a,c)=>a+(+c.stars||0),0)/csfArr.length):0;
+      h+=`<div class="card" style="margin-bottom:12px"><div class="card-hd"><div><div class="card-title">${ev.period||'—'}</div><div class="card-sub">評価者: ${ev.evaluatorName||'—'}（${roleJ}）</div></div><span class="chip s-done">CSF平均 ${csfAvg.toFixed(1)}</span></div>
         <div class="card-body">
-          <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px">
-            <div><div style="font-size:10px;color:var(--text3)">KGI</div><div style="color:var(--amber);letter-spacing:1px">${starStr(r.kgi)}</div></div>
-            <div><div style="font-size:10px;color:var(--text3)">CSF平均</div><div style="color:var(--amber);letter-spacing:1px">${starStr(r.csf)} <span style="font-size:10px;color:var(--text3)">${r.csf||0}</span></div></div>
-            <div><div style="font-size:10px;color:var(--text3)">タスク</div><div style="color:var(--amber);letter-spacing:1px">${starStr(r.task)}</div></div>
+          <div style="margin-bottom:10px;padding:8px 10px;background:#FFFBEB;border:1px solid #FCD34D;border-radius:6px">
+            <div style="font-size:11px;font-weight:800;color:#92400E">🎯 KGI <span style="color:var(--amber);letter-spacing:1px;margin-left:6px">${starStr(ev.kgi)}</span></div>
+            ${ev.kgiComment?`<div style="font-size:11px;color:var(--text2);margin-top:3px">💬 ${ev.kgiComment}</div>`:''}
           </div>
-          <div style="font-size:11px;color:var(--text2);background:#FAFAFA;border:1px solid var(--border);border-radius:6px;padding:8px 10px">💬 ${r.comment||'—'}</div>
-        </div></div>`;
+          <div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:4px">CSF評価（${csfArr.length}項目）</div>`;
+      if(!csfArr.length)h+=`<div style="font-size:11px;color:var(--text3)">CSF評価は記録されていません</div>`;
+      csfArr.forEach((c,i)=>{
+        h+=`<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+          <div style="min-width:0;flex:1"><div style="font-size:11px;font-weight:600">CSF-${i+1} ${subs[i]?'：'+subs[i]:''}</div>${c.comment?`<div style="font-size:10px;color:var(--text3);margin-top:1px">💬 ${c.comment}</div>`:''}</div>
+          <div style="color:var(--amber);letter-spacing:1px;font-size:12px;flex-shrink:0">${starStr(+c.stars||0)}</div></div>`;
+      });
+      h+=`</div></div>`;
     });
+    box.innerHTML=h;return;
   }
-  h+=`</div>`;
-  con.innerHTML=h;
+  // デモ（未接続）: EVAL_RECORDS のサマリ表示
+  const recs=EVAL_RECORDS.filter(r=>r.name===_evalRecSel);
+  if(!recs.length){box.innerHTML=`<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">${_evalRecSel} さんの評価記録はまだありません<br><span style="font-size:10px">（CSFまでの詳細はSupabase接続時に表示されます）</span></div>`;return;}
+  let h=`<div style="font-size:12px;font-weight:700;margin-bottom:10px">${_evalRecSel} さんへの評価履歴（${recs.length}件）</div>`;
+  recs.forEach(r=>{
+    h+=`<div class="card" style="margin-bottom:10px"><div class="card-hd"><div><div class="card-title">${r.period}</div><div class="card-sub">評価者: ${r.evaluator||'—'}</div></div><span class="chip ${r.status==='done'?'s-done':'s-todo'}">${r.status==='done'?'完了':'未入力'}</span></div>
+      <div class="card-body"><div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px">
+        <div><div style="font-size:10px;color:var(--text3)">KGI</div><div style="color:var(--amber);letter-spacing:1px">${starStr(r.kgi)}</div></div>
+        <div><div style="font-size:10px;color:var(--text3)">CSF平均</div><div style="color:var(--amber);letter-spacing:1px">${starStr(r.csf)} <span style="font-size:10px;color:var(--text3)">${r.csf||0}</span></div></div>
+        <div><div style="font-size:10px;color:var(--text3)">タスク</div><div style="color:var(--amber);letter-spacing:1px">${starStr(r.task)}</div></div>
+      </div><div style="font-size:11px;color:var(--text2);background:#FAFAFA;border:1px solid var(--border);border-radius:6px;padding:8px 10px">💬 ${r.comment||'—'}</div></div></div>`;
+  });
+  box.innerHTML=h;
 }
 
 /* ===== 日報（メンバー別カレンダー） ===== */
@@ -1271,10 +1330,26 @@ const INBOX=(()=>{ // デモ用: Supabase接続時は実データで置換
 let _ibCur=null,_ibSel=null;
 function updateInboxBadge(){
   const b=document.getElementById('inbox-badge');if(!b)return;
-  const n=INBOX.filter(s=>s.status!=='done').length;
+  const n=INBOX.filter(s=>s.status!=='done').length+((window._leaderNotifs||[]).filter(x=>!x.read).length);
   b.textContent=n;b.style.display=n?'':'none';
 }
+// メンバーからの記入（日報提出・タスク完了・チャート更新）を受信ボックスに表示
+function renderLeaderNotifs(){
+  const con=document.getElementById('inbox-notif-list');if(!con)return;
+  const ns=window._leaderNotifs||[];
+  const cnt=document.getElementById('inbox-notif-count');if(cnt)cnt.textContent=ns.length?ns.length+'件':'';
+  if(!ns.length){con.innerHTML='<div style="padding:14px;text-align:center;color:var(--text3);font-size:12px">まだ通知はありません</div>';return;}
+  const meta={task_done:['✅','#D1FAE5','var(--green)','assign'],report_submitted:['📓','#EDE9FE','#7C3AED','report'],task_late:['⚠','#FEE2E2','var(--red)','assign'],chart_edit:['✏','#FEF3C7','#D97706','dashboard']};
+  con.innerHTML=ns.slice(0,30).map(n=>{
+    const mt=meta[n.type]||['🔔','#F3F4F6','var(--text3)','dashboard'];
+    return `<div onclick="gotoTab('${mt[3]}')" style="display:flex;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='#FAFCFC'" onmouseout="this.style.background=''">
+      <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;background:${mt[1]};color:${mt[2]};flex-shrink:0">${mt[0]}</div>
+      <div style="min-width:0"><div style="font-size:12px;color:var(--text)">${n.actor_name?'<b>'+n.actor_name+'</b>：':''}${n.body||n.title||'通知'}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">${(n.created_at||'').slice(0,16).replace('T',' ')}</div></div></div>`;
+  }).join('');
+}
 function renderInbox(){
+  renderLeaderNotifs();
   const con=document.getElementById('inbox-list');if(!con)return;
   if(!INBOX.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">受信したチャートはありません。幹部・統括が送信すると、ここに表示されます。</div></div>';return;}
   const st={sent:['s-todo','未着手'],in_progress:['s-wip','振り分け中'],done:['s-done','完了']};

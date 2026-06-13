@@ -596,7 +596,7 @@
   // 特定メンバーが持つ全曼荼羅チャート（評価対象選択用）
   async function loadChartsFor(pid) {
     if (!sb || !pid) return [];
-    var r = await sb.from('mandala_charts').select('id,name,period,scope_label,center,subs').eq('owner_user_id', pid).order('created_at', { ascending: true });
+    var r = await sb.from('mandala_charts').select('id,name,period,scope_label,center,subs,acts,color,bg,member_kpi_edits').eq('owner_user_id', pid).order('created_at', { ascending: true });
     if (r.error) { err('chartsFor', r.error); return []; }
     return r.data || [];
   }
