@@ -225,39 +225,36 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <!-- 進捗ダッシュボード -->
 <div id="tc-progress" class="tab-content active">
   <div class="g4">
-    <div class="stat-card"><div class="s-lbl">自分の達成率</div><div class="s-val" style="color:var(--accent)" id="ep-stat-rate">72%</div><div class="s-trend up" id="ep-stat-rate-sub">▲ 4pt 先月比</div></div>
-    <div class="stat-card"><div class="s-lbl">完了タスク</div><div class="s-val" style="color:var(--green)" id="ep-stat-done">6</div><div class="s-trend up" id="ep-stat-done-sub">▲ 2 先週比</div></div>
-    <div class="stat-card"><div class="s-lbl">進行中タスク</div><div class="s-val" id="ep-stat-wip">3</div><div class="s-trend" style="color:var(--text3)">個人タスク</div></div>
-    <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)" id="ep-stat-late">1</div><div class="s-trend down" id="ep-stat-late-sub">▲ 1 先週比</div></div>
+    <div class="stat-card"><div class="s-lbl">本日までの達成率</div><div class="s-val" style="color:var(--accent)" id="ep-d-todayrate">—</div><div class="s-trend" style="color:var(--text3)" id="ep-d-todayrate-sub">期限到来分の完了割合</div></div>
+    <div class="stat-card"><div class="s-lbl">本日対応すべき</div><div class="s-val" id="ep-d-due">—</div><div class="s-trend" style="color:var(--text3)">期限が本日まで・未完了</div></div>
+    <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)" id="ep-d-late">—</div><div class="s-trend" style="color:var(--text3)">期限超過・未完了</div></div>
+    <div class="stat-card"><div class="s-lbl">合計作業時間</div><div class="s-val" style="color:var(--accent)" id="ep-d-hours">—</div><div class="s-trend" style="color:var(--text3)">全タスク累計工数</div></div>
+  </div>
+  <!-- 本日対応が必要・未完了タスク -->
+  <div class="card">
+    <div class="card-hd"><div><div class="card-title">🎯 本日対応が必要・未完了タスク</div><div class="card-sub">期限内／遅延を明示。進捗・期限・優先度・工数つき</div></div><span id="ep-d-open-count" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div>
+    <div class="card-body" id="ep-d-open-list"><div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">読み込み中…</div></div>
   </div>
   <div class="g2">
     <div class="card">
-      <div class="card-hd"><div><div class="card-title">自分のKGI / KPI 進捗</div><div class="card-sub" id="ep-kgi-name">Q3個人売上 ¥15M達成</div></div><span style="font-size:20px;font-weight:800;color:var(--accent)" id="ep-kgi-pct">72%</span></div>
-      <div class="card-body" id="ep-kpi-rows">
-        <div class="team-row"><div class="tname" style="font-size:11px">新規顧客10社</div><div class="pw"><div class="pt"><div class="pf" style="width:70%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">70%</div></div></div>
-        <div class="team-row"><div class="tname" style="font-size:11px">訪問件数30件</div><div class="pw"><div class="pt"><div class="pf" style="width:80%;background:var(--green)"></div></div><div class="pp" style="color:var(--green)">80%</div></div></div>
-        <div class="team-row"><div class="tname" style="font-size:11px">受注率35%</div><div class="pw"><div class="pt"><div class="pf" style="width:60%;background:var(--amber)"></div></div><div class="pp" style="color:var(--amber)">60%</div></div></div>
-        <div class="team-row"><div class="tname" style="font-size:11px">提案力UP</div><div class="pw"><div class="pt"><div class="pf" style="width:78%;background:var(--cyan)"></div></div><div class="pp" style="color:var(--cyan)">78%</div></div></div>
-      </div>
+      <div class="card-hd"><div><div class="card-title">自分のKGI / KPI 進捗</div><div class="card-sub" id="ep-kgi-name">Q3個人売上 ¥15M達成</div></div><span style="font-size:20px;font-weight:800;color:var(--accent)" id="ep-kgi-pct">—</span></div>
+      <div class="card-body" id="ep-kpi-rows"></div>
     </div>
     <div class="card">
-      <div class="card-hd"><div><div class="card-title">所属チームの進捗</div><div class="card-sub" id="ep-team-name">営業チームA メンバー</div></div><span style="font-size:13px;font-weight:700;color:var(--accent)" id="ep-team-pct">82%</span></div>
-      <div class="card-body" id="ep-team-rows">
-        <div class="team-row"><div class="tdot" style="background:var(--green)"></div><div class="tname" style="font-size:11px">田中 花子 <span style="font-size:9px;color:var(--text3)">上長</span></div><div class="pw"><div class="pt"><div class="pf" style="width:94%;background:var(--green)"></div></div><div class="pp" style="color:var(--green)">94%</div></div></div>
-        <div class="team-row" style="background:rgba(13,148,136,.06);border-radius:6px;padding:7px 6px"><div class="tdot" style="background:var(--accent)"></div><div class="tname" style="font-size:11px">中村 健太 <span style="font-size:9px;color:var(--accent);font-weight:700">あなた</span></div><div class="pw"><div class="pt"><div class="pf" style="width:72%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">72%</div></div></div>
-        <div class="team-row"><div class="tdot" style="background:var(--text3)"></div><div class="tname" style="font-size:11px">伊藤 さくら</div><div class="pw"><div class="pt"><div class="pf" style="width:68%;background:var(--text3)"></div></div><div class="pp" style="color:var(--text3)">68%</div></div></div>
-      </div>
+      <div class="card-hd"><div><div class="card-title">✅ 完了済みタスク</div><div class="card-sub">合計工数つき</div></div><span id="ep-d-done-count" style="font-size:13px;font-weight:700;color:var(--green)"></span></div>
+      <div class="card-body" id="ep-d-done-list"><div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">—</div></div>
     </div>
   </div>
-  <div class="card">
-    <div class="card-hd"><div><div class="card-title">達成率ランキング</div><div class="card-sub" id="ep-rank-sub">営業チームA · 今月のKPI達成率</div></div></div>
-    <div class="card-body" id="ep-rank-rows">
-      <div class="rank-row"><div class="rank-n">🥇</div><div class="rank-name">田中 花子</div><div class="rank-team">営業チームA</div><span class="badge b-manager">上長</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:94%;background:var(--green)"></div></div><div class="pp" style="color:var(--green)">94%</div></div></div>
-      <div class="rank-row"><div class="rank-n">🥈</div><div class="rank-name">伊藤 さくら</div><div class="rank-team">営業チームA</div><span class="badge b-employee">従業員</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:78%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">78%</div></div></div>
-      <div class="rank-row me"><div class="rank-n">🥉</div><div class="rank-name">中村 健太 <span style="font-size:9px;color:var(--accent);font-weight:700">あなた</span></div><div class="rank-team">営業チームA</div><span class="badge b-employee">従業員</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:72%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">72%</div></div></div>
-      <div class="rank-row"><div class="rank-n" style="color:var(--text3);font-size:11px">4</div><div class="rank-name">小林 大輔</div><div class="rank-team">営業チームA</div><span class="badge b-employee">従業員</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:64%;background:var(--text3)"></div></div><div class="pp" style="color:var(--text3)">64%</div></div></div>
+  <!-- チーム進捗（参考・優先度を下げて折りたたみ） -->
+  <details class="card" style="padding:0">
+    <summary style="cursor:pointer;padding:14px 18px;font-size:13px;font-weight:700;color:var(--text2);list-style:none">📊 所属チームの進捗・達成率ランキング（参考）<span style="float:right;font-size:11px;color:var(--text3)" id="ep-team-pct">—</span></summary>
+    <div style="padding:0 18px 16px">
+      <div class="card-sub" id="ep-team-name" style="margin-bottom:6px">営業チームA メンバー</div>
+      <div id="ep-team-rows"></div>
+      <div class="card-sub" id="ep-rank-sub" style="margin:12px 0 6px">達成率ランキング</div>
+      <div id="ep-rank-rows"></div>
     </div>
-  </div>
+  </details>
 </div>
 
 <!-- タスク管理 -->
@@ -272,7 +269,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
   <div class="card" style="overflow:auto">
     <table class="tbl" style="min-width:640px">
-      <thead><tr><th>タスク名</th><th>関連KPI</th><th>開始日</th><th>期限</th><th>優先度</th><th>ステータス</th></tr></thead>
+      <thead><tr><th>タスク名</th><th>関連KPI</th><th>開始日</th><th>期限</th><th>優先度</th><th>工数</th><th>進捗・ステータス</th></tr></thead>
       <tbody id="task-tbody">
         <tr class="task-row" data-status="wip"><td>新規顧客 訪問アポ獲得</td><td>訪問件数30件</td><td>5/20</td><td>6/5</td><td><span class="chip s-hi">高</span></td><td><span class="chip s-wip">進行中</span></td></tr>
         <tr class="task-row" data-status="done"><td>顧客ヒアリング資料作成</td><td>提案力UP</td><td>5/15</td><td>5/28</td><td><span class="chip s-lo">低</span></td><td><span class="chip s-done">完了</span></td></tr>
@@ -643,16 +640,31 @@ function asgUpdate(i,val){
   if(hint)hint.style.display=val>=100?'block':'none';
 }
 function asgComment(i,val){ASSIGNMENTS[i].comment=val;}
+function _epToday(){return new Date().toISOString().slice(0,10);}
+// 本日の作業時間＋到達進捗を記録（工数を加算）。100%なら完了処理。
 async function asgSaveData(i,btn){
-  const a=ASSIGNMENTS[i];
+  const a=ASSIGNMENTS[i];if(!a)return;
+  const hEl=document.getElementById('asg-h'+i);
+  const hours=Math.max(0,+(hEl&&hEl.value)||0);
   const API=window.VexumAPI;
-  if(API&&API.ready&&a&&a.id){
-    const st=a.pct>=100?'done':a.pct>0?'wip':(a.status==='late'?'late':'todo');
-    const res=await API.updateTask(a.id,{progress:a.pct,comment:a.comment||'',status:st});
+  if(API&&API.ready&&a.id){
+    const res=await API.logTaskTime(a.id,{hours,progressAfter:a.pct,comment:a.comment||''});
     if(res&&res.error){alert('保存失敗: '+res.error);return;}
-    a.status=st;
+    if(res){a.hours=(res.totalHours!=null?res.totalHours:(a.hours||0)+hours);}
+  }else{
+    a.hours=(a.hours||0)+hours; // デモ
   }
-  const old=btn.textContent;btn.textContent='✓ 保存しました';btn.style.background='var(--green)';setTimeout(()=>{btn.textContent=old;btn.style.background='var(--accent)';},1800);
+  if(hEl)hEl.value='';
+  a.status=a.pct>=100?'done':a.pct>0?'wip':(a.dueRaw&&a.dueRaw<_epToday()?'late':'todo');
+  const old=btn.textContent;btn.textContent=`✓ 記録しました（+${hours}h／合計${a.hours}h）`;btn.style.background='var(--green)';
+  setTimeout(()=>{btn.textContent=old;btn.style.background='var(--accent)';renderAssign();},1500);
+  if(a.pct>=100){setTimeout(()=>processAssignCompletion(),1600);}
+}
+// 「完了にする」: 進捗100%にして記録（本日の作業時間も任意で加算）→ 履歴へ＋リーダー通知
+async function asgComplete(i,btn){
+  const a=ASSIGNMENTS[i];if(!a)return;
+  a.pct=100;asgUpdate(i,100);
+  await asgSaveData(i,btn);
 }
 function updateAssignBadge(){const b=document.getElementById('assign-badge');if(!b)return;b.textContent=ASSIGNMENTS.length;b.style.display=ASSIGNMENTS.length?'':'none';}
 function processAssignCompletion(){
@@ -676,18 +688,27 @@ function renderAssign(){
     if(!ASSIGNMENTS.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">現在の割り当てはありません。完了したタスクは「🕘 過去の履歴」で確認できます。</div></div>';return;}
     ASSIGNMENTS.forEach((a,i)=>{
       const chartChip=a.chart?`<span style="font-size:9px;background:#EDE9FE;color:#7C3AED;padding:2px 8px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${a.chart}</span>`:'';
+      const late=a.status==='late'||(a.dueRaw&&a.dueRaw<_epToday()&&a.pct<100);
+      const stChip=late?'<span class="chip s-late" style="margin-left:6px">遅延</span>':(a.pct>0?'<span class="chip s-wip" style="margin-left:6px">進行中</span>':'<span class="chip s-todo" style="margin-left:6px">未着手</span>');
+      const totH=a.hours!=null?a.hours:0;
+      const planH=a.planned!=null?` / 予定 ${a.planned}h`:'';
       h+=`<div class="asg-card">
-        <div class="asg-top"><div><div class="asg-name">${a.name}${chartChip}</div><div class="asg-meta">${a.meta}</div></div><span class="asg-from ${a.fromClass}">${a.from}</span></div>
-        <div class="asg-dates"><span>開始期間 <b>${a.start}</b></span><span>終了期間 <b>${a.end}</b></span></div>
+        <div class="asg-top"><div><div class="asg-name">${a.name}${chartChip}${stChip}</div><div class="asg-meta">${a.meta}</div></div><span class="asg-from ${a.fromClass}">${a.from}</span></div>
+        <div class="asg-dates"><span>開始 <b>${a.start}</b></span><span>期限 <b${late?' style=\"color:var(--red)\"':''}>${a.end}${late?' ⚠':''}</b></span><span>合計工数 <b style="color:var(--accent)">${totH}h</b>${planH}</span></div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
           <div style="flex:1"><div class="asg-prog-label"><span>達成度</span><span id="asg-v${i}" style="color:var(--accent);font-weight:700">${a.pct}%</span></div>
             <input type="range" id="asg-r${i}" class="asg-slider" min="0" max="100" value="${a.pct}" oninput="asgUpdate(${i},this.value)"></div>
-          <div><div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px">直接入力</div>
+          <div><div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px">達成度 %</div>
             <div style="display:flex;align-items:center;gap:4px"><input type="number" id="asg-n${i}" min="0" max="100" value="${a.pct}" style="${numStyle}" oninput="asgUpdate(${i},this.value)"><span style="font-size:13px;font-weight:700;color:var(--text2)">%</span></div></div>
+          <div><div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px">本日の作業時間</div>
+            <div style="display:flex;align-items:center;gap:4px"><input type="number" id="asg-h${i}" min="0" step="0.5" placeholder="0" style="${numStyle}"><span style="font-size:13px;font-weight:700;color:var(--text2)">h</span></div></div>
         </div>
         <textarea class="asg-comment" rows="2" placeholder="進捗状況・メモ・上長への報告コメントを入力…" oninput="asgComment(${i},this.value)">${a.comment}</textarea>
-        <button class="asg-save" onclick="asgSaveData(${i},this)">保存する</button>
-        <div id="asg-hint${i}" style="display:${a.pct>=100?'block':'none'};margin-top:8px;font-size:11px;color:var(--green);font-weight:700">✅ 達成度100% — タブを切り替えると「過去の履歴」へ移動します</div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="asg-save" style="flex:2;margin:0" onclick="asgSaveData(${i},this)">💾 本日分を記録して保存</button>
+          <button class="asg-save" style="flex:1;margin:0;background:var(--green)" onclick="asgComplete(${i},this)">✓ 完了にする</button>
+        </div>
+        <div id="asg-hint${i}" style="display:${a.pct>=100?'block':'none'};margin-top:8px;font-size:11px;color:var(--green);font-weight:700">✅ 達成度100% — 保存すると合計工数とともに「過去の履歴」へ移動し、リーダーへ完了通知が届きます</div>
       </div>`;
     });
   }else{
@@ -695,7 +716,7 @@ function renderAssign(){
     ASSIGN_HISTORY.forEach(a=>{
       h+=`<div class="asg-card" style="background:#FAFAFA">
         <div class="asg-top"><div><div class="asg-name">${a.name} <span class="chip s-done" style="margin-left:6px">完了</span></div><div class="asg-meta">${a.meta}</div></div><span class="asg-from ${a.fromClass}">${a.from}</span></div>
-        <div class="asg-dates"><span>開始期間 <b>${a.start}</b></span><span>終了期間 <b>${a.end}</b></span><span>完了日 <b style="color:var(--green)">${a.completed||'—'}</b></span></div>
+        <div class="asg-dates"><span>開始 <b>${a.start}</b></span><span>期限 <b>${a.end}</b></span><span>完了日 <b style="color:var(--green)">${a.completed||'—'}</b></span><span>合計工数 <b style="color:var(--accent)">${a.hours!=null?a.hours:0}h</b>${a.planned!=null?` / 予定 ${a.planned}h`:''}</span></div>
         <div class="asg-prog-label"><span>達成度</span><span style="color:var(--green);font-weight:700">100%</span></div>
         <div style="height:6px;background:#F3F4F6;border-radius:3px;overflow:hidden;margin:4px 0 8px"><div style="height:100%;width:100%;background:var(--green)"></div></div>
         ${a.comment?`<div style="font-size:11px;color:var(--text2);background:#fff;border:1px solid var(--border);border-radius:6px;padding:8px 10px;line-height:1.5">💬 ${a.comment}</div>`:''}
@@ -1542,6 +1563,8 @@ renderEval();
 renderPReportCalendar();
 renderAssign();
 updateAssignBadge();
+if(typeof renderTaskTable==='function')renderTaskTable();
+if(typeof renderProgressDash==='function')renderProgressDash();
 </script>
 
 <script>
@@ -1980,16 +2003,17 @@ function renderTaskTable(){
   const priMap={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低'],urgent:['s-hi','緊急']};
   const stMap={wip:['s-wip','進行中'],done:['s-done','完了'],late:['s-late','遅延'],todo:['s-todo','未着手']};
   const rows=[
-    ...ASSIGNMENTS.map(a=>({name:a.name,kpi:a.kpi||'—',start:a.start,end:a.end,pri:a.pri||'md',status:a.status||(a.pct>=100?'done':a.pct>0?'wip':'todo'),chart:a.chart||null,pct:a.pct||0})),
-    ...ASSIGN_HISTORY.map(a=>({name:a.name,kpi:a.kpi||'—',start:a.start,end:a.end,pri:a.pri||'md',status:'done',chart:a.chart||null,pct:100}))
+    ...ASSIGNMENTS.map(a=>({name:a.name,kpi:a.kpi||'—',start:a.start,end:a.end,pri:a.pri||'md',status:a.status||(a.pct>=100?'done':a.pct>0?'wip':'todo'),chart:a.chart||null,pct:a.pct||0,hours:a.hours!=null?a.hours:0})),
+    ...ASSIGN_HISTORY.map(a=>({name:a.name,kpi:a.kpi||'—',start:a.start,end:a.end,pri:a.pri||'md',status:'done',chart:a.chart||null,pct:100,hours:a.hours!=null?a.hours:0}))
   ];
   tb.innerHTML=rows.map(t=>{
     const pc=priMap[t.pri]||priMap.md,sc=stMap[t.status]||stMap.todo;
     const lateTd=t.status==='late'?` style="color:var(--red);font-weight:700"`:'';
     const chartChip=t.chart?`<div style="margin-top:2px"><span style="font-size:9px;background:#EDE9FE;color:#7C3AED;padding:1px 7px;border-radius:8px;font-weight:700">📊 ${t.chart}</span></div>`:'';
-    const pctBadge=`<span style="font-size:10px;font-weight:700;color:${t.pct>=100?'var(--green)':t.pct>=40?'var(--accent)':'var(--amber)'};margin-left:6px">${t.pct}%</span>`;
-    return `<tr class="task-row" data-status="${t.status}"><td>${t.name}${chartChip}</td><td>${t.kpi}</td><td>${_epShortMD(t.start)}</td><td${lateTd}>${_epShortMD(t.end)}${t.status==='late'?' ⚠':''}</td><td><span class="chip ${pc[0]}">${pc[1]}</span></td><td><span class="chip ${sc[0]}">${sc[1]}</span>${pctBadge}</td></tr>`;
-  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text3);font-size:12px;padding:20px">タスクがありません</td></tr>';
+    const col=t.pct>=100?'var(--green)':t.pct>=40?'var(--accent)':'var(--amber)';
+    const prog=`<div class="pw" style="min-width:90px;display:inline-flex"><div class="pt" style="flex:1"><div class="pf" style="width:${t.pct}%;background:${col}"></div></div><div class="pp" style="color:${col};font-size:10px">${t.pct}%</div></div> <span class="chip ${sc[0]}">${sc[1]}</span>`;
+    return `<tr class="task-row" data-status="${t.status}"><td>${t.name}${chartChip}</td><td>${t.kpi}</td><td>${_epShortMD(t.start)}</td><td${lateTd}>${_epShortMD(t.end)}${t.status==='late'?' ⚠':''}</td><td><span class="chip ${pc[0]}">${pc[1]}</span></td><td style="font-weight:700;color:var(--accent)">${t.hours}h</td><td>${prog}</td></tr>`;
+  }).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--text3);font-size:12px;padding:20px">タスクがありません</td></tr>';
   const f=document.getElementById('ep-task-filters');
   if(f){
     const cnt=st=>st==='all'?rows.length:rows.filter(t=>t.status===st).length;
@@ -1998,11 +2022,62 @@ function renderTaskTable(){
 }
 
 /* ===== 進捗ダッシュボード（実データ描画・Supabase接続時のみ） ===== */
+// 本日対応が必要・未完了タスク／完了済みタスクの一覧を描画
+function _epRenderTaskLists(){
+  const today=_epToday();
+  const pri={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低'],urgent:['s-hi','緊急']};
+  function dueISO(a){ // ASSIGNMENTSはdueRaw、無ければend(YYYY/MM/DD)から
+    if(a.dueRaw)return a.dueRaw;
+    if(a.end&&/\d{4}\/\d{1,2}\/\d{1,2}/.test(a.end))return a.end.replace(/\//g,'-');
+    return null;
+  }
+  const open=ASSIGNMENTS.slice().sort((x,y)=>(dueISO(x)||'9999').localeCompare(dueISO(y)||'9999'));
+  const oc=document.getElementById('ep-d-open-list');
+  if(oc){
+    if(!open.length)oc.innerHTML='<div style="text-align:center;color:var(--green);font-size:12px;padding:20px">未完了タスクはありません 🎉</div>';
+    else oc.innerHTML=open.map(a=>{
+      const di=dueISO(a);const late=di&&di<today&&a.pct<100;const dueToday=di&&di===today;
+      const pc=pri[a.pri]||pri.md;
+      const badge=late?'<span class="chip s-late">遅延</span>':(dueToday?'<span class="chip s-hi">本日期限</span>':(a.pct>0?'<span class="chip s-wip">進行中</span>':'<span class="chip s-todo">未着手</span>'));
+      const col=a.pct>=80?'var(--green)':a.pct>=40?'var(--accent)':'var(--amber)';
+      const chartChip=a.chart?`<span style="font-size:9px;background:#EDE9FE;color:#7C3AED;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${a.chart}</span>`:'';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">${a.name}${chartChip}</div>
+        <div style="font-size:10px;color:${late?'var(--red)':'var(--text3)'}">期限 ${a.end||'—'}${late?' ⚠ 超過':''} ／ 工数 ${a.hours!=null?a.hours:0}h</div></div>
+        <span class="chip ${pc[0]}">${pc[1]}</span>${badge}
+        <div class="pw" style="min-width:110px"><div class="pt"><div class="pf" style="width:${a.pct}%;background:${col}"></div></div><div class="pp" style="color:${col}">${a.pct}%</div></div>
+      </div>`;
+    }).join('');
+  }
+  const occ=document.getElementById('ep-d-open-count');if(occ)occ.textContent=open.length+'件';
+  const done=ASSIGN_HISTORY.slice();
+  const dc=document.getElementById('ep-d-done-list');
+  if(dc){
+    if(!done.length)dc.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">完了済みタスクはまだありません</div>';
+    else dc.innerHTML=done.slice(0,8).map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="color:var(--green)">✓</span><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">${a.name}</div>
+      <div style="font-size:10px;color:var(--text3)">完了 ${a.completed||'—'} ／ 合計工数 <b style="color:var(--accent)">${a.hours!=null?a.hours:0}h</b></div></div></div>`).join('');
+  }
+  const dcc=document.getElementById('ep-d-done-count');if(dcc)dcc.textContent=done.length+'件';
+}
 function renderProgressDash(){
-  const st=window._epStats;if(!st)return;
+  let st=window._epStats;
+  if(!st){ // デモ（Supabase未接続）: 手元のASSIGNMENTS等から簡易集計
+    const today=_epToday();
+    const di=a=>a.dueRaw||(a.end&&/\d{4}\/\d{1,2}\/\d{1,2}/.test(a.end)?a.end.replace(/\//g,'-'):null);
+    const late=ASSIGNMENTS.filter(a=>{const d=di(a);return d&&d<today&&a.pct<100;}).length;
+    const due=ASSIGNMENTS.filter(a=>{const d=di(a);return d&&d<=today&&a.pct<100;}).length;
+    const hrs=[...ASSIGNMENTS,...ASSIGN_HISTORY].reduce((s,a)=>s+(a.hours||0),0);
+    st={rate:72,done:ASSIGN_HISTORY.length,wip:ASSIGNMENTS.filter(a=>a.pct>0).length,late,dueToday:due,todayRate:72,totalHours:Math.round(hrs*10)/10};
+  }
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
-  set('ep-stat-rate',st.rate+'%');set('ep-stat-done',st.done);set('ep-stat-wip',st.wip);set('ep-stat-late',st.late);
-  ['ep-stat-rate-sub','ep-stat-done-sub','ep-stat-late-sub'].forEach(id=>{const e=document.getElementById(id);if(e){e.className='s-trend';e.style.color='var(--text3)';e.textContent={'ep-stat-rate-sub':'チーム登録値','ep-stat-done-sub':'累計完了','ep-stat-late-sub':'要対応'}[id];}});
+  // 今日基準のサマリ
+  set('ep-d-todayrate',(st.todayRate!=null?st.todayRate:st.rate)+'%');
+  set('ep-d-due',st.dueToday!=null?st.dueToday:'0');
+  set('ep-d-late',st.late!=null?st.late:'0');
+  set('ep-d-hours',(st.totalHours!=null?st.totalHours:0)+'h');
+  // 本日対応が必要・未完了タスク一覧（ASSIGNMENTS=未完了の割当）
+  _epRenderTaskLists();
   const kpis=window._epKpis||[];
   const kgiName=(CHARTS.self_q3&&CHARTS.self_q3.center)?CHARTS.self_q3.center.replace(/\n/g,' '):'';
   if(kgiName)set('ep-kgi-name',kgiName);
@@ -2029,6 +2104,10 @@ function renderProgressDash(){
     }).join('');
   }
 }
+// 初期描画（この関数群はこのブロックで定義されるため、ここで初回描画する。
+// Supabase接続時は後続のbootstrapが実データで再描画する）
+renderProgressDash();
+renderTaskTable();
 </script>
 
 <!-- ===== Supabase 連携（未設定時は内蔵デモのまま動作） ===== -->

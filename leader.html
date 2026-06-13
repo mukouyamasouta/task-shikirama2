@@ -1340,20 +1340,25 @@ updateInboxBadge();
 /* 🔔 リーダーの通知: 受信チャート（要振り分け）・メンバーの日報提出 */
 window.vxNotifSource=function(){
   const out=[];
+  // メンバーからの通知（完了/遅延/日報提出）= notifications テーブル由来（最優先で表示）
+  if(Array.isArray(window._leaderNotifs)){
+    window._leaderNotifs.slice(0,8).forEach(n=>{
+      const ic=n.type==='task_done'?'✅':n.type==='report_submitted'?'📓':'⚠';
+      const bg=n.type==='task_done'?'#D1FAE5':n.type==='report_submitted'?'#EDE9FE':'#FEE2E2';
+      const col=n.type==='task_done'?'var(--green)':n.type==='report_submitted'?'#7C3AED':'var(--red)';
+      out.push({icon:ic,bg:bg,color:col,
+        text:(n.actor_name?n.actor_name+'：':'')+(n.body||n.title||'通知'),
+        time:(n.created_at||'').slice(0,16).replace('T',' '),
+        tab:n.type==='report_submitted'?'report':'assign'});
+    });
+  }
   if(typeof INBOX!=='undefined'&&Array.isArray(INBOX)){
     INBOX.filter(s=>s.status!=='done').slice(0,6).forEach(s=>out.push({
       icon:'📥',bg:'#DAEEE9',color:'var(--accent)',
       text:`受信チャート「${(s.center||'').replace(/\n/,' ')}」 — メンバーへ振り分けてください`,
       time:(s.sent_by_name||'幹部/統括')+' / '+((s.sent_at||'').slice(0,10)),tab:'inbox'}));
   }
-  if(typeof REPORTS!=='undefined'&&typeof MEMBERS!=='undefined'){
-    Object.keys(REPORTS).forEach(id=>{
-      const rs=REPORTS[id]||[];if(!rs.length)return;
-      const last=rs[rs.length-1];const nm=(MEMBERS[id]||{}).name||'メンバー';
-      out.push({icon:'📓',bg:'#EDE9FE',color:'#7C3AED',text:`${nm}さんが日報を提出しました`,time:last.date||'',tab:'report'});
-    });
-  }
-  return out.slice(0,10);
+  return out.slice(0,14);
 };
 function vexumLogout(){
   var API=window.VexumAPI;
@@ -1401,9 +1406,20 @@ function vexumLogout(){
     if(typeof updateInboxBadge==='function') updateInboxBadge();
     if(window.VexumUI)VexumUI.refresh();
   }).catch(function(){});
-  // リアルタイム反映: メンバーの進捗書き込み・幹部の新規送信を自動で再描画
+  // メンバーからの通知（完了/遅延/日報提出）を取得 → 🔔と提出物タブに反映
+  function reloadNotifs(){
+    if(!API.loadNotifications)return;
+    API.loadNotifications().then(function(rows){
+      window._leaderNotifs=rows||[];
+      if(typeof renderLeaderNotifs==='function')renderLeaderNotifs();
+      if(window.VexumUI)VexumUI.refresh();
+    }).catch(function(){});
+  }
+  reloadNotifs();
+  // リアルタイム反映: メンバーの進捗書き込み・幹部の新規送信・通知を自動で再描画
   if(API.subscribeLive){
-    API.subscribeLive(['tasks','chart_sends'],function(){
+    API.subscribeLive(['tasks','chart_sends','notifications'],function(){
+      reloadNotifs();
       API.loadMyInbox().then(function(rows){
         if(!rows)return;
         replArr(INBOX,rows);

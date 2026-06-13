@@ -317,16 +317,143 @@
       updated_at: new Date().toISOString()
     }).eq('id', sendId);
   }
+
+  // ===== 工数（作業時間）記録・タスク完了・通知 =====
+  // 「本日 hours 時間かけて progressAfter% まで進んだ」を記録し、
+  // tasks.total_hours を加算、progress/status を更新。100%なら完了処理。
+  async function logTaskTime(taskId, o) {
+    if (!sb) return { error: 'Supabase未接続' };
+    if (!taskId) return { error: 'タスクIDが不明です（デモデータは保存対象外）' };
+    var me = await currentProfile();
+    var hours = Math.max(0, +o.hours || 0);
+    var prog = (o.progressAfter != null) ? Math.max(0, Math.min(100, Math.round(o.progressAfter))) : null;
+    // 1) 日次ログ（17/18未適用でも tasks 更新は通るよう、ログ失敗は握りつぶす）
+    if (hours > 0 || prog != null) {
+      try {
+        await sb.from('task_time_logs').insert({
+          task_id: taskId, user_id: me ? me.id : null,
+          log_date: o.date || new Date().toISOString().slice(0, 10),
+          hours: hours, progress_after: prog, note: o.note || null
+        });
+      } catch (e) {}
+    }
+    // 2) tasks 更新：total_hours 加算 + progress/status
+    var cur = await sb.from('tasks').select('progress,total_hours,status,due_date').eq('id', taskId).maybeSingle();
+    var prevHours = (cur.data && +cur.data.total_hours) || 0;
+    var newProg = (prog != null) ? prog : (cur.data ? cur.data.progress : 0);
+    var done = newProg >= 100;
+    var late = !done && cur.data && cur.data.due_date && cur.data.due_date < new Date().toISOString().slice(0, 10);
+    var up = { progress: newProg, status: done ? 'done' : (late ? 'late' : (newProg > 0 ? 'wip' : 'todo')) };
+    if (o.comment != null) up.comment = o.comment;
+    // total_hours 列が無い古いDBでも動くよう、まず加算込みで試す
+    var withHours = Object.assign({ total_hours: prevHours + hours }, up);
+    if (done) { withHours.completed_date = new Date().toISOString().slice(0, 10); withHours.completed_at = new Date().toISOString(); }
+    var r = await sb.from('tasks').update(withHours).eq('id', taskId).select('id');
+    if (r.error && /total_hours|completed_at/.test(r.error.message)) {
+      if (done) up.completed_date = new Date().toISOString().slice(0, 10);
+      r = await sb.from('tasks').update(up).eq('id', taskId).select('id');
+    }
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    try { await propagateTaskToSend(taskId); } catch (e) {}
+    if (done) { try { await notifyTaskDone(taskId); } catch (e) {} }
+    return { ok: true, progress: newProg, done: done, totalHours: prevHours + hours };
+  }
+
+  // タスク完了時、担当チームのリーダーへ完了通知
+  async function notifyTaskDone(taskId) {
+    if (!sb) return;
+    var t = await sb.from('tasks').select('id,title,assignee_id,team_id,total_hours').eq('id', taskId).maybeSingle();
+    if (!t.data) return;
+    var me = await currentProfile();
+    var leaderId = null, teamId = t.data.team_id;
+    if (teamId) {
+      var tr = await sb.from('teams').select('leader_id').eq('id', teamId).maybeSingle();
+      leaderId = tr.data && tr.data.leader_id;
+    }
+    if (!leaderId && me) {
+      var tm = await sb.from('team_members').select('team_id').eq('profile_id', me.id).maybeSingle();
+      if (tm.data) { var tr2 = await sb.from('teams').select('leader_id').eq('id', tm.data.team_id).maybeSingle(); leaderId = tr2.data && tr2.data.leader_id; teamId = tm.data.team_id; }
+    }
+    if (!leaderId) return;
+    var hrs = (t.data.total_hours != null) ? (' / 合計 ' + t.data.total_hours + 'h') : '';
+    try {
+      await sb.from('notifications').insert({
+        to_user_id: leaderId, to_team_id: teamId || null, type: 'task_done',
+        title: 'タスク完了', body: '「' + t.data.title + '」が完了しました' + hrs,
+        actor_id: me ? me.id : null, actor_name: me ? me.full_name : '', ref_id: taskId
+      });
+    } catch (e) {}
+  }
+
+  // 日報提出をリーダーへ通知
+  async function notifyReportSubmitted(reportId, dateStr) {
+    if (!sb) return;
+    var me = await currentProfile(); if (!me) return;
+    var leaderId = null, teamId = null;
+    var tm = await sb.from('team_members').select('team_id').eq('profile_id', me.id).maybeSingle();
+    if (tm.data) { teamId = tm.data.team_id; var tr = await sb.from('teams').select('leader_id').eq('id', teamId).maybeSingle(); leaderId = tr.data && tr.data.leader_id; }
+    if (!leaderId) return;
+    try {
+      await sb.from('notifications').insert({
+        to_user_id: leaderId, to_team_id: teamId, type: 'report_submitted',
+        title: '日報提出', body: (dateStr || '') + ' の日報が提出されました',
+        actor_id: me.id, actor_name: me.full_name, ref_id: reportId || null
+      });
+    } catch (e) {}
+  }
+
+  // 自分/自チーム宛ての通知を取得（リーダー画面の🔔・受信用）
+  async function loadNotifications() {
+    if (!sb) return [];
+    var me = await currentProfile(); if (!me) return [];
+    var teamIds = [];
+    try { var t = await sb.from('teams').select('id').eq('leader_id', me.id); teamIds = (t.data || []).map(function (x) { return x.id; }); } catch (e) {}
+    var r = await sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(50);
+    if (r.error) { err('notifications', r.error); return []; }
+    return (r.data || []).filter(function (n) {
+      if (n.to_user_id === me.id) return true;
+      if (n.to_team_id && teamIds.indexOf(n.to_team_id) >= 0) return true;
+      return false;
+    });
+  }
+  async function markNotificationsRead(ids) {
+    if (!sb || !ids || !ids.length) return { ok: true };
+    var r = await sb.from('notifications').update({ read: true }).in('id', ids);
+    if (r.error) return { error: r.error.message };
+    return { ok: true };
+  }
+  // タスクの作業時間ログ一覧（工数履歴・日別内訳）
+  async function loadTaskTimeLogs(taskId) {
+    if (!sb || !taskId) return [];
+    var r = await sb.from('task_time_logs').select('*').eq('task_id', taskId).order('log_date', { ascending: true });
+    if (r.error) return [];
+    return r.data || [];
+  }
+
   // 日報を保存（同一日付は上書き: author_id + report_date でupsert）
+  // 始業(計画: planTasks/planHours/goal)・終業(実績: done/issue/actualHours)に対応。
+  // o.submit=true（終業提出）のときリーダーへ通知。
   async function saveDailyReport(o) {
     if (!sb) return { error: 'Supabase未接続' };
     var me = await currentProfile(); if (!me) return { error: '未ログイン' };
-    var r = await sb.from('daily_reports').upsert({
+    var row = {
       author_id: me.id, report_date: o.date,
       hours: o.hours || null, done: o.done || null, plan: o.plan || null,
       issue: o.issue || null, condition: o.cond || 'normal'
-    }, { onConflict: 'author_id,report_date' });
+    };
+    // 拡張列（18未適用DBでは弾かれるのでフォールバック）
+    var ext = Object.assign({}, row);
+    if (o.planTasks != null) ext.plan_tasks = o.planTasks;
+    if (o.planHours != null) ext.plan_hours = o.planHours;
+    if (o.goal != null) ext.goal = o.goal;
+    if (o.actualHours != null) ext.actual_hours = o.actualHours;
+    if (o.submit) ext.submitted_at = new Date().toISOString();
+    var r = await sb.from('daily_reports').upsert(ext, { onConflict: 'author_id,report_date' }).select('id').maybeSingle();
+    if (r.error && /plan_tasks|plan_hours|goal|actual_hours|submitted_at/.test(r.error.message)) {
+      r = await sb.from('daily_reports').upsert(row, { onConflict: 'author_id,report_date' }).select('id').maybeSingle();
+    }
     if (r.error) return { error: friendlyErr(r.error.message) };
+    if (o.submit) { try { await notifyReportSubmitted(r.data && r.data.id, o.date); } catch (e) {} }
     return { ok: true };
   }
   async function saveEvalRecord(o) {
@@ -527,9 +654,9 @@
         : '関連KGI: ' + (t.related_kgi || '—') + ' ／ カテゴリ: ' + (t.category || '—');
       var from = self ? '🙋 自分で作成' : ('📌 ' + (exec ? '役員' : '上長') + ' · ' + (assigner.full_name || ''));
       if (t.status === 'done' || (t.progress || 0) >= 100) {
-        ASSIGN_HISTORY.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '', pri: t.priority || 'md', chart: chart });
+        ASSIGN_HISTORY.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '', pri: t.priority || 'md', chart: chart, hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
       } else {
-        ASSIGNMENTS.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: self, chart: chart, sendId: t.source_send_id || null, cell: t.source_cell || null });
+        ASSIGNMENTS.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), dueRaw: t.due_date || null, pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: self, chart: chart, sendId: t.source_send_id || null, cell: t.source_cell || null, hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
       }
     });
 
@@ -554,11 +681,28 @@
       var p = rel.length ? Math.round(rel.reduce(function (a, t) { return a + (t.progress || 0); }, 0) / rel.length) : (myTm.achievement_rate || 0);
       return { n: s, p: Math.max(0, Math.min(100, p)) };
     });
+    var todayStr = new Date().toISOString().slice(0, 10);
+    var openTasks = myTasks.filter(function (t) { return t.status !== 'done' && (t.progress || 0) < 100; });
+    // 本日まで（期限が今日以前）に対応すべき未完了タスク
+    var dueByToday = openTasks.filter(function (t) { return t.due_date && t.due_date <= todayStr; });
+    var lateTasks = openTasks.filter(function (t) { return t.due_date && t.due_date < todayStr; });
+    var doneTasks = myTasks.filter(function (t) { return t.status === 'done' || (t.progress || 0) >= 100; });
+    var totalHours = myTasks.reduce(function (a, t) { return a + (t.total_hours != null ? +t.total_hours : 0); }, 0);
     var STATS = {
       rate: myTm.achievement_rate || 0,
-      done: myTasks.filter(function (t) { return t.status === 'done'; }).length,
+      done: doneTasks.length,
       wip: myTasks.filter(function (t) { return t.status === 'wip'; }).length,
-      late: myTasks.filter(function (t) { return t.status === 'late'; }).length
+      late: lateTasks.length,
+      open: openTasks.length,
+      dueToday: dueByToday.length,
+      // 本日までの達成率 = 期限到来分のうち完了済みの割合
+      todayRate: (function () {
+        var dueAll = myTasks.filter(function (t) { return t.due_date && t.due_date <= todayStr; });
+        if (!dueAll.length) return 100;
+        var d = dueAll.filter(function (t) { return t.status === 'done' || (t.progress || 0) >= 100; }).length;
+        return Math.round(d / dueAll.length * 100);
+      })(),
+      totalHours: Math.round(totalHours * 10) / 10
     };
 
     return { CHARTS: CHARTS, FEEDBACK: FEEDBACK, ASSIGNMENTS: ASSIGNMENTS, ASSIGN_HISTORY: ASSIGN_HISTORY, PREPORTS: PREPORTS, TEAM: TEAM, KPIS: KPIS, STATS: STATS };
@@ -834,6 +978,10 @@
     updateTeam: updateTeam,
     assignTask: assignTask,
     updateTask: updateTask,
+    logTaskTime: logTaskTime,
+    loadTaskTimeLogs: loadTaskTimeLogs,
+    loadNotifications: loadNotifications,
+    markNotificationsRead: markNotificationsRead,
     saveDailyReport: saveDailyReport,
     saveEvalRecord: saveEvalRecord,
     saveEvaluation: saveEvaluation,
