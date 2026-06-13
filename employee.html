@@ -871,8 +871,9 @@ function resetReportForm(){
       <div class="fg"><label class="fl">開始日</label><input class="fi" id="tm-start" type="date"></div>
       <div class="fg"><label class="fl">期限</label><input class="fi" id="tm-due" type="date"></div>
     </div>
-    <div class="fg"><label class="fl">優先度</label>
-      <select class="fs" id="tm-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select>
+    <div class="fr">
+      <div class="fg"><label class="fl">対象期間 <span style="font-weight:400;color:var(--text3)">（評価に連携）</span></label><select class="fs" id="tm-period"></select></div>
+      <div class="fg"><label class="fl">優先度</label><select class="fs" id="tm-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select></div>
     </div>
     <div style="display:flex;gap:8px;margin-top:6px">
       <button class="f-submit" style="flex:1;background:#9CA3AF" onclick="closeTaskCreate()">キャンセル</button>
@@ -1557,12 +1558,19 @@ function updateGridSummary(){
 }
 
 /* ===== タスク作成モーダル ===== */
+function _epPeriodOptions(){
+  const y=new Date().getFullYear();let o='';
+  [1,2,3,4].forEach(q=>o+=`<option value="${y} Q${q}">${y}年 Q${q}</option>`);
+  for(let mo=1;mo<=12;mo++){const v=`${y}-${String(mo).padStart(2,'0')}`;o+=`<option value="${v}">${y}年${mo}月</option>`;}
+  o+=`<option value="${y}年度">${y}年度（通年）</option>`;return o;
+}
 function openTaskCreate(){
   const sel=document.getElementById('tm-kgi');
   if(sel&&!sel.options.length){
     let o='';for(const key in CHARTS){if(key.startsWith('__'))continue;const d=CHARTS[key];o+=`<option value="${key}">${d.name} — ${d.scopeLabel}（${(d.center||'').replace(/\n/,' ')}）</option>`;}
     sel.innerHTML=o;
   }
+  const ps=document.getElementById('tm-period');if(ps&&!ps.options.length)ps.innerHTML=_epPeriodOptions();
   tmOnKgi();
   document.getElementById('task-modal').style.display='flex';
 }
@@ -1587,11 +1595,12 @@ function submitTask(){
   const start=fmtDate(startRaw);
   const due=fmtDate(dueRaw);
   const pri=document.getElementById('tm-pri').value;
-  const task={id:null,name,kpi,meta:'関連KGI: '+kpi+' ／ カテゴリ: 自作',from:'🙋 自分で作成',fromClass:'',
-    start:startRaw?startRaw.replace(/-/g,'/'):'—',end:dueRaw?dueRaw.replace(/-/g,'/'):'—',pct:0,comment:'',status:'todo',pri,self:true};
+  const period=(document.getElementById('tm-period')||{}).value||'';
+  const task={id:null,name,kpi,meta:'関連KGI: '+kpi+' ／ カテゴリ: 自作'+(period?' ／ 期間: '+period:''),from:'🙋 自分で作成',fromClass:'',
+    start:startRaw?startRaw.replace(/-/g,'/'):'—',end:dueRaw?dueRaw.replace(/-/g,'/'):'—',pct:0,comment:'',status:'todo',pri,self:true,period};
   const API=window.VexumAPI;
   if(API&&API.ready){
-    API.assignTask({title:name,kpi:kpi!=='-'?kpi:null,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self'})
+    API.assignTask({title:name,kpi:kpi!=='-'?kpi:null,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self',period:period||null})
       .then(res=>{
         if(res&&res.error){alert('タスクの保存に失敗しました: '+res.error);return;}
         if(res&&res.data)task.id=res.data.id;

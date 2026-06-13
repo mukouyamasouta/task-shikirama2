@@ -149,9 +149,10 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="sb-item" onclick="swTab('assign',this);renderAssignedTasks()"><span class="sb-icon">📋</span>タスク割当</button>
     <button class="sb-item" onclick="swTab('inbox',this);renderInbox()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="inbox-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('teamedit',this);renderTeamEdit()"><span class="sb-icon">⚙</span>チーム編集</button>
-    <button class="sb-item" onclick="swTab('evalin',this);renderMemberEval()"><span class="sb-icon">📝</span>メンバー評価入力</button>
+    <button class="sb-item" onclick="swTab('evalin',this);renderMemberEval();renderEvalPeriodTasks()"><span class="sb-icon">📝</span>メンバー評価入力</button>
     <button class="sb-item" onclick="swTab('evalrec',this);renderEvalRec()"><span class="sb-icon">📊</span>評価記録</button>
     <button class="sb-item" onclick="swTab('report',this);renderReports()"><span class="sb-icon">📒</span>日報<span class="sb-badge">6</span></button>
+    <button class="sb-item" onclick="swTab('submissions',this);renderSubmissions()"><span class="sb-icon">📥</span>提出物（日報・工数）</button>
   </div>
   <div class="sb-footer">v2.4.1 © 2025 VEXUM Inc.</div>
 </aside>
@@ -190,6 +191,10 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
           <div class="fg"><label class="fl">開始日</label><input class="fi" id="asg-start" type="date"></div>
           <div class="fg"><label class="fl">期限</label><input class="fi" id="asg-due" type="date"></div>
         </div>
+        <div class="fr">
+          <div class="fg"><label class="fl">対象期間 <span style="font-weight:400;color:var(--text3)">（評価に連携）</span></label><select class="fs" id="asg-period"></select></div>
+          <div class="fg"><label class="fl">予定工数（h・任意）</label><input class="fi" id="asg-planhours" type="number" min="0" step="0.5" placeholder="例: 8"></div>
+        </div>
         <div class="fg"><label class="fl">優先度</label><select class="fs" id="asg-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select></div>
         <button class="f-submit" onclick="submitAssign()">タスクを割り当てる</button>
         <span class="toast" id="asg-saved">✅ 保存しました</span>
@@ -204,7 +209,11 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
     <div>
       <div class="card">
-        <div class="card-hd"><div><div class="card-title">割り当て済みタスク（履歴）</div><div class="card-sub">メンバー別の割当状況・履歴</div></div></div>
+        <div class="card-hd"><div><div class="card-title">割り当て済みタスク</div><div class="card-sub">自チームのメンバー別・ステータスで絞り込み</div></div></div>
+        <div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+          <select class="fs" id="asgf-member" style="min-width:130px" onchange="renderAssignedTasks()"><option value="">全メンバー</option></select>
+          <select class="fs" id="asgf-status" onchange="renderAssignedTasks()"><option value="">全ステータス</option><option value="todo">未着手</option><option value="wip">進行中</option><option value="done">完了</option><option value="late">遅延</option></select>
+        </div>
         <div class="card-body" id="assigned-list" style="padding:0"></div>
       </div>
     </div>
@@ -225,12 +234,14 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="sec-title">メンバー評価入力 <span style="font-size:11px;font-weight:400;color:var(--text3)">曼荼羅チャートのKGI・CSFと割当タスクを★5段階＋コメントで評価</span></div>
   <div class="card" style="margin-bottom:16px">
     <div class="card-body" style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
-      <div style="flex:1;min-width:220px"><label class="fl">評価するメンバー</label><select class="fs" id="evalin-member" onchange="renderMemberEval()"></select></div>
-      <div style="min-width:160px"><label class="fl">評価期間</label><select class="fs" id="evalin-period"><option>2025年 Q2</option><option>2025年 Q1</option><option>2024年 Q4</option></select></div>
+      <div style="flex:1;min-width:200px"><label class="fl">評価するメンバー</label><select class="fs" id="evalin-member" onchange="renderMemberEval();renderEvalPeriodTasks()"></select></div>
+      <div style="min-width:150px"><label class="fl">評価期間</label><select class="fs" id="evalin-period" onchange="renderEvalPeriodTasks()"></select></div>
       <button class="f-submit" onclick="saveMemberEval()">💾 評価を保存</button>
       <span class="toast" id="evalin-saved">✅ 評価を保存しました（評価記録に反映）</span>
     </div>
   </div>
+  <!-- 選択期間のタスク・工数（評価の参考） -->
+  <div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">📋 選択期間のタスク・工数（参考）</div><div class="card-sub" id="evalp-sub">タスク作成時の「対象期間」で集計</div></div><span id="evalp-total" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div><div class="card-body" id="evalp-tasks" style="padding:0"><div style="padding:14px;color:var(--text3);font-size:12px">メンバーと期間を選択してください</div></div></div>
   <div style="background:#F0FDF4;border:1px solid #10B981;border-radius:8px;padding:9px 14px;margin-bottom:14px;font-size:11px;color:#065F46;display:flex;gap:14px;flex-wrap:wrap;align-items:center">
     <span style="font-weight:700">⭐ 星をクリックで5段階評価</span><span>KGI・各CSF・割当タスクごとにコメントを記入できます</span>
   </div>
@@ -272,6 +283,23 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <div id="tc-teamedit" class="tab-content">
   <div class="sec-title">チーム編集 <span style="font-size:11px;font-weight:400;color:var(--text3)">チーム情報の編集・メンバーの追加／削除</span></div>
   <div id="teamedit-container"></div>
+</div>
+
+<!-- 提出物（日報・工数履歴） -->
+<div id="tc-submissions" class="tab-content">
+  <div class="sec-title">提出物（日報・工数） <span style="font-size:11px;font-weight:400;color:var(--text3)">自チームのメンバーの日報・作業時間履歴を確認</span></div>
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-body" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <div><div class="fl" style="margin-bottom:4px">メンバー</div><select class="fs" id="sub-member" style="min-width:160px" onchange="renderSubmissions()"></select></div>
+      <div><div class="fl" style="margin-bottom:4px">期間</div><select class="fs" id="sub-period" onchange="renderSubmissions()"><option value="">全期間</option></select></div>
+      <div><div class="fl" style="margin-bottom:4px">表示</div><select class="fs" id="sub-view" onchange="renderSubmissions()"><option value="both">日報＋工数</option><option value="report">日報のみ</option><option value="hours">工数のみ</option></select></div>
+      <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="sub-summary"></div>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="card"><div class="card-hd"><div class="card-title">📒 日報履歴</div></div><div class="card-body" id="sub-reports" style="padding:0"><div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">メンバーを選択してください</div></div></div>
+    <div class="card"><div class="card-hd"><div><div class="card-title">🕐 工数履歴</div><div class="card-sub" id="sub-hours-total"></div></div></div><div class="card-body" id="sub-hours" style="padding:0"><div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">—</div></div></div>
+  </div>
 </div>
 
   </div><!-- /content -->
@@ -483,7 +511,7 @@ function getEvalProgress(k){const st=evalStates[k]||{};return Math.round(Object.
 
 <script>
 /* ===== タブ切替・共通 ===== */
-const TITLES={dashboard:['チームダッシュボード','チームリーダーメニュー / チームDB'],assign:['タスク割当','チームリーダーメニュー / タスク割当'],inbox:['受信ボックス','チームリーダーメニュー / 受信ボックス'],evalin:['メンバー評価入力','チームリーダーメニュー / 評価入力'],evalrec:['評価記録','チームリーダーメニュー / 評価記録'],report:['日報','チームリーダーメニュー / 日報'],teamedit:['チーム編集','チームリーダーメニュー / チーム編集']};
+const TITLES={dashboard:['チームダッシュボード','チームリーダーメニュー / チームDB'],assign:['タスク割当','チームリーダーメニュー / タスク割当'],inbox:['受信ボックス','チームリーダーメニュー / 受信ボックス'],evalin:['メンバー評価入力','チームリーダーメニュー / 評価入力'],evalrec:['評価記録','チームリーダーメニュー / 評価記録'],report:['日報','チームリーダーメニュー / 日報'],teamedit:['チーム編集','チームリーダーメニュー / チーム編集'],submissions:['提出物（日報・工数）','チームリーダーメニュー / 提出物']};
 function swTab(id,btn){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.getElementById('tc-'+id).classList.add('active');
@@ -669,18 +697,31 @@ async function saveChartEdit(){
   closeChartEdit();renderDashboard();
   showToast('asg-saved');
 }
-/* ===== タスク割当 ===== */
+/* ===== タスク割当（自チーム内でメンバー別/ステータス絞り込み） ===== */
 function renderAssignedTasks(){
-  let h='';
-  EVAL_IDS.forEach(id=>{
-    const m=MEMBERS[id];const tasks=MEMBER_TASKS[id]||[];
+  // メンバー絞り込みドロップダウンを自チームで構築
+  const ids=EVAL_IDS.filter(id=>MEMBERS[id]);
+  const mf=document.getElementById('asgf-member');
+  if(mf&&mf.dataset.n!=String(ids.length)){
+    const cur=mf.value;
+    mf.innerHTML='<option value="">全メンバー</option>'+ids.map(id=>`<option value="${id}">${MEMBERS[id].name}</option>`).join('');
+    if(ids.indexOf(cur)>=0)mf.value=cur; mf.dataset.n=String(ids.length);
+  }
+  const fMem=(mf||{}).value||'';
+  const fSt=(document.getElementById('asgf-status')||{}).value||'';
+  let h='',shown=0;
+  ids.filter(id=>!fMem||id===fMem).forEach(id=>{
+    const m=MEMBERS[id];let tasks=MEMBER_TASKS[id]||[];
+    if(fSt)tasks=tasks.filter(t=>(t.status||'todo')===fSt);
     h+=`<div style="padding:10px 16px;background:#FAFCFC;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);display:flex;align-items:center;gap:8px"><span class="tdot" style="background:${m.color}"></span>${m.name} <span style="font-weight:400;color:var(--text3)">（${tasks.length}件）</span></div>`;
-    if(!tasks.length)h+=`<div style="padding:10px 16px;font-size:11px;color:var(--text3)">割当なし</div>`;
-    tasks.forEach(t=>{const sc=statusChip(t.status),pc=priChip(t.pri);
+    if(!tasks.length)h+=`<div style="padding:10px 16px;font-size:11px;color:var(--text3)">該当なし</div>`;
+    tasks.forEach(t=>{const sc=statusChip(t.status),pc=priChip(t.pri);shown++;
       const chartChip=t.chart?`<span style="font-size:9px;background:#EDE9FE;color:#7C3AED;padding:1px 7px;border-radius:8px;font-weight:700">📊 ${t.chart}</span>`:'';
       const pct=t.pct!=null?t.pct:0;
-      h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${t.name} ${chartChip}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${pct}%;background:${pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)'}"></div></div><div class="pp" style="font-size:10px">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
+      const hrs=t.pct!=null&&t.hours!=null?` ／ ${t.hours}h`:'';
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${t.name} ${chartChip}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${hrs}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${pct}%;background:${pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)'}"></div></div><div class="pp" style="font-size:10px">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
   });
+  if(!shown&&(fMem||fSt))h+='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">絞り込み条件に該当するタスクがありません</div>';
   document.getElementById('assigned-list').innerHTML=h;
 }
 function pidOf(id){return (MEMBERS[id]&&MEMBERS[id].pid)||(AVAILABLE[id]&&AVAILABLE[id].pid)||(window._memberPid&&window._memberPid[id])||id;}
@@ -690,6 +731,7 @@ function submitAssign(){
   const id=document.getElementById('asg-member').value;
   if(!id){alert('メンバーを選択してください');return;}
   PENDING_ASSIGN={name,id,kpi:val('asg-kpi')||'—',pri:document.getElementById('asg-pri').value,
+    period:(document.getElementById('asg-period')||{}).value||'',planHours:parseFloat(val('asg-planhours'))||null,
     startV:val('asg-start')||null,dueV:val('asg-due')||null,startD:fmtDate('asg-start'),dueD:fmtDate('asg-due')};
   const m=MEMBERS[id];
   document.getElementById('assignchoice-title').textContent='「'+name+'」を '+(m?m.name:'')+' に割り当て';
@@ -700,11 +742,11 @@ async function doCreateTask(){
   const pa=PENDING_ASSIGN;if(!pa)return null;
   const API=window.VexumAPI;
   if(API&&API.ready){
-    const res=await API.assignTask({title:pa.name,kpi:pa.kpi,assigneePid:pidOf(pa.id),teamUuid:teamMeta.uid,start:pa.startV,due:pa.dueV,priority:pa.pri});
+    const res=await API.assignTask({title:pa.name,kpi:pa.kpi,assigneePid:pidOf(pa.id),teamUuid:teamMeta.uid,start:pa.startV,due:pa.dueV,priority:pa.pri,period:pa.period||null,plannedHours:pa.planHours});
     if(res&&res.error){alert('割当失敗: '+res.error);return null;}
   }
   if(!MEMBER_TASKS[pa.id])MEMBER_TASKS[pa.id]=[];
-  MEMBER_TASKS[pa.id].push({name:pa.name,kpi:pa.kpi,start:pa.startD,due:pa.dueD,pri:pa.pri,status:'todo'});
+  MEMBER_TASKS[pa.id].push({name:pa.name,kpi:pa.kpi,start:pa.startD,due:pa.dueD,pri:pa.pri,status:'todo',period:pa.period||'',pct:0,hours:0});
   renderAssignedTasks();
   return pa.id;  // ※フォームは消さない（割当完了まで内容を保持）
 }
@@ -752,8 +794,30 @@ function clearEvalCache(){window._chartsCache={};window._evalCache={};}
 window._chartsCache={};  // pid -> charts[]
 window._evalCache={};    // pid+chartId -> {fromSelf,fromLeader,fromExec}
 let _evalChartId='';     // 現在選択中の評価対象チャートID
+// 評価期間ドロップダウンを生成（タスクの対象期間と揃える）
+function ensureEvalPeriodOptions(){
+  const ps=document.getElementById('evalin-period');
+  if(ps&&(!ps.options.length||ps.dataset.gen!=='1')){const cur=ps.value;ps.innerHTML=periodOptions();ps.dataset.gen='1';if(cur)ps.value=cur;}
+}
+// 選択メンバー×選択期間のタスクと工数を表示（評価の参考）
+function renderEvalPeriodTasks(){
+  ensureEvalPeriodOptions();
+  const id=(document.getElementById('evalin-member')||{}).value;
+  const period=(document.getElementById('evalin-period')||{}).value||'';
+  const con=document.getElementById('evalp-tasks');if(!con)return;
+  if(!id||!MEMBERS[id]){con.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">メンバーを選択してください</div>';return;}
+  let tasks=(MEMBER_TASKS[id]||[]);
+  const inPeriod=period?tasks.filter(t=>t.period===period):tasks;
+  document.getElementById('evalp-sub').textContent=period?period+' のタスク（対象期間一致）':'全期間のタスク';
+  const totalH=inPeriod.reduce((a,t)=>a+(t.hours||0),0);
+  const doneN=inPeriod.filter(t=>t.status==='done'||((t.pct||0)>=100)).length;
+  document.getElementById('evalp-total').textContent='合計 '+(Math.round(totalH*10)/10)+'h ／ 完了 '+doneN+'/'+inPeriod.length;
+  if(!inPeriod.length){con.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">この期間の割当タスクはありません</div>';return;}
+  con.innerHTML=inPeriod.map(t=>{const sc=statusChip(t.status),pct=t.pct!=null?t.pct:0;return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-bottom:1px solid var(--border)"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}</div><div style="font-size:10px;color:var(--text3)">${t.kpi}${t.period?' ／ '+t.period:''}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><span style="font-size:12px;font-weight:700;color:var(--accent)">${t.hours||0}h</span><span style="font-size:10px">${pct}%</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;}).join('');
+}
 async function renderMemberEval(){
   const sel=document.getElementById('evalin-member');if(!sel)return;const id=sel.value;if(!id)return;
+  ensureEvalPeriodOptions();
   const d=MEMBERS[id];const e=_meval(id);
   // メンバーの曼荼羅チャート一覧を取得
   let charts=window._chartsCache[d.pid];
@@ -889,6 +953,60 @@ function renderReportMembers(){
   con.innerHTML=h;
 }
 function selectReportMember(id){_repMember=id;_repSelDate='';renderReportMembers();renderReportCalendar();document.getElementById('report-detail').innerHTML='';}
+
+/* ===== 提出物（日報・工数履歴）— 自チームのメンバー別/期間で確認 ===== */
+let _subLogsCache={};
+async function renderSubmissions(){
+  const ids=(EVAL_IDS.length?EVAL_IDS:DASH_IDS).filter(id=>MEMBERS[id]);
+  const sel=document.getElementById('sub-member');if(!sel)return;
+  // メンバー選択肢（自チームのみ）
+  if(!sel.options.length||sel.dataset.n!=String(ids.length)){
+    sel.innerHTML=ids.map(id=>`<option value="${id}">${MEMBERS[id].name}（${MEMBERS[id].role}）</option>`).join('');
+    sel.dataset.n=String(ids.length);
+  }
+  const mid=sel.value||ids[0];if(sel&&!sel.value&&ids[0])sel.value=ids[0];
+  const m=MEMBERS[mid]; if(!m)return;
+  const view=(document.getElementById('sub-view')||{}).value||'both';
+  const API=window.VexumAPI;
+  // 工数ログ取得（接続時のみ）
+  let logs=[];
+  if(API&&API.ready&&m.pid){
+    if(_subLogsCache[mid]) logs=_subLogsCache[mid];
+    else { logs=await API.loadMemberTimeLogs(m.pid); _subLogsCache[mid]=logs; }
+  }
+  // 期間選択肢を工数ログから構築
+  const psel=document.getElementById('sub-period');
+  const periods=[...new Set(logs.map(l=>l.period).filter(Boolean))];
+  if(psel){const cur=psel.value;psel.innerHTML='<option value="">全期間</option>'+periods.map(p=>`<option value="${p}">${p}</option>`).join('');if(periods.indexOf(cur)>=0)psel.value=cur;}
+  const period=(psel||{}).value||'';
+  // 日報
+  const rep=document.getElementById('sub-reports');
+  const reps=repList(mid).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  if(view==='hours'){rep.parentElement.parentElement.style.display='none';}
+  else{
+    rep.parentElement.parentElement.style.display='';
+    rep.innerHTML=reps.length?reps.map(r=>{
+      const c=(typeof PCOND!=='undefined'&&PCOND[r.cond])||['📝','',''];
+      return `<div style="padding:10px 14px;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between"><div style="font-size:12px;font-weight:700">${r.date} ${c[0]||''}</div><div style="font-size:10px;color:var(--text3)">稼働 ${r.hours||'—'}</div></div><div style="font-size:11px;color:var(--text2);margin-top:3px">${(r.done||'').slice(0,80)}</div>${r.goal?`<div style="font-size:10px;color:#C2410C;margin-top:2px">🌅 ${r.goal}</div>`:''}</div>`;
+    }).join(''):'<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">日報はまだありません</div>';
+  }
+  // 工数履歴
+  const hrsEl=document.getElementById('sub-hours');
+  const flogs=period?logs.filter(l=>l.period===period):logs;
+  const totalEl=document.getElementById('sub-hours-total');
+  if(view==='report'){hrsEl.parentElement.parentElement.style.display='none';}
+  else{
+    hrsEl.parentElement.parentElement.style.display='';
+    if(!(API&&API.ready)){hrsEl.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">工数履歴はSupabase接続時に表示されます</div>';if(totalEl)totalEl.textContent='';}
+    else if(!flogs.length){hrsEl.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">工数の記録はまだありません</div>';if(totalEl)totalEl.textContent='';}
+    else{
+      const total=flogs.reduce((a,l)=>a+(l.hours||0),0);
+      if(totalEl)totalEl.textContent='合計 '+Math.round(total*10)/10+'h'+(period?'（'+period+'）':'');
+      hrsEl.innerHTML=flogs.map(l=>`<div style="padding:9px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${l.taskTitle}</div><div style="font-size:10px;color:var(--text3)">${l.date}${l.period?' ／ '+l.period:''}${l.progress!=null?' ／ 到達 '+l.progress+'%':''}</div></div><div style="font-size:13px;font-weight:800;color:var(--accent);flex-shrink:0">${l.hours}h</div></div>`).join('');
+    }
+  }
+  const sm=document.getElementById('sub-summary');if(sm)sm.textContent=m.name+' ／ 日報 '+reps.length+'件 ／ 工数記録 '+logs.length+'件';
+}
 function changeReportMonth(d){_repMonth+=d;if(_repMonth<0){_repMonth=11;_repYear--;}else if(_repMonth>11){_repMonth=0;_repYear++;}_repSelDate='';document.getElementById('report-detail').innerHTML='';renderReportCalendar();}
 function renderReportCalendar(){
   const m=MEMBERS[_repMember];if(!m)return;
@@ -1069,6 +1187,18 @@ function populateSelects(){
     return `<option value="${id}">${m.name}（${m.role}）${hasSelf?' 📝自己評価あり':''}</option>`;
   }).join('');
   ['asg-member','evalin-member','chartedit-member'].forEach(sid=>{const s=document.getElementById(sid);if(s)s.innerHTML=opts;});
+  // 対象期間の選択肢（当年度の四半期＋月＋年次）
+  const ap=document.getElementById('asg-period');
+  if(ap&&!ap.options.length)ap.innerHTML=periodOptions();
+}
+// 対象期間の選択肢を生成（今年基準: Q1-Q4 / 各月 / 年度）
+function periodOptions(sel){
+  const y=new Date().getFullYear();
+  let o='';
+  [1,2,3,4].forEach(q=>{o+=`<option value="${y} Q${q}"${sel===y+' Q'+q?' selected':''}>${y}年 Q${q}</option>`;});
+  for(let mo=1;mo<=12;mo++){const v=`${y}-${String(mo).padStart(2,'0')}`;o+=`<option value="${v}"${sel===v?' selected':''}>${y}年${mo}月</option>`;}
+  o+=`<option value="${y}年度"${sel===y+'年度'?' selected':''}>${y}年度（通年）</option>`;
+  return o;
 }
 async function updateSelfEvalMarkers(){
   const API=window.VexumAPI;if(!(API&&API.ready))return;

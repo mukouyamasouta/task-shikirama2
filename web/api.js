@@ -183,7 +183,7 @@
       var key = memKey(t.assignee_id); if (!key || !MEMBERS[key]) return;
       (MEMBER_TASKS[key] = MEMBER_TASKS[key] || []).push({
         id: t.id, name: t.title, kpi: t.related_kgi || '—', start: fmtMD(t.start_date), due: fmtMD(t.due_date), pri: t.priority, status: t.status,
-        pct: t.progress || 0, chart: t.source_chart || null, sendId: t.source_send_id || null, cell: t.source_cell || null
+        pct: t.progress || 0, hours: (t.total_hours != null ? +t.total_hours : 0), period: t.period || '', chart: t.source_chart || null, sendId: t.source_send_id || null, cell: t.source_cell || null
       });
     });
 
@@ -257,12 +257,14 @@
       source: o.source || 'leader', start_date: o.start || null, due_date: o.due || null,
       priority: o.priority || 'md', progress: 0, status: 'todo'
     };
+    if (o.period) row.period = o.period;            // 対象期間（評価連携・19_task_period.sql）
+    if (o.plannedHours != null) row.planned_hours = o.plannedHours; // 予定工数
     // 受信チャート由来のタスク: どのチャートのどのセルか（個人画面チップ表示・進捗の逆反映用）
     if (o.sendId) { row.source_send_id = o.sendId; row.source_cell = o.cell || null; row.source_chart = o.chartTitle || null; }
     var r = await sb.from('tasks').insert(row).select().single();
-    if (r.error && o.sendId && /source_send_id|source_cell|source_chart/.test(r.error.message)) {
-      // 17_chart_task_link.sql 未適用のDB: 紐付けなしで作成（後方互換）
-      delete row.source_send_id; delete row.source_cell; delete row.source_chart;
+    if (r.error && /source_send_id|source_cell|source_chart|period|planned_hours/.test(r.error.message)) {
+      // 17/18/19 未適用のDB: 拡張列なしで作成（後方互換）
+      delete row.source_send_id; delete row.source_cell; delete row.source_chart; delete row.period; delete row.planned_hours;
       r = await sb.from('tasks').insert(row).select().single();
     }
     if (r.error) return { error: friendlyErr(r.error.message) };
@@ -428,6 +430,24 @@
     var r = await sb.from('task_time_logs').select('*').eq('task_id', taskId).order('log_date', { ascending: true });
     if (r.error) return [];
     return r.data || [];
+  }
+  // メンバー個人の工数履歴（リーダーの提出物閲覧用）。タスク名を添えて日付降順で返す。
+  async function loadMemberTimeLogs(pid) {
+    if (!sb || !pid) return [];
+    var r = await sb.from('task_time_logs').select('*').eq('user_id', pid).order('log_date', { ascending: false }).limit(200);
+    if (r.error) { err('member_time_logs', r.error); return []; }
+    var logs = r.data || [];
+    var ids = {}; logs.forEach(function (l) { if (l.task_id) ids[l.task_id] = 1; });
+    var titles = {};
+    var idArr = Object.keys(ids);
+    if (idArr.length) {
+      var t = await sb.from('tasks').select('id,title,period').in('id', idArr);
+      (t.data || []).forEach(function (x) { titles[x.id] = { title: x.title, period: x.period }; });
+    }
+    return logs.map(function (l) {
+      var ti = titles[l.task_id] || {};
+      return { date: l.log_date, hours: +l.hours || 0, progress: l.progress_after, taskTitle: ti.title || '（タスク不明）', period: ti.period || '', note: l.note || '' };
+    });
   }
 
   // 日報を保存（同一日付は上書き: author_id + report_date でupsert）
@@ -989,6 +1009,7 @@
     updateTask: updateTask,
     logTaskTime: logTaskTime,
     loadTaskTimeLogs: loadTaskTimeLogs,
+    loadMemberTimeLogs: loadMemberTimeLogs,
     loadNotifications: loadNotifications,
     markNotificationsRead: markNotificationsRead,
     saveDailyReport: saveDailyReport,
