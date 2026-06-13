@@ -55,14 +55,25 @@ button:disabled{opacity:.6}
   var API = window.VexumAPI || {};
   if(!API.ready){ document.getElementById('warn').style.display='block'; }
   var DEST = { admin:'./admin.html', executive:'./executive.html', leader:'./leader.html', member:'./employee.html' };
-  // ログイン済みなら自分のロールの画面へ自動遷移（1アカウント=1ロール=1画面）
+  var ROLE_JP0={admin:'統括',executive:'幹部',leader:'リーダー',member:'メンバー'};
+  // ログイン済みでも自動遷移はしない（ログイン画面に戻れなくなる「閉じ込め」を防ぐ）。
+  // 代わりに「現在ログイン中」の案内を出し、画面へ進む／ログアウトを選べるようにする。
   if(API.ready){
     API.currentProfile().then(function(p){
-      if(p && DEST[p.role]){
-        var msg=document.getElementById('msg'); msg.className='msg ok';
-        msg.textContent=p.full_name+'（'+p.role+'）でログイン中です。遷移します…';
-        location.replace(DEST[p.role]);
-      }
+      if(!p || !DEST[p.role]) return;
+      var form=document.getElementById('login');
+      var bn=document.createElement('div');
+      bn.style.cssText='margin-bottom:16px;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:8px;padding:10px 12px;font-size:12px;color:#065F46';
+      bn.innerHTML='現在 <b>'+p.full_name+'（'+(ROLE_JP0[p.role]||p.role)+'）</b> でログイン中です。'
+        +'<div style="display:flex;gap:8px;margin-top:8px">'
+        +'<button id="go-screen" type="button" style="flex:1;margin:0;padding:8px;background:#0D9488;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">'+(ROLE_JP0[p.role]||'自分')+'画面へ進む</button>'
+        +'<button id="do-logout" type="button" style="flex:1;margin:0;padding:8px;background:#fff;color:#0D9488;border:1px solid #0D9488;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">別アカウントでログイン（ログアウト）</button>'
+        +'</div>';
+      form.parentNode.insertBefore(bn, form); // ログインフォームの直前
+      document.getElementById('go-screen').addEventListener('click', function(){ location.href=DEST[p.role]; });
+      document.getElementById('do-logout').addEventListener('click', function(){
+        try{ API.sb.auth.signOut().then(function(){ location.reload(); }).catch(function(){ location.reload(); }); }catch(e){ location.reload(); }
+      });
     }).catch(function(){});
   }
   document.getElementById('login').addEventListener('submit', async function(e){
