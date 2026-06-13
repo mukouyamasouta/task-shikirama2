@@ -456,6 +456,14 @@
     if (o.submit) { try { await notifyReportSubmitted(r.data && r.data.id, o.date); } catch (e) {} }
     return { ok: true };
   }
+  // 日報を削除（本人の指定日）
+  async function deleteDailyReport(dateStr) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var me = await currentProfile(); if (!me) return { error: '未ログイン' };
+    var r = await sb.from('daily_reports').delete().eq('author_id', me.id).eq('report_date', dateStr);
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    return { ok: true };
+  }
   async function saveEvalRecord(o) {
     if (!sb) return { error: 'Supabase未接続' };
     var me = await currentProfile();
@@ -661,7 +669,8 @@
     });
 
     var PREPORTS = raw.daily_reports.filter(function (r) { return r.author_id === uid; })
-      .map(function (r) { return { date: r.report_date, hours: r.hours, done: r.done, plan: r.plan, issue: r.issue, cond: r.condition }; });
+      .map(function (r) { return { date: r.report_date, hours: r.hours, done: r.done, plan: r.plan, issue: r.issue, cond: r.condition,
+        planTasks: r.plan_tasks || '', planHours: r.plan_hours || '', goal: r.goal || '', actualHours: (r.actual_hours != null ? r.actual_hours : ''), submitted: !!r.submitted_at }; });
 
     // 進捗ダッシュボード用: 自分の達成率・所属チームメンバー一覧
     var myTm = tm || {};
@@ -983,6 +992,7 @@
     loadNotifications: loadNotifications,
     markNotificationsRead: markNotificationsRead,
     saveDailyReport: saveDailyReport,
+    deleteDailyReport: deleteDailyReport,
     saveEvalRecord: saveEvalRecord,
     saveEvaluation: saveEvaluation,
     loadEvalHistory: loadEvalHistory,

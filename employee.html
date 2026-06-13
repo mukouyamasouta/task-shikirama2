@@ -535,16 +535,31 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="g2">
     <div>
       <div class="form-card">
-        <h3 style="font-size:14px;font-weight:700;margin-bottom:18px">本日の日報を作成</h3>
-        <div class="fr"><div class="fg"><label class="fl">日付</label><input class="fi" type="date" id="prep-date" value="2025-05-30"></div><div class="fg"><label class="fl">稼働時間</label><input class="fi" id="prep-hours" placeholder="8.0h"></div></div>
-        <div class="fg"><label class="fl">本日の達成タスク</label><textarea class="fi" id="prep-done" rows="3" placeholder="完了したタスク・進捗を記入…" style="resize:vertical"></textarea></div>
-        <div class="fg"><label class="fl">明日の予定</label><textarea class="fi" id="prep-plan" rows="2" placeholder="明日取り組む内容…" style="resize:vertical"></textarea></div>
-        <div class="fg"><label class="fl">課題・相談事項</label><textarea class="fi" id="prep-issue" rows="2" placeholder="困っていること・上長への相談…" style="resize:vertical"></textarea></div>
-        <div class="fg"><label class="fl">本日の気分・コンディション</label>
-          <select class="fs" id="prep-cond"><option value="great">😀 とても良い</option><option value="good" selected>🙂 良い</option><option value="normal">😐 普通</option><option value="bad">😟 やや不調</option><option value="poor">😣 不調</option></select>
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:6px" id="prep-form-title">本日の日報（始業の計画 → 終業の報告）</h3>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:14px">朝に「始業の計画」を保存し、退勤時に「終業の報告」を提出します。<span id="prep-edit-note" style="display:none;color:var(--accent);font-weight:700"></span></div>
+        <div class="fr"><div class="fg"><label class="fl">日付</label><input class="fi" type="date" id="prep-date"></div><div class="fg"><label class="fl">本日の合計作業時間</label><input class="fi" id="prep-hours" placeholder="例: 8.0"></div></div>
+        <!-- 始業（計画） -->
+        <div style="background:#FFF7ED;border:1px solid #FDBA74;border-radius:8px;padding:12px;margin-bottom:12px">
+          <div style="font-size:12px;font-weight:800;color:#C2410C;margin-bottom:8px">🌅 始業（今日の計画・朝礼）</div>
+          <div class="fg"><label class="fl">本日の業務内容</label><textarea class="fi" id="prep-plantasks" rows="2" placeholder="今日取り組む業務を記入…" style="resize:vertical"></textarea></div>
+          <div class="fg"><label class="fl">業務ごとの予定時間</label><input class="fi" id="prep-planhours" placeholder="例: 提案書3h / 訪問2h / 事務1h"></div>
+          <div class="fg"><label class="fl">本日の目標・朝礼共有</label><textarea class="fi" id="prep-goal" rows="2" placeholder="今日のゴール・チームへの共有事項…" style="resize:vertical"></textarea></div>
+          <button class="card-btn" style="width:100%;background:#FFEDD5;color:#C2410C;border-color:#FDBA74;font-weight:700;padding:9px" onclick="reportSaveMorning()">🌅 始業の計画を保存（今日の予定を送る）</button>
+          <span id="report-morning-msg" style="display:none;margin-left:8px;color:var(--green);font-size:11px;font-weight:700">✅ 保存しました</span>
         </div>
-        <button class="f-submit" onclick="reportSubmit()">日報を提出</button>
-        <span id="report-msg" style="display:none;margin-left:12px;color:var(--green);font-size:12px;font-weight:700">✅ 提出しました</span>
+        <!-- 終業（報告） -->
+        <div style="background:#EFF6FF;border:1px solid #93C5FD;border-radius:8px;padding:12px">
+          <div style="font-size:12px;font-weight:800;color:#1D4ED8;margin-bottom:8px">🌇 終業（今日の振り返り・実績）</div>
+          <div class="fg"><label class="fl">本日の達成タスク・実績</label><textarea class="fi" id="prep-done" rows="3" placeholder="完了したタスク・進捗を記入…（タスクごとの工数は各タスクの「本日の作業時間」で記録）" style="resize:vertical"></textarea></div>
+          <div class="fg"><label class="fl">振り返り・明日の予定</label><textarea class="fi" id="prep-plan" rows="2" placeholder="今日の振り返り・明日取り組む内容…" style="resize:vertical"></textarea></div>
+          <div class="fg"><label class="fl">課題・相談事項</label><textarea class="fi" id="prep-issue" rows="2" placeholder="困っていること・上長への相談…" style="resize:vertical"></textarea></div>
+          <div class="fg"><label class="fl">本日の気分・コンディション</label>
+            <select class="fs" id="prep-cond"><option value="great">😀 とても良い</option><option value="good" selected>🙂 良い</option><option value="normal">😐 普通</option><option value="bad">😟 やや不調</option><option value="poor">😣 不調</option></select>
+          </div>
+          <button class="f-submit" style="margin-top:0" onclick="reportSubmit()">🌇 終業の報告を提出（リーダーへ通知）</button>
+          <span id="report-msg" style="display:none;margin-left:12px;color:var(--green);font-size:12px;font-weight:700">✅ 提出しました</span>
+        </div>
+        <div id="prep-edit-actions" style="display:none;margin-top:10px;text-align:right"><button class="card-btn" onclick="resetReportForm()">＋ 新規日報に切替</button></div>
       </div>
     </div>
     <div>
@@ -725,20 +740,72 @@ function renderAssign(){
   }
   con.innerHTML=h;
 }
-async function reportSubmit(){
-  const date=document.getElementById('prep-date').value;
-  if(!date){alert('日付を入力してください');return;}
-  const rec={date,hours:document.getElementById('prep-hours').value||'—',done:document.getElementById('prep-done').value||'—',plan:document.getElementById('prep-plan').value||'—',issue:document.getElementById('prep-issue').value||'—',cond:document.getElementById('prep-cond').value};
+function _prepGather(){
+  const g=id=>{const e=document.getElementById(id);return e?e.value:'';};
+  return {date:g('prep-date'),hours:g('prep-hours')||'—',
+    planTasks:g('prep-plantasks'),planHours:g('prep-planhours'),goal:g('prep-goal'),
+    done:g('prep-done')||'—',plan:g('prep-plan')||'—',issue:g('prep-issue')||'—',cond:g('prep-cond'),
+    actualHours:(parseFloat(g('prep-hours'))||null)};
+}
+function _prepStore(rec){
+  const i=PREPORTS.findIndex(r=>r.date===rec.date);
+  if(i>=0)PREPORTS[i]=Object.assign({},PREPORTS[i],rec);else PREPORTS.push(rec);
+  const p=rec.date.split('-');prepYear=+p[0];prepMonth=+p[1]-1;
+  renderPReportCalendar();showPReportDetail(rec.date);
+}
+// 始業：今日の計画を保存（通知なし）
+async function reportSaveMorning(){
+  const rec=_prepGather();
+  if(!rec.date){alert('日付を入力してください');return;}
   const API=window.VexumAPI;
   if(API&&API.ready){
-    const res=await API.saveDailyReport(rec);
+    const res=await API.saveDailyReport(Object.assign({},rec,{submit:false}));
+    if(res&&res.error){alert('保存に失敗しました: '+res.error);return;}
+  }
+  _prepStore(rec);
+  const m=document.getElementById('report-morning-msg');if(m){m.style.display='inline';setTimeout(()=>m.style.display='none',2500);}
+}
+// 終業：報告を提出（リーダーへ通知）
+async function reportSubmit(){
+  const rec=_prepGather();
+  if(!rec.date){alert('日付を入力してください');return;}
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const res=await API.saveDailyReport(Object.assign({},rec,{submit:true}));
     if(res&&res.error){alert('日報の保存に失敗しました: '+res.error);return;}
   }
-  const i=PREPORTS.findIndex(r=>r.date===date);
-  if(i>=0)PREPORTS[i]=rec;else PREPORTS.push(rec);
-  const p=date.split('-');prepYear=+p[0];prepMonth=+p[1]-1;
-  renderPReportCalendar();showPReportDetail(date);
+  rec.submitted=true;
+  _prepStore(rec);
   const m=document.getElementById('report-msg');m.style.display='inline';setTimeout(()=>{m.style.display='none';},3000);
+}
+// 編集：既存日報をフォームに読み込む
+function editPReport(ds){
+  const r=PREPORTS.find(x=>x.date===ds);if(!r)return;
+  const s=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v||'';};
+  s('prep-date',r.date);s('prep-hours',r.hours&&r.hours!=='—'?String(r.hours).replace('h',''):'');
+  s('prep-plantasks',r.planTasks);s('prep-planhours',r.planHours);s('prep-goal',r.goal);
+  s('prep-done',r.done==='—'?'':r.done);s('prep-plan',r.plan==='—'?'':r.plan);s('prep-issue',r.issue==='—'?'':r.issue);
+  const c=document.getElementById('prep-cond');if(c)c.value=r.cond||'good';
+  const note=document.getElementById('prep-edit-note');if(note){note.style.display='inline';note.textContent='（'+r.date+' を編集中）';}
+  document.getElementById('prep-edit-actions').style.display='block';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+// 削除
+async function deletePReport(ds){
+  if(!confirm(ds+' の日報を削除しますか？'))return;
+  const API=window.VexumAPI;
+  if(API&&API.ready&&API.deleteDailyReport){
+    const res=await API.deleteDailyReport(ds);
+    if(res&&res.error){alert('削除に失敗しました: '+res.error);return;}
+  }
+  const i=PREPORTS.findIndex(r=>r.date===ds);if(i>=0)PREPORTS.splice(i,1);
+  prepSel='';document.getElementById('prep-detail').innerHTML='';renderPReportCalendar();
+}
+function resetReportForm(){
+  ['prep-hours','prep-plantasks','prep-planhours','prep-goal','prep-done','prep-plan','prep-issue'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const c=document.getElementById('prep-cond');if(c)c.value='good';
+  const note=document.getElementById('prep-edit-note');if(note)note.style.display='none';
+  document.getElementById('prep-edit-actions').style.display='none';
 }
 </script>
 
@@ -748,9 +815,12 @@ async function reportSubmit(){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
       <div>
         <div id="mandala-team-name" style="font-size:16px;font-weight:800;color:#1a1a2e;margin-bottom:3px">曼荼羅チャート</div>
-        <div style="font-size:10px;color:#9ca3af">中心：KGI　第2層：CSF（8項目）　外周：KPI（各8項目）</div>
+        <div style="font-size:10px;color:#9ca3af" id="mnd-sublabel">中心：KGI　第2層：CSF（8項目）。「KPIを表示」で各CSFの施策まで展開</div>
       </div>
-      <button onclick="closeMandala()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#9ca3af;flex-shrink:0;line-height:1;padding:0 0 0 12px">✕</button>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <button id="mnd-kpi-toggle" onclick="toggleMndKpi()" style="padding:6px 12px;background:var(--accent-l,#DAEEE9);color:var(--accent,#0D9488);border:1px solid var(--accent,#0D9488);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">＋ KPIを表示</button>
+        <button onclick="closeMandala()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#9ca3af;line-height:1;padding:0 0 0 4px">✕</button>
+      </div>
     </div>
     <div style="display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap">
       <span style="display:flex;align-items:center;gap:5px;font-size:10px;color:#6b7280"><span id="mleg-c" style="width:14px;height:14px;border-radius:2px;display:inline-block;flex-shrink:0"></span>KGI</span>
@@ -773,6 +843,7 @@ async function reportSubmit(){
     </div>
     <div style="overflow-x:auto">
       <div id="mandala-grid" style="display:grid;grid-template-columns:repeat(9,minmax(60px,1fr));gap:2px;min-width:560px"></div>
+      <div id="mandala-grid-simple" style="display:none;grid-template-columns:repeat(3,1fr);gap:8px;max-width:560px;margin:0 auto"></div>
     </div>
   </div>
 </div>
@@ -1055,14 +1126,61 @@ function buildGridHTML(k,evalMode){
   return h;
 }
 
+// 簡素表示: 中心(KGI)+CSF8 の3x3。CSFごとの進捗(あれば)を表示。
+let _mndKpiOn=false,_mndCurKey=null,_mndEvalMode=false;
+function buildSimpleGridHTML(k){
+  const d=getAllMnd()[k];if(!d)return'';
+  // CSF進捗: チャートに progressMap があれば使用（本人チャート等）。無ければ未表示。
+  const pm=(d.csfProgress||d.progressMap||null);
+  const order=[0,1,2,7,-1,3,6,5,4]; // 3x3配置（中心=-1）
+  let h='';
+  order.forEach(si=>{
+    if(si===-1){
+      h+=`<div style="min-height:96px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:13px;font-weight:800;color:#fff;background:${d.color};border-radius:10px;padding:8px;line-height:1.4">${(d.center||'').replace(/\n/g,'<br>')}</div>`;
+    }else{
+      const label=(d.subs||[])[si]||'';
+      const p=pm&&pm[si]!=null?pm[si]:null;
+      const bar=p!=null?`<div class="pt" style="margin-top:6px"><div class="pf" style="width:${p}%;background:${p>=80?'var(--green)':p>=40?'var(--accent)':'var(--amber)'}"></div></div><div style="font-size:10px;font-weight:700;color:${p>=80?'var(--green)':'var(--accent)'};margin-top:2px">${p}%</div>`:'';
+      h+=`<div style="min-height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:${d.color};background:${d.bg};border:1.5px solid ${d.color};border-radius:10px;padding:8px;line-height:1.4">
+        <div style="font-size:8px;color:var(--text3);font-weight:600;margin-bottom:2px">CSF ${si+1}</div>${label}${bar}</div>`;
+    }
+  });
+  return h;
+}
+function _mndApplyView(){
+  const full=document.getElementById('mandala-grid'),simple=document.getElementById('mandala-grid-simple');
+  const tg=document.getElementById('mnd-kpi-toggle'),sub=document.getElementById('mnd-sublabel');
+  if(_mndKpiOn){
+    full.style.display='grid';simple.style.display='none';
+    if(tg){tg.textContent='− KPIを隠す';}
+    if(sub)sub.textContent='中心：KGI　第2層：CSF　外周：KPI（各8項目）';
+  }else{
+    full.style.display='none';simple.style.display='grid';
+    if(tg){tg.textContent='＋ KPIを表示';}
+    if(sub)sub.textContent='基本表示：中心(KGI)＋CSF 8項目。「KPIを表示」で施策まで展開';
+  }
+}
+function toggleMndKpi(){
+  _mndKpiOn=!_mndKpiOn;
+  if(_mndCurKey){
+    if(_mndKpiOn)document.getElementById('mandala-grid').innerHTML=buildGridHTML(_mndCurKey,_mndEvalMode);
+    else document.getElementById('mandala-grid-simple').innerHTML=buildSimpleGridHTML(_mndCurKey);
+  }
+  _mndApplyView();
+}
 function openMandala(k,evalMode){
   const d=getAllMnd()[k];if(!d)return;
-  if(!evalStates[k])evalStates[k]={};_curEvalKey=k;
+  if(!evalStates[k])evalStates[k]={};_curEvalKey=k;_mndCurKey=k;_mndEvalMode=!!evalMode;
   document.getElementById('mandala-team-name').textContent=d.name+' — 曼荼羅（'+d.scopeLabel+'）';
   const lc=document.getElementById('mleg-c'),ls=document.getElementById('mleg-s');
   if(lc)lc.style.background=d.color;if(ls){ls.style.background=d.bg;ls.style.borderColor=d.color;}
   const eb=document.getElementById('mnd-eval-bar');if(eb){eb.style.display=evalMode?'flex':'none';const p=document.getElementById('mnd-eval-pct');if(p)p.textContent=getEvalProgress(k)+'%';}
+  // 評価モードはKPIまで必要なので自動展開。通常は簡素表示(CSF)が既定。
+  _mndKpiOn=!!evalMode;
   document.getElementById('mandala-grid').innerHTML=buildGridHTML(k,evalMode);
+  document.getElementById('mandala-grid-simple').innerHTML=buildSimpleGridHTML(k);
+  const tg=document.getElementById('mnd-kpi-toggle');if(tg)tg.style.display=evalMode?'none':'';
+  _mndApplyView();
   const m=document.getElementById('mandala-modal');m.style.display='flex';m.scrollTop=0;
 }
 function closeMandala(){document.getElementById('mandala-modal').style.display='none';}
@@ -1488,8 +1606,8 @@ function submitTask(){
 /* ===== 新規日報 ===== */
 function newReport(){
   gotoTab('report');
-  ['prep-hours','prep-done','prep-plan','prep-issue'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-  const d=document.getElementById('prep-date');if(d)d.value='2025-05-30';
+  resetReportForm();
+  const d=document.getElementById('prep-date');if(d)d.value=_epToday();
   window.scrollTo({top:0,behavior:'smooth'});
   const fc=document.querySelector('#tc-report .form-card');if(fc){fc.style.boxShadow='0 0 0 2px var(--accent)';setTimeout(()=>fc.style.boxShadow='',1200);}
 }
@@ -1546,18 +1664,33 @@ function showPReportDetail(ds){
   const r=prepByDate(ds);if(!r){document.getElementById('prep-detail').innerHTML='';return;}
   const c=PCOND[r.cond]||PCOND.normal;
   const p=ds.split('-');const dow=['日','月','火','水','木','金','土'][new Date(+p[0],+p[1]-1,+p[2]).getDay()];
+  const hasMorning=r.planTasks||r.planHours||r.goal;
+  const sub=(r.submitted?'終業提出済み':'始業のみ')+(r.hours&&r.hours!=='—'?' ／ 稼働 '+r.hours:'');
+  const morning=hasMorning?`<div style="grid-column:1/3;background:#FFF7ED;border-radius:6px;padding:8px 10px">
+        <div style="font-size:10px;font-weight:800;color:#C2410C;margin-bottom:4px">🌅 始業（計画）</div>
+        ${r.planTasks?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>業務:</b> ${r.planTasks}</div>`:''}
+        ${r.planHours?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>予定時間:</b> ${r.planHours}</div>`:''}
+        ${r.goal?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>目標/朝礼:</b> ${r.goal}</div>`:''}
+      </div>`:'';
   const h=`<div class="card"><div class="card-hd" style="border-left:4px solid ${c[2]}">
-      <div><div class="card-title">${+p[0]}/${+p[1]}/${+p[2]} (${dow}) の日報</div><div class="card-sub">稼働 ${r.hours}</div></div>
+      <div><div class="card-title">${+p[0]}/${+p[1]}/${+p[2]} (${dow}) の日報</div><div class="card-sub">${sub}</div></div>
       <span style="font-size:12px;font-weight:700;color:${c[2]}">${c[0]} ${c[1]}</span>
     </div><div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div><div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:3px">✅ 本日の達成タスク</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.done}</div></div>
-      <div><div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:3px">📅 明日の予定</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.plan}</div></div>
+      ${morning}
+      <div style="grid-column:1/3;font-size:10px;font-weight:800;color:#1D4ED8;border-top:1px solid var(--border);padding-top:8px">🌇 終業（報告）</div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:3px">✅ 達成タスク・実績</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.done}</div></div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:3px">📅 振り返り・明日の予定</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.plan}</div></div>
       <div style="grid-column:1/3"><div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:3px">⚠ 課題・相談事項</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.issue}</div></div>
+      <div style="grid-column:1/3;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:10px">
+        <button class="card-btn" onclick="editPReport('${ds}')">✏ 編集</button>
+        <button class="card-btn" style="color:var(--red);border-color:var(--red)" onclick="deletePReport('${ds}')">🗑 削除</button>
+      </div>
     </div></div>`;
   document.getElementById('prep-detail').innerHTML=h;
 }
 
 /* init */
+(function(){const d=document.getElementById('prep-date');if(d&&!d.value)d.value=_epToday();})();
 updateTbNewBtn('progress');
 renderEval();
 renderPReportCalendar();
