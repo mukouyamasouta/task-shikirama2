@@ -1,0 +1,17 @@
+# Vercel CLI デプロイ時に除外（このフォルダには個人書類が同居しているため）
+# 配信に必要なのは *.html / web/ / vercel.json のみ
+画像/
+apps/
+docs/
+node_modules/
+.git/
+.next/
+.vercel.systembak/
+*.pdf
+*.qta
+*.mp4
+*.docx
+*.jpg
+*.jpeg
+*.png
+.DS_Store
