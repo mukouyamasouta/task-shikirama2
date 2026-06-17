@@ -326,9 +326,10 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <div id="mandala-modal" onclick="if(event.target===this)closeMandala()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:840px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-      <div>
+      <div style="min-width:0">
         <div id="mandala-team-name" style="font-size:16px;font-weight:800;color:#1a1a2e;margin-bottom:3px">曼荼羅チャート</div>
         <div style="font-size:10px;color:#9ca3af">中心：KGI　第2層：CSF（8項目）　外周：KPI（各8項目）</div>
+        <div id="mnd-chart-sel-wrap" style="display:none;margin-top:8px"><span style="font-size:10px;color:#6b7280;margin-right:6px">チャートの種類</span><select id="mnd-chart-sel" onchange="mndSwitchChart(this.value)" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-weight:600;font-family:inherit"></select></div>
       </div>
       <button onclick="closeMandala()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#9ca3af;flex-shrink:0;line-height:1;padding:0 0 0 12px">✕</button>
     </div>
@@ -547,7 +548,7 @@ function renderDashboard(){
     m.kpis.forEach(kp=>{const c=kp.p>=80?'var(--green)':kp.p>=50?'var(--amber)':'var(--accent)';h+=`<div class="team-row" style="padding:6px 0"><div class="tname" style="font-size:11px">${kp.n}</div><div class="pw" style="max-width:160px"><div class="pt"><div class="pf" style="width:${kp.p}%;background:${c}"></div></div><div class="pp" style="color:${c}">${kp.p}%</div></div></div>`;});
     const kpiEditCnt=m.memberKpiEdits?Object.keys(m.memberKpiEdits).length:0;
     const kpiEditBadge=kpiEditCnt>0?`<span style="font-size:9px;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;padding:2px 7px;border-radius:10px;font-weight:700">✏ KPI編集 ${kpiEditCnt}件</span>`:'';
-    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:10px;color:var(--text3)">完了 ${m.stats.done} ・ 進行 ${m.stats.wip} ・ 遅延 ${m.stats.late}</span>${kpiEditBadge}</div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMemberDash('${id}')">📊 個人DB</button><button class="card-btn" onclick="openMandala('${id}',false)">🧿 曼荼羅</button></div></div></div></div>`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:10px;color:var(--text3)">完了 ${m.stats.done} ・ 進行 ${m.stats.wip} ・ 遅延 ${m.stats.late}</span>${kpiEditBadge}</div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMemberDash('${id}')">📊 個人DB</button><button class="card-btn" onclick="openMemberMandala('${id}')">🧿 曼荼羅</button></div></div></div></div>`;
   });
   document.getElementById('dash-members').innerHTML=h;
 }
@@ -597,6 +598,34 @@ function mdViewChart(){
 }
 function closeMemberDash(){document.getElementById('member-modal').style.display='none';}
 
+/* ===== 曼荼羅を直接開く（複数チャートはモーダル内プルダウンで切替） ===== */
+async function openMemberMandala(id){
+  const m=MEMBERS[id];if(!m)return;
+  let charts=[];const API=window.VexumAPI;
+  if(API&&API.ready&&m.pid){ try{charts=window._chartsCache[m.pid]||await API.loadChartsFor(m.pid);window._chartsCache[m.pid]=charts;}catch(e){charts=[];} }
+  window._mndCharts=charts;window._mndMemberId=id;
+  if(charts.length>1){
+    // 複数チャート: プルダウンで切替
+    const sel=document.getElementById('mnd-chart-sel');
+    sel.innerHTML=charts.map((c,i)=>`<option value="${i}">${c.name||'チャート'}（${c.scope_label||c.period||''}）</option>`).join('');
+    sel.value='0';
+    mndSwitchChart(0);
+  }else{
+    // 単一（または未接続）: 従来どおり
+    document.getElementById('mnd-chart-sel-wrap').style.display='none';
+    openMandala(id,false);
+  }
+}
+function mndSwitchChart(idx){
+  const charts=window._mndCharts||[];const c=charts[+idx];if(!c)return;
+  const m=MEMBERS[window._mndMemberId]||{};
+  MEMBERS['__mndview__']={name:c.name||m.name,role:m.role,team:m.team,scopeLabel:c.scope_label||c.period||'',color:c.color||m.color||'#0D9488',bg:c.bg||'#CCEDE9',center:c.center||'',subs:c.subs||[],acts:c.acts||[]};
+  openMandala('__mndview__',false);
+  // openMandala がプルダウンを隠すので、複数チャート時はここで再表示＋選択状態維持
+  const wrap=document.getElementById('mnd-chart-sel-wrap');if(wrap)wrap.style.display='block';
+  const sel=document.getElementById('mnd-chart-sel');if(sel)sel.value=String(idx);
+}
+
 /* ===== 曼荼羅モーダル ===== */
 function buildMndGrid(k){
   const d=getAllMnd()[k];if(!d)return;
@@ -611,6 +640,8 @@ function buildMndGrid(k){
 function openMandala(k,evalMode){
   const d=getAllMnd()[k];if(!d)return;
   if(!evalStates[k])evalStates[k]={};_curEvalKey=k;
+  // 既定ではチャート種類プルダウンを隠す（openMemberMandala が複数時のみ表示）
+  if(k!=='__mndview__'){const w=document.getElementById('mnd-chart-sel-wrap');if(w)w.style.display='none';}
   document.getElementById('mandala-team-name').textContent=d.name+' — 曼荼羅チャート';
   const lc=document.getElementById('mleg-c'),ls=document.getElementById('mleg-s');
   if(lc)lc.style.background=d.color;if(ls){ls.style.background=d.bg;ls.style.borderColor=d.color;}
