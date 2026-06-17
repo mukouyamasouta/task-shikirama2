@@ -654,18 +654,20 @@ function openMandala(k,evalMode){
     let oc='';
     const cellMeta=CELL_META[r][c];
     const memEdit=!evalMode&&cellMeta&&cellMeta.type==='action'&&d.memberKpiEdits&&d.memberKpiEdits[cellMeta.si+'-'+cellMeta.ai];
+    const ec=memEdit&&memEdit.by?_ldEditorColor(memEdit.by):'#D97706';
     if(cell&&cell.t==='center')sty+=`background:${d.color};color:#fff;font-weight:800;font-size:10.5px;border:2px solid ${d.color};`;
     else if(cell&&cell.t==='sub')sty+=`background:${d.bg};color:${d.color};font-weight:700;border:1.5px solid ${d.color};`;
-    else if(memEdit){sty+='background:#FEF3C7;color:#92400E;border:1.5px solid #F59E0B;';}
+    else if(memEdit){sty+=`background:${ec}1A;color:#3f3f46;border:1.5px solid ${ec};`;}
     else{sty+=evalMode?(EVAL_STYLES[es]+'cursor:pointer;'):'background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;';if(evalMode&&cell&&cell.t==='action')oc=`onclick="evalCellClick('${k}',${r},${c})"`;}
-    const tx=cell?(cell.t==='center'?cell.tx.replace(/\n/g,'<br>'):cell.tx):'';
-    const memIcon=memEdit?`<span style="font-size:7px;position:absolute;top:1px;right:2px;color:#D97706">✏</span>`:'';
+    const tx=cell?(cell.t==='center'?cell.tx.replace(/\n/g,'<br>'):(memEdit&&memEdit.text!=null?memEdit.text:cell.tx)):'';
+    const memIcon=memEdit?`<span style="font-size:7px;position:absolute;top:1px;right:2px;color:${ec}" title="${memEdit.by||''}">✎</span>${memEdit.by?`<span style="font-size:6px;position:absolute;bottom:1px;left:2px;color:${ec};font-weight:700">${memEdit.by}</span>`:''}${memEdit.progress!=null?`<span style="font-size:7px;display:block;color:${ec};font-weight:700">${memEdit.progress}%</span>`:''}`:'';
     const icon=(evalMode&&cell&&cell.t==='action'&&es>0)?`<span style="font-size:8px;margin-top:1px">${EVAL_ICONS[es]}</span>`:'';
     h+=`<div ${oc} style="${sty};position:relative">${memIcon}${tx}${icon}</div>`;
   }
   document.getElementById('mandala-grid').innerHTML=h;
   const m=document.getElementById('mandala-modal');m.style.display='flex';m.scrollTop=0;
 }
+function _ldEditorColor(name){const pal=['#0D9488','#EC4899','#F59E0B','#6366F1','#10B981','#EF4444','#8B5CF6','#06B6D4'];let h=0;for(let i=0;i<(name||'').length;i++)h=(h*31+name.charCodeAt(i))%pal.length;return pal[h];}
 function closeMandala(){document.getElementById('mandala-modal').style.display='none';}
 function evalCellClick(k,r,c){if(!evalStates[k])evalStates[k]={};evalStates[k][`${r},${c}`]=((evalStates[k][`${r},${c}`]||0)+1)%4;openMandala(k,true);}
 function downloadCSVFromModal(){downloadCSV(_curEvalKey);}
@@ -919,7 +921,7 @@ async function renderMemberEval(){
   // チャート選択プルダウン
   let chartSelHTML='';
   if(charts.length){
-    chartSelHTML=`<div style="background:#FAFCFC;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap"><label class="fl" style="margin:0">評価対象の曼荼羅チャート</label><select class="fs" style="width:auto;min-width:280px" onchange="onEvalChartChange(this.value)">${charts.map(c=>`<option value="${c.id}" ${c.id===_evalChartId?'selected':''}>${c.name||c.id}${c.period?' ('+c.period+')':''}</option>`).join('')}</select>${selfEval?'<span style="font-size:11px;color:var(--amber);font-weight:700">📝 本人自己評価あり</span>':'<span style="font-size:11px;color:var(--text3)">自己評価なし</span>'}</div>`;
+    chartSelHTML=`<div style="background:#FAFCFC;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap"><label class="fl" style="margin:0">評価対象の期間（チャート）</label><select class="fs" style="width:auto;min-width:280px" onchange="onEvalChartChange(this.value)">${charts.map(c=>`<option value="${c.id}" ${c.id===_evalChartId?'selected':''}>${c.period||c.scope_label||'期間未設定'}${c.name?' ／ '+c.name:''}</option>`).join('')}</select>${selfEval?'<span style="font-size:11px;color:var(--amber);font-weight:700">📝 本人自己評価あり</span>':'<span style="font-size:11px;color:var(--text3)">自己評価なし</span>'}</div>`;
   }
   let h=`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF・KPI）</div><div class="card-sub">${d.name} ／ ${d.team}</div></div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMandala('${id}',false)">🧿 全体を見る</button><button class="card-btn" style="background:var(--accent);color:#fff" onclick="openMandala('${id}',true)">🖊 KPIまで評価</button></div></div>${chartSelHTML}<div class="card-body">`;
   h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-kgi">KGI</span><span class="eval-goal">${(d.center||'').replace(/\n/g,' ')}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'kgi',-1)}</div><textarea class="eval-cmt" rows="2" placeholder="KGIへの評価コメント…" oninput="saveMeval('${id}','kgi',-1,this.value)">${e.kgi.comment}</textarea>${selfKgi}</div>`;

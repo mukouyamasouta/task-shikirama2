@@ -659,7 +659,8 @@
     var teamRow = raw.teams.filter(function (t) { return tm && t.id === tm.team_id; })[0];
     function chartObj(c) {
       return { dbId: c.id, name: c.name, scopeLabel: c.scope_label, period: c.period, startDate: c.start_date ? fmtYMD(c.start_date) : '',
-        team: teamRow ? teamRow.name : '', color: c.color, bg: c.bg, center: c.center, subs: c.subs, acts: c.acts };
+        team: teamRow ? teamRow.name : '', color: c.color, bg: c.bg, center: c.center, subs: c.subs, acts: c.acts,
+        memberKpiEdits: c.member_kpi_edits || {} };
     }
     var CHARTS = {};
     raw.mandala_charts.forEach(function (c) {
