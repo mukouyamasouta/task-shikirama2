@@ -796,6 +796,10 @@ function submitAssign(){
   const name=val('asg-name');if(!name){alert('タスク名を入力してください');return;}
   const id=document.getElementById('asg-member').value;
   if(!id){alert('メンバーを選択してください');return;}
+  const API=window.VexumAPI;
+  if(API&&API.ready&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pidOf(id))){
+    alert('データ読み込み中です。少し待ってから再度お試しください。');return;
+  }
   PENDING_ASSIGN={name,id,kpi:val('asg-kpi')||'—',pri:document.getElementById('asg-pri').value,
     period:(document.getElementById('asg-period')||{}).value||'',planHours:parseFloat(val('asg-planhours'))||null,
     startV:val('asg-start')||null,dueV:val('asg-due')||null,startD:fmtDate('asg-start'),dueD:fmtDate('asg-due')};
@@ -933,6 +937,10 @@ async function renderMemberEval(){
 }
 function saveMemberEval(){
   const id=document.getElementById('evalin-member').value;const period=document.getElementById('evalin-period').value;
+  const API0=window.VexumAPI;
+  if(API0&&API0.ready&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pidOf(id))){
+    alert('データ読み込み中です。少し待ってから再度お試しください。');return;
+  }
   const e=_meval(id);const name=MEMBERS[id].name;
   const avgCsf=Math.round(e.csf.reduce((a,c)=>a+c.stars,0)/8*10)/10;
   const cmt=e.kgi.comment||(e.csf.find(c=>c.comment)||{}).comment||'';
