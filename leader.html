@@ -1656,8 +1656,12 @@ function vexumLogout(){
   reloadNotifs();
   // リアルタイム反映: メンバーの進捗書き込み・幹部の新規送信・通知を自動で再描画
   if(API.subscribeLive){
-    API.subscribeLive(['tasks','chart_sends','notifications'],function(){
+    API.subscribeLive(['tasks','chart_sends','notifications','mandala_charts'],function(){
       reloadNotifs();
+      // メンバーがチャート（CSF/KPI・進捗・工数・色）を更新→キャッシュを破棄して再取得
+      window._chartsCache={};
+      // 個人DB/曼荼羅を開いていれば最新を再描画
+      if(document.getElementById('member-modal')&&document.getElementById('member-modal').style.display==='flex'&&window._mdMemberId){try{openMemberDash(window._mdMemberId);}catch(e){}}
       API.loadMyInbox().then(function(rows){
         if(!rows)return;
         replArr(INBOX,rows);

@@ -35,6 +35,35 @@
 
   function err(label, e) { console.warn('[VexumAPI] ' + label + ' failed:', e); }
 
+  function _sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  // 一時的エラー（レート制限/接続断/5xx）は指数バックオフでリトライ。
+  // makeReq は Supabase 呼び出し（{data,error} を返す Promise）を生成する関数。
+  async function sbRetry(makeReq, tries) {
+    tries = tries || 4;
+    var last;
+    for (var i = 0; i < tries; i++) {
+      try {
+        var r = await makeReq();
+        if (r && r.error) {
+          var m = String((r.error && r.error.message) || r.error || '');
+          var code = String((r.error && (r.error.code || r.error.status)) || '');
+          // 一時的エラーのみリトライ（フレーズ優先＋HTTPステータスはコード/境界で判定。
+          // 金額や任意の数字に '500' 等が含まれる永続エラーを誤ってリトライしない）
+          var transient = /rate ?limit|too many|timeout|timed out|temporar|fetch failed|networkerror|failed to fetch|ECONN|bad gateway|service unavailable|gateway time/i.test(m)
+            || /^(429|500|502|503|504)$/.test(code)
+            || /\b(429|502|503|504)\b/.test(m);
+          if (transient && i < tries - 1) { await _sleep(400 * Math.pow(2, i)); continue; }
+        }
+        return r;
+      } catch (e) {
+        last = e;
+        if (i < tries - 1) { await _sleep(400 * Math.pow(2, i)); continue; }
+        return { error: { message: (e && e.message) || String(e) } };
+      }
+    }
+    return { error: { message: (last && last.message) || 'retry exhausted' } };
+  }
+
   // 全テーブルを一括取得（生データ）
   async function fetchAll() {
     if (!sb) return null;
@@ -329,7 +358,7 @@
     var me = await currentProfile();
     var hours = Math.max(0, +o.hours || 0);
     var prog = (o.progressAfter != null) ? Math.max(0, Math.min(100, Math.round(o.progressAfter))) : null;
-    // 1) 日次ログ（17/18未適用でも tasks 更新は通るよう、ログ失敗は握りつぶす）
+    // 1) 日次ログ（単発・best-effort。リトライしない＝タイムアウト後の二重挿入を防ぐ）
     if (hours > 0 || prog != null) {
       try {
         await sb.from('task_time_logs').insert({
@@ -340,8 +369,11 @@
       } catch (e) {}
     }
     // 2) tasks 更新：total_hours 加算 + progress/status
-    var cur = await sb.from('tasks').select('progress,total_hours,status,due_date').eq('id', taskId).maybeSingle();
-    var prevHours = (cur.data && +cur.data.total_hours) || 0;
+    var cur = await sbRetry(function () { return sb.from('tasks').select('progress,total_hours,status,due_date').eq('id', taskId).maybeSingle(); });
+    // 現状読込に失敗したら total_hours を 0 起点で上書きしない（累計が消えるのを防ぐ）
+    if (cur.error) return { error: friendlyErr((cur.error && cur.error.message) || '読込失敗') };
+    if (!cur.data) return { error: 'タスクが見つかりません' };
+    var prevHours = (+cur.data.total_hours) || 0;
     var newProg = (prog != null) ? prog : (cur.data ? cur.data.progress : 0);
     var done = newProg >= 100;
     var late = !done && cur.data && cur.data.due_date && cur.data.due_date < new Date().toISOString().slice(0, 10);
@@ -350,15 +382,40 @@
     // total_hours 列が無い古いDBでも動くよう、まず加算込みで試す
     var withHours = Object.assign({ total_hours: prevHours + hours }, up);
     if (done) { withHours.completed_date = new Date().toISOString().slice(0, 10); withHours.completed_at = new Date().toISOString(); }
-    var r = await sb.from('tasks').update(withHours).eq('id', taskId).select('id');
+    var r = await sbRetry(function () { return sb.from('tasks').update(withHours).eq('id', taskId).select('id'); });
     if (r.error && /total_hours|completed_at/.test(r.error.message)) {
       if (done) up.completed_date = new Date().toISOString().slice(0, 10);
-      r = await sb.from('tasks').update(up).eq('id', taskId).select('id');
+      r = await sbRetry(function () { return sb.from('tasks').update(up).eq('id', taskId).select('id'); });
     }
     if (r.error) return { error: friendlyErr(r.error.message) };
+    if (!r.data || r.data.length === 0) return { error: '更新できませんでした（RLS/権限の可能性）' };
     try { await propagateTaskToSend(taskId); } catch (e) {}
     if (done) { try { await notifyTaskDone(taskId); } catch (e) {} }
     return { ok: true, progress: newProg, done: done, totalHours: prevHours + hours };
+  }
+
+  // 絶対値SET（冪等）でタスクの進捗・累計工数を設定。再送キュー用：
+  // 何度呼んでも total_hours は加算されず指定値になるため二重計上しない。
+  async function setTaskProgress(taskId, o) {
+    if (!sb || !taskId) return { error: 'タスクIDが不明です' };
+    var prog = (o.progress != null) ? Math.max(0, Math.min(100, Math.round(o.progress))) : null;
+    var done = prog != null && prog >= 100;
+    var up = {};
+    if (prog != null) { up.progress = prog; up.status = done ? 'done' : (prog > 0 ? 'wip' : 'todo'); }
+    if (o.totalHours != null) up.total_hours = Math.max(0, +o.totalHours);
+    if (done) { up.completed_date = new Date().toISOString().slice(0, 10); up.completed_at = new Date().toISOString(); }
+    if (!Object.keys(up).length) return { ok: true };
+    var r = await sbRetry(function () { return sb.from('tasks').update(up).eq('id', taskId).select('id'); });
+    if (r.error && /total_hours|completed_at/.test(r.error.message)) {
+      delete up.total_hours; delete up.completed_at;
+      if (done) up.completed_date = new Date().toISOString().slice(0, 10);
+      r = await sbRetry(function () { return sb.from('tasks').update(up).eq('id', taskId).select('id'); });
+    }
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    if (!r.data || r.data.length === 0) return { error: '更新できませんでした（RLS/権限の可能性）' };
+    try { await propagateTaskToSend(taskId); } catch (e) {}
+    if (done) { try { await notifyTaskDone(taskId); } catch (e) {} }
+    return { ok: true };
   }
 
   // タスク完了時、担当チームのリーダーへ完了通知
@@ -572,8 +629,20 @@
     if (newActs) payload.acts = newActs;
     if (extra && extra.center != null) payload.center = extra.center;   // KGI中心の編集
     if (extra && extra.subs) payload.subs = extra.subs;                 // CSFの編集
-    var r = await sb.from('mandala_charts').update(payload).eq('id', chartId);
+    // リトライ＋更新行数の検証（0行=RLS/権限/対象なしの「無言の失敗」を検出）
+    var r = await sbRetry(function () { return sb.from('mandala_charts').update(payload).eq('id', chartId).select('id'); });
     if (r.error) return { error: friendlyErr(r.error.message) };
+    if (!r.data || r.data.length === 0) {
+      // 対象が無ければ作成（owner未設定の取り違え等を救済）。失敗時は明示エラー。
+      var me = await currentProfile();
+      if (me) {
+        var up = await sbRetry(function () {
+          return sb.from('mandala_charts').upsert(Object.assign({ id: chartId, owner_type: 'user', owner_user_id: me.id }, payload)).select('id');
+        });
+        if (!up.error && up.data && up.data.length) return { ok: true };
+      }
+      return { error: '更新できませんでした（RLS/権限、または対象チャートが存在しません）' };
+    }
     return { ok: true };
   }
   // 個人がチャート（KGI/CSF/KPI）を更新した旨を自チームのリーダーへ通知
@@ -1027,6 +1096,7 @@
     assignTask: assignTask,
     updateTask: updateTask,
     logTaskTime: logTaskTime,
+    setTaskProgress: setTaskProgress,
     loadTaskTimeLogs: loadTaskTimeLogs,
     loadMemberTimeLogs: loadMemberTimeLogs,
     loadNotifications: loadNotifications,
