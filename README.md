@@ -144,6 +144,13 @@ VEXUM
    ```
 5. Vercel に config.js をプッシュ → 自動デプロイ
 
+### 🔴 保存されない場合（最重要・40名運用の永続化）
+編集・進捗・工数が**端末をまたいで保存**されるには Supabase に列・テーブルが揃っている必要があります。
+SQL Editor で **`supabase/20_setup_all.sql` を1回実行**してください（冪等・これ1本で全部入り）。
+末尾の確認クエリが **`1 / 1 / 1 / 1 / 1 / 1`** を返せば完了です。
+> 接続済み（web/config.js 設定済み）なら、以降の編集は自動的に Supabase に保存され、
+> 他の人・他の端末からも見えます。未接続時はブラウザ内（localStorage）に保存されます。
+
 ### 既存プロジェクト（REBUILD実行済み）の場合
 - `supabase/15_backend_complete.sql` → `supabase/16_one_account_one_role.sql`
   → `supabase/17_chart_task_link.sql` の順に実行（すべて冪等・再実行安全）。
