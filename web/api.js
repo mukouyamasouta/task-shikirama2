@@ -622,11 +622,20 @@
     if (!r.data || r.data.length === 0) return { error: '更新できませんでした（権限不足の可能性）' };
     return { ok: true };
   }
+  // 全セルが空（未入力）の acts かどうか判定。既存の記入済みデータを
+  // 空配列で誤って上書きしてしまう事故（チャート初期化前のCHARTEDIT等の
+  // 取り違え）を防ぐためのガードに使う。
+  function isBlankActs(a) {
+    if (!a || !a.length) return true;
+    return a.every(function (row) { return !row || row.every(function (c) { return !c; }); });
+  }
   // メンバー自身のKPI編集を保存（member_kpi_edits列 + acts更新）
   async function saveMemberKpiEdits(chartId, edits, newActs, extra) {
     if (!sb) return { error: 'Supabase未接続' };
     var payload = { member_kpi_edits: edits };
-    if (newActs) payload.acts = newActs;
+    // 全セル空の acts は「未入力」ではなく取り違えの可能性が高いため送らない
+    // （既存の記入済みデータを誤って空で上書きしない）
+    if (newActs && !isBlankActs(newActs)) payload.acts = newActs;
     if (extra && extra.center != null) payload.center = extra.center;   // KGI中心の編集
     if (extra && extra.subs) payload.subs = extra.subs;                 // CSFの編集
     // リトライ＋更新行数の検証（0行=RLS/権限/対象なしの「無言の失敗」を検出）
@@ -637,7 +646,7 @@
       var me = await currentProfile();
       if (me) {
         var up = await sbRetry(function () {
-          return sb.from('mandala_charts').upsert(Object.assign({ id: chartId, owner_type: 'user', owner_user_id: me.id }, payload)).select('id');
+          return sb.from('mandala_charts').upsert(Object.assign({ id: chartId, owner_type: 'user', owner_user_id: me.id, acts: [], subs: [], name: '個人チャート', center: '' }, payload)).select('id');
         });
         if (!up.error && up.data && up.data.length) return { ok: true };
       }
@@ -697,9 +706,19 @@
   // メンバーの個人曼荼羅チャートを upsert（リーダーが記入＝タスク割当）
   async function upsertMemberChart(o) {
     if (!sb) return { error: 'Supabase未接続' };
+    // acts は not null 制約があるため必ず何かを入れる必要がある。
+    // 全セル空で送られてきた場合、既存チャート（記入済み）の取り違えの可能性が高いので
+    // 既存の acts を確認し、記入済みならそれを保持する（誤って空で上書きしない）。
+    var actsToUse = o.acts || [];
+    if (isBlankActs(actsToUse) && o.id) {
+      try {
+        var cur = await sb.from('mandala_charts').select('acts').eq('id', o.id).maybeSingle();
+        if (cur.data && !isBlankActs(cur.data.acts)) actsToUse = cur.data.acts;
+      } catch (e) {}
+    }
     var payload = {
       owner_type: 'user', owner_user_id: o.pid, name: o.name || '個人チャート',
-      center: o.center || '', subs: o.subs || [], acts: o.acts || [],
+      center: o.center || '', subs: o.subs || [], acts: actsToUse,
       color: o.color || '#0D9488', bg: o.bg || '#CCEDE9'
     };
     if (o.id) { payload.id = o.id; }
