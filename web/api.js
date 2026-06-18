@@ -418,20 +418,6 @@
     return { ok: true };
   }
 
-  // タスク単位の自己評価（評価管理タブ・個別保存）。本人(assignee)のみRLSで更新可。
-  // 22_task_self_eval.sql 未適用のDBでは列が無いため、その旨を返す。
-  async function saveTaskEval(taskId, o) {
-    if (!sb || !taskId) return { error: 'タスクIDが不明です' };
-    var up = { self_eval_stars: o.stars || 0, self_eval_comment: o.comment || '' };
-    var r = await sbRetry(function () { return sb.from('tasks').update(up).eq('id', taskId).select('id'); });
-    if (r.error && /self_eval_stars|self_eval_comment/.test(r.error.message)) {
-      return { error: '評価列が未作成です。supabase/22_task_self_eval.sql をSQL Editorで実行してください。' };
-    }
-    if (r.error) return { error: friendlyErr(r.error.message) };
-    if (!r.data || r.data.length === 0) return { error: '更新できませんでした（RLS/権限の可能性）' };
-    return { ok: true };
-  }
-
   // タスク完了時、担当チームのリーダーへ完了通知
   async function notifyTaskDone(taskId) {
     if (!sb) return;
@@ -807,11 +793,10 @@
         ? '📊 チャート: ' + chart + ' ／ CSF: ' + (t.related_kgi || '—')
         : '関連KGI: ' + (t.related_kgi || '—') + ' ／ カテゴリ: ' + (t.category || '—');
       var from = self ? '🙋 自分で作成' : ('📌 ' + (exec ? '役員' : '上長') + ' · ' + (assigner.full_name || ''));
-      var evalStars = t.self_eval_stars || 0, evalComment = t.self_eval_comment || '';
       if (t.status === 'done' || (t.progress || 0) >= 100) {
-        ASSIGN_HISTORY.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '', pri: t.priority || 'md', self: self, chart: chart, hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null), evalStars: evalStars, evalComment: evalComment });
+        ASSIGN_HISTORY.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '', pri: t.priority || 'md', self: self, chart: chart, hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
       } else {
-        ASSIGNMENTS.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), dueRaw: t.due_date || null, pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: self, chart: chart, sendId: t.source_send_id || null, cell: t.source_cell || null, hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null), evalStars: evalStars, evalComment: evalComment });
+        ASSIGNMENTS.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), dueRaw: t.due_date || null, pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: self, chart: chart, sendId: t.source_send_id || null, cell: t.source_cell || null, hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
       }
     });
 
@@ -1136,7 +1121,6 @@
     updateTask: updateTask,
     logTaskTime: logTaskTime,
     setTaskProgress: setTaskProgress,
-    saveTaskEval: saveTaskEval,
     loadTaskTimeLogs: loadTaskTimeLogs,
     loadMemberTimeLogs: loadMemberTimeLogs,
     loadNotifications: loadNotifications,

@@ -209,7 +209,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="sb-item" onclick="swTab('chartmgr',this);initChartMgr()"><span class="sb-icon">🗂</span>チャート管理</button>
     <button class="sb-item" onclick="swTab('inbox',this);renderInbox()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="inbox-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('assign',this)"><span class="sb-icon">📌</span>割り当て<span class="sb-badge" id="assign-badge">3</span></button>
-    <button class="sb-item" onclick="swTab('reviews',this);renderEval();renderTaskEval();refreshSelfEvalStatusCard()"><span class="sb-icon">★</span>評価管理</button>
+    <button class="sb-item" onclick="swTab('reviews',this);renderEval();refreshSelfEvalStatusCard()"><span class="sb-icon">★</span>評価管理</button>
     <button class="sb-item" onclick="swTab('create',this);initCreate()"><span class="sb-icon">＋</span>新規作成</button>
     <button class="sb-item" onclick="swTab('report',this)"><span class="sb-icon">📝</span>日報</button>
   </div>
@@ -269,12 +269,6 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="f-submit" style="padding:7px 16px;font-size:12px;background:var(--amber)" onclick="openSelfEval()">📝 自己評価を入力 / 編集 / 提出</button>
   </div>
   <div id="self-eval-status-card" style="background:#FFFBEB;border:1px solid #F59E0B;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#92400E;display:none"></div>
-
-  <!-- タスク評価（与えられたタスクのみ・項目ごとに個別保存） -->
-  <div class="card" id="task-eval-card" style="margin-bottom:16px">
-    <div class="card-hd"><div><div class="card-title">📌 タスク評価</div><div class="card-sub">リーダー・上長・役員から与えられたタスクのみが対象です（自分で作成したタスクは対象外）。項目ごとに★評価・コメントを個別に保存できます。</div></div></div>
-    <div class="card-body" id="task-eval-list" style="padding:0"></div>
-  </div>
 
   <!-- 自己評価モーダル（KGI＋CSF8項目） -->
   <div id="self-eval-modal" onclick="if(event.target===this)closeSelfEval()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
@@ -1330,54 +1324,6 @@ async function submitSelfEval(isSubmit){
   }
   if(isSubmit){alert('✅ 提出しました。リーダー・幹部画面に反映されます。');closeSelfEval();}
   else{alert('💾 下書きを保存しました。引き続き編集できます。');await loadExistingSelfEval();}
-}
-
-/* ===== タスク評価（与えられたタスクのみ・項目ごとに個別保存） =====
- * 評価対象は「自分で作成していない」タスク（a.self!==true）のみ。
- * 永続化先: tasks.self_eval_stars / self_eval_comment（22_task_self_eval.sql）。
- * 担当者(assignee)本人のみ更新可（RLS）＝保存・編集は従業員画面からのみ可能。 */
-function _evFindTask(rid){return ASSIGNMENTS.find(a=>a.id===rid)||ASSIGN_HISTORY.find(a=>a.id===rid);}
-function _evStarsHTML(rid,stars){
-  let s='';for(let n=1;n<=5;n++)s+=`<span onclick="evTaskStar('${rid}',${n})" style="cursor:pointer;font-size:18px;color:${n<=stars?'#F59E0B':'#D9DEE3'}">★</span>`;
-  return s;
-}
-function renderTaskEval(){
-  const con=document.getElementById('task-eval-list');if(!con)return;
-  const items=[...ASSIGNMENTS,...ASSIGN_HISTORY].filter(a=>!a.self&&a.id);
-  if(!items.length){con.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:24px">評価対象の「与えられたタスク」はまだありません。</div>';return;}
-  let h='';
-  items.forEach(a=>{
-    const rid=a.id;
-    const cm=a.evalComment||'';
-    const chartChip=a.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:2px 8px;border-radius:8px;font-weight:700;margin-left:6px">📊 チームチャート: ${a.chart}</span>`:'<span style="font-size:9px;background:#F3F4F6;color:#4B5563;padding:2px 8px;border-radius:8px;font-weight:700;margin-left:6px">🗂 通常タスク</span>';
-    h+=`<div style="padding:12px 14px;border-bottom:1px solid #F3F4F6">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-        <div style="min-width:0"><div style="font-size:12px;font-weight:700">${a.name}${chartChip}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${a.from||''} ／ 進捗 ${a.pct!=null?a.pct:100}%</div></div>
-        <div id="ev-stars-${rid}">${_evStarsHTML(rid,a.evalStars||0)}</div>
-      </div>
-      <textarea rows="2" placeholder="評価コメント…" oninput="evTaskComment('${rid}',this.value)" style="width:100%;margin-top:8px;padding:7px 9px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;outline:none">${cm}</textarea>
-      <div style="text-align:right;margin-top:6px"><button class="card-btn" style="background:var(--amber);color:#fff;border-color:var(--amber)" onclick="evTaskSave('${rid}',this)">💾 この項目を保存</button></div>
-    </div>`;
-  });
-  con.innerHTML=h;
-}
-// 星クリックは該当タスクの★表示だけをその場で更新（全体再描画すると他タスクの
-// コメント入力中テキストボックスが再生成され、フォーカス・IME入力中の内容が消えるため）
-function evTaskStar(rid,n){
-  const a=_evFindTask(rid);if(!a)return;
-  a.evalStars=(a.evalStars===n?0:n);
-  const el=document.getElementById('ev-stars-'+rid);if(el)el.innerHTML=_evStarsHTML(rid,a.evalStars);
-}
-function evTaskComment(rid,val){const a=_evFindTask(rid);if(!a)return;a.evalComment=val;}
-async function evTaskSave(rid,btn){
-  const a=_evFindTask(rid);if(!a)return;
-  const API=window.VexumAPI;
-  if(API&&API.ready){
-    const res=await API.saveTaskEval(rid,{stars:a.evalStars||0,comment:a.evalComment||''});
-    if(res&&res.error){alert('保存失敗: '+res.error);return;}
-  }
-  const old=btn.textContent;btn.textContent='✓ 保存しました';btn.style.background='var(--green)';
-  setTimeout(()=>{btn.textContent=old;btn.style.background='var(--amber)';},1500);
 }
 
 function renderEval(){
@@ -2536,32 +2482,16 @@ function vexumLogout(){
   });
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}
-  // 再読込（初回・リアルタイム反映）でASSIGNMENTS/ASSIGN_HISTORYを丸ごと置換する前に、
-  // 評価管理タブで未保存の★評価・コメント（タスク評価）を新データへ引き継ぐ。
-  // 引き継がないと、他の保存操作で起きるリアルタイム更新（45秒ポーリング含む）が
-  // 入力中の評価を黙って消してしまう。
-  function preserveEvalEdits(newAssignments,newHistory){
-    var oldMap={};
-    [].concat(ASSIGNMENTS,ASSIGN_HISTORY).forEach(function(a){
-      if(a&&a.id&&((a.evalStars||0)>0||a.evalComment))oldMap[a.id]={evalStars:a.evalStars,evalComment:a.evalComment};
-    });
-    [].concat(newAssignments,newHistory).forEach(function(a){
-      var old=a&&oldMap[a.id];
-      if(old&&!((a.evalStars||0)>0||a.evalComment)){a.evalStars=old.evalStars;a.evalComment=old.evalComment;}
-    });
-  }
   API.currentProfile().then(function(p){ if(!p)return; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; }).catch(function(){});
   API.loadPersonalData().then(function(d){
     if(!d) return;
     repl(CHARTS,d.CHARTS); repl(FEEDBACK,d.FEEDBACK);
-    preserveEvalEdits(d.ASSIGNMENTS,d.ASSIGN_HISTORY);
     replArr(ASSIGNMENTS,d.ASSIGNMENTS); replArr(ASSIGN_HISTORY,d.ASSIGN_HISTORY); replArr(PREPORTS,d.PREPORTS);
     window._epTeam=d.TEAM; window._epKpis=d.KPIS; window._epStats=d.STATS;
     if(typeof restoreTasksFromLS==='function')restoreTasksFromLS();   // ローカル保存の進捗・工数を反映
     if(typeof renderProgressDash==='function') renderProgressDash();
     if(typeof renderTaskTable==='function') renderTaskTable();
     if(typeof renderEval==='function') renderEval();
-    if(typeof renderTaskEval==='function') renderTaskEval();
     if(typeof renderAssign==='function') renderAssign();
     if(typeof updateAssignBadge==='function') updateAssignBadge();
     if(typeof renderPReportCalendar==='function') renderPReportCalendar();
@@ -2587,7 +2517,6 @@ function vexumLogout(){
       API.loadPersonalData().then(function(d){
         if(!d)return;
         repl(CHARTS,d.CHARTS);repl(FEEDBACK,d.FEEDBACK);
-        preserveEvalEdits(d.ASSIGNMENTS,d.ASSIGN_HISTORY);
         replArr(ASSIGNMENTS,d.ASSIGNMENTS);replArr(ASSIGN_HISTORY,d.ASSIGN_HISTORY);
         window._epTeam=d.TEAM;window._epKpis=d.KPIS;window._epStats=d.STATS;
         if(typeof renderProgressDash==='function')renderProgressDash();
@@ -2595,7 +2524,6 @@ function vexumLogout(){
         if(typeof renderAssign==='function')renderAssign();
         if(typeof updateAssignBadge==='function')updateAssignBadge();
         if(typeof renderCmTasks==='function')renderCmTasks();
-        if(typeof renderTaskEval==='function')renderTaskEval();
       }).catch(function(){});
       API.loadMyInbox().then(function(rows){
         if(!rows)return;

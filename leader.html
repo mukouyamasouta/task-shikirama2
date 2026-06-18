@@ -107,7 +107,6 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 .eval-tag{font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;letter-spacing:.05em}
 .tag-kgi{background:var(--accent);color:#fff}
 .tag-csf{background:var(--accent-l);color:var(--accent)}
-.tag-task{background:rgba(236,72,153,.12);color:var(--pink)}
 .eval-goal{font-size:12.5px;font-weight:700;color:var(--text)}
 /* mandala subs/preview */
 .mnd-eval-cell{cursor:pointer}
@@ -237,7 +236,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- メンバー評価入力 -->
 <div id="tc-evalin" class="tab-content">
-  <div class="sec-title">メンバー評価入力 <span style="font-size:11px;font-weight:400;color:var(--text3)">曼荼羅チャートのKGI・CSFと割当タスクを★5段階＋コメントで評価</span></div>
+  <div class="sec-title">メンバー評価入力 <span style="font-size:11px;font-weight:400;color:var(--text3)">曼荼羅チャートのKGI・CSFを★5段階＋コメントで評価</span></div>
   <div class="card" style="margin-bottom:16px">
     <div class="card-body" style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
       <div style="flex:1;min-width:200px"><label class="fl">評価するメンバー</label><select class="fs" id="evalin-member" onchange="renderMemberEval();renderEvalPeriodTasks()"></select></div>
@@ -299,6 +298,10 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <div><div class="fl" style="margin-bottom:4px">メンバー</div><select class="fs" id="sub-member" style="min-width:160px" onchange="renderSubmissions()"></select></div>
       <div><div class="fl" style="margin-bottom:4px">期間</div><select class="fs" id="sub-period" onchange="renderSubmissions()"><option value="">全期間</option></select></div>
       <div><div class="fl" style="margin-bottom:4px">表示</div><select class="fs" id="sub-view" onchange="renderSubmissions()"><option value="both">日報＋工数</option><option value="report">日報のみ</option><option value="hours">工数のみ</option></select></div>
+      <div><div class="fl" style="margin-bottom:4px">提出日（開始）</div><input class="fi" type="date" id="sub-date-from" style="width:140px" onchange="renderSubmissions()"></div>
+      <div><div class="fl" style="margin-bottom:4px">提出日（終了）</div><input class="fi" type="date" id="sub-date-to" style="width:140px" onchange="renderSubmissions()"></div>
+      <button class="card-btn" onclick="renderSubmissions()">絞り込む</button>
+      <button class="card-btn" onclick="clearSubDateFilter()">クリア</button>
       <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="sub-summary"></div>
     </div>
   </div>
@@ -499,8 +502,8 @@ const REPORTS={
 };
 /* 評価記録（シード） */
 const EVAL_RECORDS=[
-  {name:'中村 健太',evaluator:'田中 花子',period:'2025年 Q1',kgi:4,csf:3.5,task:4,comment:'行動量は十分。クロージング力強化が課題。',status:'done'},
-  {name:'伊藤 さくら',evaluator:'田中 花子',period:'2025年 Q1',kgi:3,csf:3.2,task:3,comment:'着実に成長中。提案資料の質を上げたい。',status:'done'}
+  {name:'中村 健太',evaluator:'田中 花子',period:'2025年 Q1',kgi:4,csf:3.5,comment:'行動量は十分。クロージング力強化が課題。',status:'done'},
+  {name:'伊藤 さくら',evaluator:'田中 花子',period:'2025年 Q1',kgi:3,csf:3.2,comment:'着実に成長中。提案資料の質を上げたい。',status:'done'}
 ];
 const SP_MAP=[
   {cr:3,cc:3,oc:[1,1],si:0},{cr:3,cc:4,oc:[1,4],si:1},{cr:3,cc:5,oc:[1,7],si:2},
@@ -834,9 +837,9 @@ async function assignChoice(mode){
 
 /* ===== メンバー評価入力 ===== */
 const memberEval={};
-function _meval(id){if(!memberEval[id])memberEval[id]={kgi:{stars:0,comment:''},csf:Array.from({length:8},()=>({stars:0,comment:''})),tasks:[]};return memberEval[id];}
+function _meval(id){if(!memberEval[id])memberEval[id]={kgi:{stars:0,comment:''},csf:Array.from({length:8},()=>({stars:0,comment:''}))};return memberEval[id];}
 function starHTML(id,type,si){
-  const e=_meval(id);let cur=type==='kgi'?e.kgi.stars:type==='csf'?e.csf[si].stars:(e.tasks[si]?e.tasks[si].stars:0);
+  const e=_meval(id);let cur=type==='kgi'?e.kgi.stars:e.csf[si].stars;
   let h='<span class="stars">';
   for(let n=1;n<=5;n++)h+=`<span class="star ${n<=cur?'on':''}" onclick="setMstar('${id}','${type}',${si},${n})">★</span>`;
   return h+'</span>';
@@ -844,13 +847,12 @@ function starHTML(id,type,si){
 function setMstar(id,type,si,n){
   const e=_meval(id);
   if(type==='kgi')e.kgi.stars=(e.kgi.stars===n?0:n);
-  else if(type==='csf')e.csf[si].stars=(e.csf[si].stars===n?0:n);
-  else{if(!e.tasks[si])e.tasks[si]={stars:0,comment:''};e.tasks[si].stars=(e.tasks[si].stars===n?0:n);}
+  else e.csf[si].stars=(e.csf[si].stars===n?0:n);
   renderMemberEval();
 }
 function saveMeval(id,type,si,v){
   const e=_meval(id);
-  if(type==='kgi')e.kgi.comment=v;else if(type==='csf')e.csf[si].comment=v;else{if(!e.tasks[si])e.tasks[si]={stars:0,comment:''};e.tasks[si].comment=v;}
+  if(type==='kgi')e.kgi.comment=v;else e.csf[si].comment=v;
 }
 function onEvalChartChange(v){_evalChartId=v;window._evalCache={};renderMemberEval();}
 function clearEvalCache(){window._chartsCache={};window._evalCache={};}
@@ -927,23 +929,17 @@ async function renderMemberEval(){
   h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-kgi">KGI</span><span class="eval-goal">${(d.center||'').replace(/\n/g,' ')}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'kgi',-1)}</div><textarea class="eval-cmt" rows="2" placeholder="KGIへの評価コメント…" oninput="saveMeval('${id}','kgi',-1,this.value)">${e.kgi.comment}</textarea>${selfKgi}</div>`;
   for(let si=0;si<8;si++)h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-csf">CSF-${si+1}</span><span class="eval-goal">${d.subs[si]}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'csf',si)}</div><textarea class="eval-cmt" rows="2" placeholder="CSF-${si+1}への評価コメント…" oninput="saveMeval('${id}','csf',${si},this.value)">${e.csf[si].comment}</textarea>${selfCsf(si)}</div>`;
   h+=`</div></div>`;
-  const tasks=MEMBER_TASKS[id]||[];
-  h+=`<div class="card"><div class="card-hd"><div class="card-title">割り当てタスクの評価</div><div class="card-sub">${tasks.length}件</div></div><div class="card-body">`;
-  if(!tasks.length)h+=`<div style="color:var(--text3);font-size:12px">割り当てタスクはありません</div>`;
-  tasks.forEach((t,ti)=>{if(!e.tasks[ti])e.tasks[ti]={stars:0,comment:''};const sc=statusChip(t.status);h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-task">TASK</span><span class="eval-goal">${t.name}</span><span class="chip ${sc[0]}">${sc[1]}</span></div><div style="font-size:10px;color:var(--text3);margin:2px 0 6px">関連KPI: ${t.kpi} ／ 期限 ${t.due}</div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'task',ti)}</div><textarea class="eval-cmt" rows="2" placeholder="タスクの達成度・取り組みへの評価コメント…" oninput="saveMeval('${id}','task',${ti},this.value)">${e.tasks[ti].comment}</textarea></div>`;});
-  h+=`</div></div>`;
   document.getElementById('evalin-container').innerHTML=h;
 }
 function saveMemberEval(){
   const id=document.getElementById('evalin-member').value;const period=document.getElementById('evalin-period').value;
   const e=_meval(id);const name=MEMBERS[id].name;
   const avgCsf=Math.round(e.csf.reduce((a,c)=>a+c.stars,0)/8*10)/10;
-  const tArr=e.tasks.filter(t=>t&&t.stars>0);const taskAvg=tArr.length?Math.round(tArr.reduce((a,t)=>a+t.stars,0)/tArr.length*10)/10:0;
   const cmt=e.kgi.comment||(e.csf.find(c=>c.comment)||{}).comment||'';
-  const rec={name,evaluator:LEADER.name,period,kgi:e.kgi.stars,csf:avgCsf,task:taskAvg,comment:cmt,status:'done'};
+  const rec={name,evaluator:LEADER.name,period,kgi:e.kgi.stars,csf:avgCsf,comment:cmt,status:'done'};
   const API=window.VexumAPI;
   if(API&&API.ready){
-    API.saveEvalRecord({evaluateePid:pidOf(id),evaluateeName:name,period,kgi:e.kgi.stars,csf:avgCsf,task:taskAvg,comment:cmt});
+    API.saveEvalRecord({evaluateePid:pidOf(id),evaluateeName:name,period,kgi:e.kgi.stars,csf:avgCsf,comment:cmt});
     // メンバー本人の個人画面に評価を届ける（選択中チャートに紐付け）
     API.saveEvaluation({targetPid:pidOf(id),evaluatorRole:'leader',period,kgi:e.kgi.stars,kgiComment:e.kgi.comment||'',csf:e.csf.map(function(c){return {stars:c.stars,comment:c.comment};}),chartId:_evalChartId||null})
       .then(function(res){if(res&&res.error)console.warn('eval deliver:',res.error); clearEvalCache();});
@@ -1014,7 +1010,6 @@ async function _evalRecDetail(){
       <div class="card-body"><div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px">
         <div><div style="font-size:10px;color:var(--text3)">KGI</div><div style="color:var(--amber);letter-spacing:1px">${starStr(r.kgi)}</div></div>
         <div><div style="font-size:10px;color:var(--text3)">CSF平均</div><div style="color:var(--amber);letter-spacing:1px">${starStr(r.csf)} <span style="font-size:10px;color:var(--text3)">${r.csf||0}</span></div></div>
-        <div><div style="font-size:10px;color:var(--text3)">タスク</div><div style="color:var(--amber);letter-spacing:1px">${starStr(r.task)}</div></div>
       </div><div style="font-size:11px;color:var(--text2);background:#FAFAFA;border:1px solid var(--border);border-radius:6px;padding:8px 10px">💬 ${r.comment||'—'}</div></div></div>`;
   });
   box.innerHTML=h;
@@ -1071,9 +1066,13 @@ async function renderSubmissions(){
   const periods=[...new Set(logs.map(l=>l.period).filter(Boolean))];
   if(psel){const cur=psel.value;psel.innerHTML='<option value="">全期間</option>'+periods.map(p=>`<option value="${p}">${p}</option>`).join('');if(periods.indexOf(cur)>=0)psel.value=cur;}
   const period=(psel||{}).value||'';
+  // 提出期間（開始日・終了日）でのフロントエンド絞り込み
+  const dFrom=(document.getElementById('sub-date-from')||{}).value||'';
+  const dTo=(document.getElementById('sub-date-to')||{}).value||'';
+  const inDateRange=d=>(!dFrom||d>=dFrom)&&(!dTo||d<=dTo);
   // 日報
   const rep=document.getElementById('sub-reports');
-  const reps=repList(mid).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  const reps=repList(mid).filter(r=>inDateRange(r.date)).sort((a,b)=>b.date.localeCompare(a.date));
   if(view==='hours'){rep.parentElement.parentElement.style.display='none';}
   else{
     rep.parentElement.parentElement.style.display='';
@@ -1084,7 +1083,7 @@ async function renderSubmissions(){
   }
   // 工数履歴
   const hrsEl=document.getElementById('sub-hours');
-  const flogs=period?logs.filter(l=>l.period===period):logs;
+  const flogs=(period?logs.filter(l=>l.period===period):logs).filter(l=>inDateRange(l.date));
   const totalEl=document.getElementById('sub-hours-total');
   if(view==='report'){hrsEl.parentElement.parentElement.style.display='none';}
   else{
@@ -1097,7 +1096,12 @@ async function renderSubmissions(){
       hrsEl.innerHTML=flogs.map(l=>`<div style="padding:9px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${l.taskTitle}</div><div style="font-size:10px;color:var(--text3)">${l.date}${l.period?' ／ '+l.period:''}${l.progress!=null?' ／ 到達 '+l.progress+'%':''}</div></div><div style="font-size:13px;font-weight:800;color:var(--accent);flex-shrink:0">${l.hours}h</div></div>`).join('');
     }
   }
-  const sm=document.getElementById('sub-summary');if(sm)sm.textContent=m.name+' ／ 日報 '+reps.length+'件 ／ 工数記録 '+logs.length+'件';
+  const sm=document.getElementById('sub-summary');if(sm)sm.textContent=m.name+(dFrom||dTo?'（'+(dFrom||'…')+' 〜 '+(dTo||'…')+'）':'')+' ／ 日報 '+reps.length+'件 ／ 工数記録 '+flogs.length+'件';
+}
+function clearSubDateFilter(){
+  const f=document.getElementById('sub-date-from'),t=document.getElementById('sub-date-to');
+  if(f)f.value='';if(t)t.value='';
+  renderSubmissions();
 }
 function changeReportMonth(d){_repMonth+=d;if(_repMonth<0){_repMonth=11;_repYear--;}else if(_repMonth>11){_repMonth=0;_repYear++;}_repSelDate='';document.getElementById('report-detail').innerHTML='';renderReportCalendar();}
 function renderReportCalendar(){
