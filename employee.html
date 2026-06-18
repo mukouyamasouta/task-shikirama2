@@ -209,7 +209,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="sb-item" onclick="swTab('chartmgr',this);initChartMgr()"><span class="sb-icon">🗂</span>チャート管理</button>
     <button class="sb-item" onclick="swTab('inbox',this);renderInbox()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="inbox-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('assign',this)"><span class="sb-icon">📌</span>割り当て<span class="sb-badge" id="assign-badge">3</span></button>
-    <button class="sb-item" onclick="swTab('reviews',this);renderEval();refreshSelfEvalStatusCard()"><span class="sb-icon">★</span>評価管理</button>
+    <button class="sb-item" onclick="swTab('reviews',this);renderEval();renderTaskEval();refreshSelfEvalStatusCard()"><span class="sb-icon">★</span>評価管理</button>
     <button class="sb-item" onclick="swTab('create',this);initCreate()"><span class="sb-icon">＋</span>新規作成</button>
     <button class="sb-item" onclick="swTab('report',this)"><span class="sb-icon">📝</span>日報</button>
   </div>
@@ -269,6 +269,13 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="f-submit" style="padding:7px 16px;font-size:12px;background:var(--amber)" onclick="openSelfEval()">📝 自己評価を入力 / 編集 / 提出</button>
   </div>
   <div id="self-eval-status-card" style="background:#FFFBEB;border:1px solid #F59E0B;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#92400E;display:none"></div>
+
+  <!-- タスク評価（与えられたタスクのみ・項目ごとに個別保存） -->
+  <div class="card" id="task-eval-card" style="margin-bottom:16px">
+    <div class="card-hd"><div><div class="card-title">📌 タスク評価</div><div class="card-sub">リーダー・上長・役員から与えられたタスクのみが対象です（自分で作成したタスクは対象外）。項目ごとに★評価・コメントを個別に保存できます。</div></div></div>
+    <div class="card-body" id="task-eval-list" style="padding:0"></div>
+  </div>
+
   <!-- 自己評価モーダル（KGI＋CSF8項目） -->
   <div id="self-eval-modal" onclick="if(event.target===this)closeSelfEval()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
     <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:560px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
@@ -589,7 +596,13 @@ function filterTasks(s,btn){
   btn.classList.add('active');
   document.querySelectorAll('.task-row').forEach(r=>r.style.display=(s==='all'||r.dataset.status===s)?'':'none');
 }
-/* 割り当て（現在／過去の履歴） */
+/* 割り当て（現在／過去の履歴）
+ * 以下はSupabase未接続時のみ表示されるデモ・フォールバックデータ。
+ * Supabase接続時はbootstrap（本ファイル末尾）でAPI.loadPersonalData()の
+ * 結果（tasksテーブル: assignee=本人）に置き換わり、以後はこの配列を
+ * 直接書き換えない（永続化は必ずAPI経由＝logTaskTime/updateTask等）。
+ * 表示されるのは「チームチャートで与えられたタスク」(chart有り)と
+ * 「チャートに紐づかない通常タスク」(chart無し)の2種類のみ。 */
 const ASSIGNMENTS=[
   {name:'Q3 新規開拓 10社のリスト作成と初回接触',meta:'関連KGI: Q3個人売上 ¥15M達成 ／ カテゴリ: 営業',from:'📌 上長 · 田中 花子',fromClass:'',start:'2025/07/01',end:'2025/08/31',pct:40,comment:''},
   {name:'提案書フォーマットの標準化プロジェクト',meta:'関連KGI: 提案力UP ／ カテゴリ: 業務改善',from:'📌 役員 · 山田 太郎',fromClass:'exec',start:'2025/06/15',end:'2025/07/31',pct:65,comment:''},
@@ -669,7 +682,7 @@ function renderAssign(){
   if(assignView==='current'){
     if(!ASSIGNMENTS.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">現在の割り当てはありません。完了したタスクは「🕘 過去の履歴」で確認できます。</div></div>';return;}
     ASSIGNMENTS.forEach((a,i)=>{
-      const chartChip=a.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:2px 8px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${a.chart}</span>`:'';
+      const chartChip=a.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:2px 8px;border-radius:8px;font-weight:700;margin-left:6px">📊 チームチャート: ${a.chart}</span>`:'<span style="font-size:9px;background:#F3F4F6;color:#4B5563;padding:2px 8px;border-radius:8px;font-weight:700;margin-left:6px">🗂 通常タスク</span>';
       const late=a.status==='late'||(a.dueRaw&&a.dueRaw<_epToday()&&a.pct<100);
       const stChip=late?'<span class="chip s-late" style="margin-left:6px">遅延</span>':(a.pct>0?'<span class="chip s-wip" style="margin-left:6px">進行中</span>':'<span class="chip s-todo" style="margin-left:6px">未着手</span>');
       const totH=a.hours!=null?a.hours:0;
@@ -697,8 +710,9 @@ function renderAssign(){
   }else{
     if(!ASSIGN_HISTORY.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">過去の履歴はまだありません。</div></div>';return;}
     ASSIGN_HISTORY.forEach(a=>{
+      const chartChip=a.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:2px 8px;border-radius:8px;font-weight:700;margin-left:6px">📊 チームチャート: ${a.chart}</span>`:'<span style="font-size:9px;background:#F3F4F6;color:#4B5563;padding:2px 8px;border-radius:8px;font-weight:700;margin-left:6px">🗂 通常タスク</span>';
       h+=`<div class="asg-card" style="background:#FAFAFA">
-        <div class="asg-top"><div><div class="asg-name">${a.name} <span class="chip s-done" style="margin-left:6px">完了</span></div><div class="asg-meta">${a.meta}</div></div><span class="asg-from ${a.fromClass}">${a.from}</span></div>
+        <div class="asg-top"><div><div class="asg-name">${a.name} <span class="chip s-done" style="margin-left:6px">完了</span>${chartChip}</div><div class="asg-meta">${a.meta}</div></div><span class="asg-from ${a.fromClass}">${a.from}</span></div>
         <div class="asg-dates"><span>開始 <b>${a.start}</b></span><span>期限 <b>${a.end}</b></span><span>完了日 <b style="color:var(--green)">${a.completed||'—'}</b></span><span>合計工数 <b style="color:var(--accent)">${a.hours!=null?a.hours:0}h</b>${a.planned!=null?` / 予定 ${a.planned}h`:''}</span></div>
         <div class="asg-prog-label"><span>達成度</span><span style="color:var(--green);font-weight:700">100%</span></div>
         <div style="height:6px;background:#F3F4F6;border-radius:3px;overflow:hidden;margin:4px 0 8px"><div style="height:100%;width:100%;background:var(--green)"></div></div>
@@ -1318,6 +1332,54 @@ async function submitSelfEval(isSubmit){
   else{alert('💾 下書きを保存しました。引き続き編集できます。');await loadExistingSelfEval();}
 }
 
+/* ===== タスク評価（与えられたタスクのみ・項目ごとに個別保存） =====
+ * 評価対象は「自分で作成していない」タスク（a.self!==true）のみ。
+ * 永続化先: tasks.self_eval_stars / self_eval_comment（22_task_self_eval.sql）。
+ * 担当者(assignee)本人のみ更新可（RLS）＝保存・編集は従業員画面からのみ可能。 */
+function _evFindTask(rid){return ASSIGNMENTS.find(a=>a.id===rid)||ASSIGN_HISTORY.find(a=>a.id===rid);}
+function _evStarsHTML(rid,stars){
+  let s='';for(let n=1;n<=5;n++)s+=`<span onclick="evTaskStar('${rid}',${n})" style="cursor:pointer;font-size:18px;color:${n<=stars?'#F59E0B':'#D9DEE3'}">★</span>`;
+  return s;
+}
+function renderTaskEval(){
+  const con=document.getElementById('task-eval-list');if(!con)return;
+  const items=[...ASSIGNMENTS,...ASSIGN_HISTORY].filter(a=>!a.self&&a.id);
+  if(!items.length){con.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:24px">評価対象の「与えられたタスク」はまだありません。</div>';return;}
+  let h='';
+  items.forEach(a=>{
+    const rid=a.id;
+    const cm=a.evalComment||'';
+    const chartChip=a.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:2px 8px;border-radius:8px;font-weight:700;margin-left:6px">📊 チームチャート: ${a.chart}</span>`:'<span style="font-size:9px;background:#F3F4F6;color:#4B5563;padding:2px 8px;border-radius:8px;font-weight:700;margin-left:6px">🗂 通常タスク</span>';
+    h+=`<div style="padding:12px 14px;border-bottom:1px solid #F3F4F6">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="min-width:0"><div style="font-size:12px;font-weight:700">${a.name}${chartChip}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${a.from||''} ／ 進捗 ${a.pct!=null?a.pct:100}%</div></div>
+        <div id="ev-stars-${rid}">${_evStarsHTML(rid,a.evalStars||0)}</div>
+      </div>
+      <textarea rows="2" placeholder="評価コメント…" oninput="evTaskComment('${rid}',this.value)" style="width:100%;margin-top:8px;padding:7px 9px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;outline:none">${cm}</textarea>
+      <div style="text-align:right;margin-top:6px"><button class="card-btn" style="background:var(--amber);color:#fff;border-color:var(--amber)" onclick="evTaskSave('${rid}',this)">💾 この項目を保存</button></div>
+    </div>`;
+  });
+  con.innerHTML=h;
+}
+// 星クリックは該当タスクの★表示だけをその場で更新（全体再描画すると他タスクの
+// コメント入力中テキストボックスが再生成され、フォーカス・IME入力中の内容が消えるため）
+function evTaskStar(rid,n){
+  const a=_evFindTask(rid);if(!a)return;
+  a.evalStars=(a.evalStars===n?0:n);
+  const el=document.getElementById('ev-stars-'+rid);if(el)el.innerHTML=_evStarsHTML(rid,a.evalStars);
+}
+function evTaskComment(rid,val){const a=_evFindTask(rid);if(!a)return;a.evalComment=val;}
+async function evTaskSave(rid,btn){
+  const a=_evFindTask(rid);if(!a)return;
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const res=await API.saveTaskEval(rid,{stars:a.evalStars||0,comment:a.evalComment||''});
+    if(res&&res.error){alert('保存失敗: '+res.error);return;}
+  }
+  const old=btn.textContent;btn.textContent='✓ 保存しました';btn.style.background='var(--green)';
+  setTimeout(()=>{btn.textContent=old;btn.style.background='var(--amber)';},1500);
+}
+
 function renderEval(){
   const k=evalChartKey;const d=getAllMnd()[k];
   if(!d)return;
@@ -1718,7 +1780,7 @@ function initChartMgr(){
   let opts='';
   Object.entries(CHARTS).forEach(([k,c])=>{
     if(k.startsWith('__'))return;
-    opts+=`<option value="${k}">${c.name||k} — ${c.scopeLabel||''} ${c.period?'('+c.period+')':''}</option>`;
+    opts+=`<option value="${k}">${c.name||k} — ${c.scopeLabel||''} ${c.period?'('+c.period+')':''}${c.readonly?'（参照のみ）':''}</option>`;
   });
   sel.innerHTML=opts||'<option value="">— チャートなし —</option>';
   onCmChartChange();
@@ -1748,14 +1810,18 @@ function renderCmSimpleGrid(k){
   order.forEach(si=>{
     if(si===-1){
       const ed=edits['center'];const eb=ed?'box-shadow:inset 0 0 0 2px #F59E0B;':'';
-      h+=`<div onclick="openCellEdit('${k}','center')" style="cursor:pointer;position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:13px;font-weight:800;color:#fff;background:${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}">${((ed&&ed.text!=null?ed.text:d.center)||'').replace(/\n/g,'<br>')}${badge(ed)}</div>`;
+      const oc=ro?'':`onclick="openCellEdit('${k}','center')"`;
+      h+=`<div ${oc} style="${ro?'cursor:default;':'cursor:pointer;'}position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:13px;font-weight:800;color:#fff;background:${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}">${((ed&&ed.text!=null?ed.text:d.center)||'').replace(/\n/g,'<br>')}${badge(ed)}</div>`;
     }else{
       const ed=edits['csf-'+si];const label=(ed&&ed.text!=null?ed.text:(d.subs||[])[si])||'';
       const eb=ed?'box-shadow:inset 0 0 0 2px #F59E0B;background:#FEF3C7;':`background:${d.bg};`;
-      h+=`<div onclick="openCellEdit('${k}','csf',${si})" style="cursor:pointer;position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:${d.color};border:1.5px solid ${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}"><div style="font-size:8px;color:var(--text3);font-weight:600;margin-bottom:2px">CSF ${si+1}</div>${label}${badge(ed)}</div>`;
+      const oc=ro?'':`onclick="openCellEdit('${k}','csf',${si})"`;
+      h+=`<div ${oc} style="${ro?'cursor:default;':'cursor:pointer;'}position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:${d.color};border:1.5px solid ${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}"><div style="font-size:8px;color:var(--text3);font-weight:600;margin-bottom:2px">CSF ${si+1}</div>${label}${badge(ed)}</div>`;
     }
   });
-  h+='</div><div style="text-align:center;font-size:10px;color:var(--text3);margin-top:8px">セル（KGI / CSF）をクリックで内容・進捗・工数を編集</div>';
+  h+=ro
+    ?'</div><div style="text-align:center;font-size:10px;color:#92400E;background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:6px;margin-top:8px">🔒 チームチャートはリーダー・幹部が管理（参照のみ）。進捗・工数は「割り当て」「タスク管理」から記入してください</div>'
+    :'</div><div style="text-align:center;font-size:10px;color:var(--text3);margin-top:8px">セル（KGI / CSF）をクリックで内容・進捗・工数を編集</div>';
   const con=document.getElementById('cm-kpi-grid-simple');if(con)con.innerHTML=h;
 }
 function _cmApplyView(){
@@ -1769,6 +1835,7 @@ function toggleCmKpi(){_cmKpiOn=!_cmKpiOn;_cmApplyView();}
 function renderCmKpiGrid(k){
   renderCmSimpleGrid(k);_cmApplyView();
   const d=CHARTS[k];if(!d)return;
+  const ro=!!d.readonly;
   const edits=kpiEdits[k]||{};
   const G=buildMndGrid(k);
   let h='<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:2px;background:#D1D5DB;border-radius:6px;overflow:hidden;min-width:480px">';
@@ -1780,27 +1847,27 @@ function renderCmKpiGrid(k){
     let oc2='',tx='';
     if(cell&&cell.t==='center'){
       const ed=edits['center'];
-      sty+=`background:${d.color};color:#fff;font-weight:800;font-size:10px;cursor:pointer;`+(ed?'box-shadow:inset 0 0 0 2px #F59E0B;':'');
+      sty+=`background:${d.color};color:#fff;font-weight:800;font-size:10px;`+(ro?'':'cursor:pointer;')+(ed?'box-shadow:inset 0 0 0 2px #F59E0B;':'');
       tx=((ed&&ed.text!=null?ed.text:cell.tx)||'').replace(/\n/g,'<br>')+(ed&&ed.progress!=null?`<span style="font-size:7px;display:block">${ed.progress}%</span>`:'');
-      oc2=`onclick="openCellEdit('${k}','center')"`;
+      oc2=ro?'':`onclick="openCellEdit('${k}','center')"`;
     }else if(cell&&cell.t==='sub'){
       const ed=edits['csf-'+cell.si];
-      sty+=(ed?'background:#FEF3C7;box-shadow:inset 0 0 0 1.5px #F59E0B;':`background:${d.bg};`)+`color:${d.color};font-weight:700;cursor:pointer;`;
+      sty+=(ed?'background:#FEF3C7;box-shadow:inset 0 0 0 1.5px #F59E0B;':`background:${d.bg};`)+`color:${d.color};font-weight:700;`+(ro?'':'cursor:pointer;');
       tx=(ed&&ed.text!=null?ed.text:cell.tx)+(ed?'<span style="font-size:7px;position:absolute;top:1px;right:2px;color:#D97706">✏</span>':'')+(ed&&ed.progress!=null?`<span style="font-size:7px;display:block">${ed.progress}%</span>`:'');
-      oc2=`onclick="openCellEdit('${k}','csf',${cell.si})"`;
+      oc2=ro?'':`onclick="openCellEdit('${k}','csf',${cell.si})"`;
     }else if(cell&&cell.t==='action'){
       const loc=KPI_LOC_MAP[r+','+c];
       if(loc){
         const ekey=loc.si+'-'+loc.ai,ed=edits[ekey];
         if(ed){
-          sty+='background:#FEF3C7;color:#92400E;border:1.5px solid #F59E0B;cursor:pointer;';
+          sty+='background:#FEF3C7;color:#92400E;border:1.5px solid #F59E0B;'+(ro?'':'cursor:pointer;');
           const pg=ed.progress>0?`<span style="font-size:7px;margin-top:1px">${ed.progress}%</span>`:'';
           tx=`<span style="font-size:7px;position:absolute;top:1px;right:2px;color:#D97706">✏</span>${ed.text||cell.tx||''}${pg}`;
         }else{
-          sty+='background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;cursor:pointer;';
+          sty+='background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;'+(ro?'':'cursor:pointer;');
           tx=cell.tx||'';
         }
-        oc2=`onclick="openKpiEdit('${k}',${loc.si},${loc.ai})"`;
+        oc2=ro?'':`onclick="openKpiEdit('${k}',${loc.si},${loc.ai})"`;
       }else{sty+='background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;';tx=cell?cell.tx:'';}
     }else{sty+='background:#E5E7EB;';}
     h+=`<div ${oc2} style="${sty}">${tx}</div>`;
@@ -1814,6 +1881,8 @@ function _cellKey(kind,si,ai){return kind==='center'?'center':kind==='csf'?('csf
 function _cellOrig(d,kind,si,ai){return kind==='center'?(d.center||''):kind==='csf'?((d.subs||[])[si]||''):(((d.acts||[])[si]||[])[ai]||'');}
 // KGI/CSF/KPI いずれのセルもクリックで編集（内容・進捗・工数・メモ）
 function openCellEdit(k,kind,si,ai){
+  const d0=CHARTS[k];
+  if(d0&&d0.readonly){alert('チームチャートの内容（KGI/CSF/KPI）はリーダー・幹部が管理しており編集できません。\n進捗・工数は「割り当て」「タスク管理」から記入してください。');return;}
   _editingKpi={k,kind,si,ai};
   const d=CHARTS[k],edits=kpiEdits[k]||{},ekey=_cellKey(kind,si,ai),ed=edits[ekey];
   const orig=_cellOrig(d,kind,si,ai);
@@ -2237,9 +2306,10 @@ function renderTaskTable(){
     ...ASSIGN_HISTORY.map((a,i)=>({kind:'task',ref:a,arr:'H',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,pct:100,hours:a.hours!=null?a.hours:0,done:true}))
   ];
   // チャート（CSF＝チャートのタスク）: 各チャートのCSF8件を進捗・工数つきで
+  // ※ チームチャート(readonly)は除外。進捗はtasks側（割り当て/タスク管理のチャートバッジ付き行）で管理する
   const chartRows=[];
   Object.entries(CHARTS).forEach(([k,d])=>{
-    if(k.startsWith('__'))return;
+    if(k.startsWith('__')||d.readonly)return;
     const edits=kpiEdits[k]||{};
     (d.subs||[]).forEach((s,si)=>{
       const ed=edits['csf-'+si]||{};
@@ -2466,16 +2536,32 @@ function vexumLogout(){
   });
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}
+  // 再読込（初回・リアルタイム反映）でASSIGNMENTS/ASSIGN_HISTORYを丸ごと置換する前に、
+  // 評価管理タブで未保存の★評価・コメント（タスク評価）を新データへ引き継ぐ。
+  // 引き継がないと、他の保存操作で起きるリアルタイム更新（45秒ポーリング含む）が
+  // 入力中の評価を黙って消してしまう。
+  function preserveEvalEdits(newAssignments,newHistory){
+    var oldMap={};
+    [].concat(ASSIGNMENTS,ASSIGN_HISTORY).forEach(function(a){
+      if(a&&a.id&&((a.evalStars||0)>0||a.evalComment))oldMap[a.id]={evalStars:a.evalStars,evalComment:a.evalComment};
+    });
+    [].concat(newAssignments,newHistory).forEach(function(a){
+      var old=a&&oldMap[a.id];
+      if(old&&!((a.evalStars||0)>0||a.evalComment)){a.evalStars=old.evalStars;a.evalComment=old.evalComment;}
+    });
+  }
   API.currentProfile().then(function(p){ if(!p)return; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; }).catch(function(){});
   API.loadPersonalData().then(function(d){
     if(!d) return;
     repl(CHARTS,d.CHARTS); repl(FEEDBACK,d.FEEDBACK);
+    preserveEvalEdits(d.ASSIGNMENTS,d.ASSIGN_HISTORY);
     replArr(ASSIGNMENTS,d.ASSIGNMENTS); replArr(ASSIGN_HISTORY,d.ASSIGN_HISTORY); replArr(PREPORTS,d.PREPORTS);
     window._epTeam=d.TEAM; window._epKpis=d.KPIS; window._epStats=d.STATS;
     if(typeof restoreTasksFromLS==='function')restoreTasksFromLS();   // ローカル保存の進捗・工数を反映
     if(typeof renderProgressDash==='function') renderProgressDash();
     if(typeof renderTaskTable==='function') renderTaskTable();
     if(typeof renderEval==='function') renderEval();
+    if(typeof renderTaskEval==='function') renderTaskEval();
     if(typeof renderAssign==='function') renderAssign();
     if(typeof updateAssignBadge==='function') updateAssignBadge();
     if(typeof renderPReportCalendar==='function') renderPReportCalendar();
@@ -2501,6 +2587,7 @@ function vexumLogout(){
       API.loadPersonalData().then(function(d){
         if(!d)return;
         repl(CHARTS,d.CHARTS);repl(FEEDBACK,d.FEEDBACK);
+        preserveEvalEdits(d.ASSIGNMENTS,d.ASSIGN_HISTORY);
         replArr(ASSIGNMENTS,d.ASSIGNMENTS);replArr(ASSIGN_HISTORY,d.ASSIGN_HISTORY);
         window._epTeam=d.TEAM;window._epKpis=d.KPIS;window._epStats=d.STATS;
         if(typeof renderProgressDash==='function')renderProgressDash();
@@ -2508,6 +2595,7 @@ function vexumLogout(){
         if(typeof renderAssign==='function')renderAssign();
         if(typeof updateAssignBadge==='function')updateAssignBadge();
         if(typeof renderCmTasks==='function')renderCmTasks();
+        if(typeof renderTaskEval==='function')renderTaskEval();
       }).catch(function(){});
       API.loadMyInbox().then(function(rows){
         if(!rows)return;
