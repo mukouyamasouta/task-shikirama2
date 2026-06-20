@@ -503,7 +503,7 @@
     }
     return logs.map(function (l) {
       var ti = titles[l.task_id] || {};
-      return { date: l.log_date, hours: +l.hours || 0, progress: l.progress_after, taskTitle: ti.title || '（タスク不明）', period: ti.period || '', note: l.note || '' };
+      return { date: l.log_date, hours: +l.hours || 0, progress: l.progress_after, taskId: l.task_id || null, taskTitle: ti.title || '（タスク不明）', period: ti.period || '', note: l.note || '' };
     });
   }
 
@@ -1019,12 +1019,19 @@
   async function createSend(o) {
     if (!sb) return { error: 'Supabase未接続' };
     var me = await currentProfile();
-    var r = await sb.from('chart_sends').insert({
+    var payload = {
       title: o.title || o.center, center: o.center || '', subs: o.subs || [], acts: o.acts || [],
       to_team: o.toTeam || null, to_profile_id: o.toPid || null, to_name: o.toName || '',
       status: 'sent', progress: 0,
-      sent_by: me ? me.id : null, sent_by_name: me ? me.full_name : ''
-    }).select().single();
+      sent_by: me ? me.id : null, sent_by_name: me ? me.full_name : '',
+      start_date: o.startDate || null, end_date: o.endDate || null, csf_periods: o.csfPeriods || {}
+    };
+    var r = await sb.from('chart_sends').insert(payload).select().single();
+    if (r.error) {
+      // start_date/end_date/csf_periods 列が未適用の環境向けフォールバック（23_chart_periods.sql 未実行時）
+      delete payload.start_date; delete payload.end_date; delete payload.csf_periods;
+      r = await sb.from('chart_sends').insert(payload).select().single();
+    }
     if (r.error) return { error: r.error.message };
     return { data: r.data };
   }
@@ -1219,10 +1226,89 @@
     return { avgRate: avgRate, doneCount: done, lateCount: late, taskCount: tasksAll.length, memberCount: tmsAll.length, reportCount: reportsAll.length, byTeam: byTeam };
   }
 
+  // ===== 評価管理タブ共通: 曼荼羅形式で進捗%を表示・CSFクリックでKPI展開 =====
+  // chart: {center, subs:[8], acts:[8][8]} / edits: mandala_charts.member_kpi_edits 形式 { 'si-ai': {progress, ...} }
+  function renderEvalMandala(chart, edits, containerEl) {
+    if (!chart || !containerEl) return;
+    edits = edits || {};
+    var SP_MAP = [
+      { cr: 3, cc: 3, oc: [1, 1], si: 0 }, { cr: 3, cc: 4, oc: [1, 4], si: 1 }, { cr: 3, cc: 5, oc: [1, 7], si: 2 },
+      { cr: 4, cc: 3, oc: [4, 1], si: 3 }, { cr: 4, cc: 5, oc: [4, 7], si: 4 },
+      { cr: 5, cc: 3, oc: [7, 1], si: 5 }, { cr: 5, cc: 4, oc: [7, 4], si: 6 }, { cr: 5, cc: 5, oc: [7, 7], si: 7 }
+    ];
+    var expanded = containerEl._evalExpanded || (containerEl._evalExpanded = {});
+    function progressOf(si, ai) {
+      var e = edits[si + '-' + ai];
+      return e && e.progress != null ? Math.round(+e.progress) : 0;
+    }
+    function csfProgress(si) {
+      var sum = 0;
+      for (var ai = 0; ai < 8; ai++) sum += progressOf(si, ai);
+      return Math.round(sum / 8);
+    }
+    function colorOf(pct) {
+      if (pct >= 100) return { bg: '#D1FAE5', fg: '#065F46', bd: '#10B981' };
+      if (pct >= 50) return { bg: '#CFFAFE', fg: '#0E7490', bd: '#06B6D4' };
+      if (pct >= 1) return { bg: '#FEF3C7', fg: '#92400E', bd: '#F59E0B' };
+      return { bg: '#F3F4F6', fg: '#6B7280', bd: '#D1D5DB' };
+    }
+    var G = [];
+    for (var i = 0; i < 9; i++) G.push(Array(9).fill(null));
+    G[4][4] = { type: 'center' };
+    SP_MAP.forEach(function (sp) {
+      G[sp.cr][sp.cc] = { type: 'sub', si: sp.si };
+      G[sp.oc[0]][sp.oc[1]] = { type: 'sub', si: sp.si };
+      var ai = 0;
+      for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        var r = sp.oc[0] + dr, c = sp.oc[1] + dc;
+        if (!G[r][c]) G[r][c] = { type: 'action', si: sp.si, ai: ai };
+        ai++;
+      }
+    });
+    var html = '<div style="display:grid;grid-template-columns:repeat(9,minmax(54px,1fr));gap:2px;min-width:520px">';
+    for (var r2 = 0; r2 < 9; r2++) for (var c2 = 0; c2 < 9; c2++) {
+      var meta = G[r2][c2];
+      var sty = 'position:relative;min-height:46px;display:flex;align-items:center;justify-content:center;font-size:9px;text-align:center;padding:2px;word-break:break-all;line-height:1.2;';
+      if (c2 === 2 || c2 === 5) sty += 'border-right:2px solid #9CA3AF;';
+      if (r2 === 2 || r2 === 5) sty += 'border-bottom:2px solid #9CA3AF;';
+      var txt = '', badge = '', onclick = '';
+      if (!meta) { sty += 'background:#fff;'; }
+      else if (meta.type === 'center') {
+        sty += 'background:#0D9488;color:#fff;font-weight:800;';
+        txt = (chart.center || '').slice(0, 10);
+      } else if (meta.type === 'sub') {
+        var pct = csfProgress(meta.si); var col = colorOf(pct);
+        sty += 'background:' + col.bg + ';color:' + col.fg + ';font-weight:700;border:1.5px solid ' + col.bd + ';cursor:pointer;';
+        txt = ((chart.subs || [])[meta.si] || '').slice(0, 8);
+        badge = '<span style="position:absolute;bottom:1px;right:2px;font-size:7px;font-weight:800">' + pct + '%</span>';
+        onclick = ' onclick="this.closest(\'[data-eval-mnd]\').__toggleCsf(' + meta.si + ')"';
+      } else {
+        var visible = !!expanded[meta.si];
+        if (!visible) { sty += 'background:#F9FAFB;color:#E5E7EB;'; }
+        else {
+          var apct = progressOf(meta.si, meta.ai); var acol = colorOf(apct);
+          sty += 'background:' + acol.bg + ';color:' + acol.fg + ';border:1px solid ' + acol.bd + ';';
+          txt = (((chart.acts || [])[meta.si] || [])[meta.ai] || '').slice(0, 8);
+          badge = '<span style="position:absolute;bottom:0;right:2px;font-size:6.5px;font-weight:700">' + apct + '%</span>';
+        }
+      }
+      html += '<div style="' + sty + '"' + onclick + '>' + txt + badge + '</div>';
+    }
+    html += '</div>';
+    containerEl.setAttribute('data-eval-mnd', '1');
+    containerEl.innerHTML = html;
+    containerEl.__toggleCsf = function (si) {
+      expanded[si] = !expanded[si];
+      renderEvalMandala(chart, edits, containerEl);
+    };
+  }
+
   window.VexumAPI = {
     ready: ready,
     sb: sb,
     fetchAll: fetchAll,
+    renderEvalMandala: renderEvalMandala,
     loadAdminData: loadAdminData,
     loadLeaderData: loadLeaderData,
     addTeamMember: addTeamMember,

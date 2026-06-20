@@ -188,6 +188,13 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
         <div class="fg"><label class="fl">中心目標（KGI）</label>
           <input class="fi" id="send-center" placeholder="例: Q3チーム売上 ¥50M達成" oninput="updateSendPreview()">
         </div>
+        <div class="fg"><label class="fl">期間（KGI / 必須）</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input class="fi" type="date" id="send-start" style="flex:1" onchange="SEND.startDate=this.value">
+            <span style="color:var(--text3);font-size:12px">〜</span>
+            <input class="fi" type="date" id="send-end" style="flex:1" onchange="SEND.endDate=this.value">
+          </div>
+        </div>
         <div class="fg"><label class="fl">サブ目標（CSF / 8項目）</label>
           <div class="mnd-subs-wrap" id="send-subs-list"></div>
         </div>
@@ -605,7 +612,7 @@ let _curMndKey='';
 const EXTRA={};                 // 全画面プレビュー/一時表示用
 const TPL={};                   // Supabase由来のテンプレート（id→data）
 let SENDS=[];                   // チャート送信履歴
-const SEND={center:'',subs:Array(8).fill(''),acts:Array.from({length:8},()=>Array(8).fill(''))};
+const SEND={center:'',subs:Array(8).fill(''),acts:Array.from({length:8},()=>Array(8).fill('')),startDate:'',endDate:'',csfPeriods:{}};
 // 9x9セル → {type, si, ai} のメタ情報
 const CELL_META=(function(){
   const M=Array.from({length:9},()=>Array(9).fill(null));
@@ -913,7 +920,15 @@ function initSendForm(){
   const wrap=document.getElementById('send-subs-list');
   if(wrap&&wrap.children.length===0){
     let h='';
-    for(let i=1;i<=8;i++)h+=`<div class="mnd-sub-row"><span class="mnd-sub-num">${i}</span><input class="mnd-sub-input" id="ssub-${i}" placeholder="サブ目標 ${i}" oninput="csfInput(${i},this.value)"></div>`;
+    for(let i=1;i<=8;i++)h+=`<div class="mnd-sub-row" style="flex-direction:column;align-items:stretch;gap:4px">
+      <div style="display:flex;align-items:center;gap:6px"><span class="mnd-sub-num">${i}</span><input class="mnd-sub-input" id="ssub-${i}" placeholder="サブ目標 ${i}" oninput="csfInput(${i},this.value)" style="flex:1"></div>
+      <label style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--text3);padding-left:28px"><input type="checkbox" id="csf-period-chk-${i}" onchange="toggleCsfPeriod(${i},this.checked)">この項目の期間を個別設定する</label>
+      <div id="csf-period-${i}" style="display:none;padding-left:28px;gap:6px;align-items:center">
+        <input class="fi" type="date" id="csf-start-${i}" style="flex:1;font-size:11px" onchange="csfPeriodInput(${i},'start',this.value)">
+        <span style="color:var(--text3);font-size:11px">〜</span>
+        <input class="fi" type="date" id="csf-end-${i}" style="flex:1;font-size:11px" onchange="csfPeriodInput(${i},'end',this.value)">
+      </div>
+    </div>`;
     wrap.innerHTML=h;
   }
   // KGI入力にハンドラ付与
@@ -923,9 +938,29 @@ function initSendForm(){
   renderSendPreview();
 }
 function csfInput(i,val){SEND.subs[i-1]=val;renderSendPreview();}
+function toggleCsfPeriod(i,checked){
+  const box=document.getElementById('csf-period-'+i);if(box)box.style.display=checked?'flex':'none';
+  if(checked){if(!SEND.csfPeriods[i-1])SEND.csfPeriods[i-1]={start:'',end:''};}
+  else{delete SEND.csfPeriods[i-1];}
+}
+function csfPeriodInput(i,key,val){
+  if(!SEND.csfPeriods[i-1])SEND.csfPeriods[i-1]={start:'',end:''};
+  SEND.csfPeriods[i-1][key]=val;
+}
 function syncSendInputs(){
   const ci=document.getElementById('send-center');if(ci)ci.value=SEND.center;
   for(let i=1;i<=8;i++){const el=document.getElementById('ssub-'+i);if(el)el.value=SEND.subs[i-1]||'';}
+  const sd=document.getElementById('send-start');if(sd)sd.value=SEND.startDate||'';
+  const ed=document.getElementById('send-end');if(ed)ed.value=SEND.endDate||'';
+  for(let i=1;i<=8;i++){
+    const p=SEND.csfPeriods[i-1];
+    const chk=document.getElementById('csf-period-chk-'+i),box=document.getElementById('csf-period-'+i);
+    const s=document.getElementById('csf-start-'+i),e=document.getElementById('csf-end-'+i);
+    if(chk)chk.checked=!!p;
+    if(box)box.style.display=p?'flex':'none';
+    if(s)s.value=(p&&p.start)||'';
+    if(e)e.value=(p&&p.end)||'';
+  }
 }
 /* テンプレート一覧（組込3 + Supabase） */
 function allTemplates(){
@@ -945,6 +980,7 @@ function applyTemplate(key){
   SEND.center=(d.center||'').replace(/\n/,' ');
   SEND.subs=Array.from({length:8},(_,i)=>(d.subs||[])[i]||'');
   SEND.acts=Array.from({length:8},(_,i)=>Array.from({length:8},(_,j)=>((d.acts||[])[i]||[])[j]||''));
+  SEND.csfPeriods={};
   syncSendInputs();renderSendPreview();
   showToast('テンプレートを反映しました ✓');
 }
@@ -987,6 +1023,7 @@ function previewSendFull(){
 }
 async function sendChart(){
   if(!SEND.center){showToast('中心目標(KGI)を入力してください');return;}
+  if(!SEND.startDate||!SEND.endDate){showToast('KGIの開始日・終了日を入力してください');return;}
   const toEl=document.getElementById('send-to');
   const toVal=toEl?toEl.value:'';
   const toText=toEl?toEl.options[toEl.selectedIndex].text:'リーダー';
@@ -994,7 +1031,7 @@ async function sendChart(){
   const API=window.VexumAPI;
   if(API&&API.ready){
     const toPid=MEMBERS[toVal]?MEMBERS[toVal].pid:null;
-    const res=await API.createSend({center:SEND.center,title:SEND.center,subs:SEND.subs,acts:SEND.acts,toName,toPid,toTeam:(MEMBERS[toVal]?MEMBERS[toVal].team:'')});
+    const res=await API.createSend({center:SEND.center,title:SEND.center,subs:SEND.subs,acts:SEND.acts,toName,toPid,toTeam:(MEMBERS[toVal]?MEMBERS[toVal].team:''),startDate:SEND.startDate,endDate:SEND.endDate,csfPeriods:SEND.csfPeriods});
     if(res&&res.error){showToast('送信失敗: '+res.error);return;}
     if(res&&res.data)SENDS.unshift(res.data);
   }else{
@@ -1670,12 +1707,14 @@ async function updateSelfEvalMarkers(){
 }
 /* 参考評価（本人＋リーダー）を各KGI/CSFブロックに注入 */
 window._execChartChoice={};   // memberId -> chartId
+window._execChartsCache={};   // memberId -> charts[]
 async function injectEvalRefs(memberId,pid){
   if(!pid)return;
   const API=window.VexumAPI;if(!(API&&API.ready))return;
   try{
     // チャート一覧を取得してプルダウン更新
     const charts=await API.loadChartsFor(pid);
+    window._execChartsCache[memberId]=charts;
     const selWrap=document.querySelector('#chart-sel-'+memberId+' select');
     if(selWrap){
       if(charts.length){
@@ -1742,6 +1781,7 @@ function onExecChartChange(memberId,chartId){
   window._execChartChoice[memberId]=chartId;
   const m=MEMBERS[memberId];
   if(m&&m.pid)injectEvalRefs(memberId,m.pid);
+  if(_execEvalMndOn[memberId])toggleExecEvalMnd(memberId,true);
 }
 function renderMemberEval(){
   const con=document.getElementById('member-eval-container');if(!con)return;
@@ -1773,9 +1813,10 @@ function renderMemberEval(){
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-        ${d?`<button class="card-btn" onclick="openMandala('${id}')">🧿 チャートを見る</button><button class="card-btn" style="background:#F3F4F6;color:var(--text2)" onclick="downloadCSV('${id}')">⬇ CSV</button>`:''}
+        ${d?`<button class="card-btn" onclick="openMandala('${id}')">🧿 チャートを見る</button><button class="card-btn" style="background:#F3F4F6;color:var(--text2)" onclick="downloadCSV('${id}')">⬇ CSV</button><button class="card-btn" style="background:var(--accent-l);color:var(--accent);font-weight:700" onclick="toggleExecEvalMnd('${id}')">🔷 曼荼羅形式</button>`:''}
         <button class="card-btn" style="background:#FEF3C7;color:#92400E" onclick="openEvalRefs('${id}')">📋 評価を参照（リーダー・本人）</button>
       </div>
+      <div id="execeval-mnd-${id}" style="display:none;padding:10px;overflow-x:auto;background:#FAFCFC;border:1px solid var(--border);border-radius:8px;margin-bottom:12px"></div>
       <div id="chart-sel-${id}" style="display:flex;align-items:center;gap:8px;background:#FAFCFC;padding:8px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:12px;flex-wrap:wrap">
         <span style="font-size:11px;font-weight:700;color:var(--text2)">📊 評価対象チャート:</span>
         <select class="fs" style="width:auto;min-width:240px;font-size:11px;padding:5px 8px" onchange="onExecChartChange('${id}',this.value)">
@@ -1807,6 +1848,20 @@ function renderMemberEval(){
   con.innerHTML=h;
   // DOMが入った後に参考評価を非同期で注入
   mems.forEach(([id,m])=>{ if(m.pid) injectEvalRefs(id,m.pid); });
+}
+
+const _execEvalMndOn={};
+function toggleExecEvalMnd(id,forceRerender){
+  if(!forceRerender)_execEvalMndOn[id]=!_execEvalMndOn[id];
+  const box=document.getElementById('execeval-mnd-'+id);if(!box)return;
+  box.style.display=_execEvalMndOn[id]?'':'none';
+  if(_execEvalMndOn[id]){
+    const API=window.VexumAPI;
+    const charts=window._execChartsCache[id]||[];
+    const chartId=window._execChartChoice[id];
+    const chart=charts.find(c=>c.id===chartId)||charts[0]||EMP[id];
+    if(chart&&API&&API.renderEvalMandala)API.renderEvalMandala(chart,chart.member_kpi_edits||chart.memberKpiEdits||{},box);
+  }
 }
 
 /* ========== 初期化 ========== */

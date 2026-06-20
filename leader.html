@@ -785,7 +785,7 @@ function renderAssignedTasks(){
       const chartChip=t.chart?`<span style="font-size:9px;background:#EDE9FE;color:#7C3AED;padding:1px 7px;border-radius:8px;font-weight:700">📊 ${t.chart}</span>`:'';
       const pct=t.pct!=null?t.pct:0;
       const hrs=t.pct!=null&&t.hours!=null?` ／ ${t.hours}h`:'';
-      h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${t.name} ${chartChip}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${hrs}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${pct}%;background:${pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)'}"></div></div><div class="pp" style="font-size:10px">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
+      h+=`<div id="asgtask-${t.id||''}" style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${t.name} ${chartChip}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${hrs}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${pct}%;background:${pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)'}"></div></div><div class="pp" style="font-size:10px">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
   });
   if(!shown&&(fMem||fSt))h+='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">絞り込み条件に該当するタスクがありません</div>';
   document.getElementById('assigned-list').innerHTML=h;
@@ -929,11 +929,27 @@ async function renderMemberEval(){
   if(charts.length){
     chartSelHTML=`<div style="background:#FAFCFC;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap"><label class="fl" style="margin:0">評価対象の期間（チャート）</label><select class="fs" style="width:auto;min-width:280px" onchange="onEvalChartChange(this.value)">${charts.map(c=>`<option value="${c.id}" ${c.id===_evalChartId?'selected':''}>${c.period||c.scope_label||'期間未設定'}${c.name?' ／ '+c.name:''}</option>`).join('')}</select>${selfEval?'<span style="font-size:11px;color:var(--amber);font-weight:700">📝 本人自己評価あり</span>':'<span style="font-size:11px;color:var(--text3)">自己評価なし</span>'}</div>`;
   }
-  let h=`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF・KPI）</div><div class="card-sub">${d.name} ／ ${d.team}</div></div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMandala('${id}',false)">🧿 全体を見る</button><button class="card-btn" style="background:var(--accent);color:#fff" onclick="openMandala('${id}',true)">🖊 KPIまで評価</button></div></div>${chartSelHTML}<div class="card-body">`;
+  let h=`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF・KPI）</div><div class="card-sub">${d.name} ／ ${d.team}</div></div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMandala('${id}',false)">🧿 全体を見る</button><button class="card-btn" style="background:var(--accent);color:#fff" onclick="openMandala('${id}',true)">🖊 KPIまで評価</button><button class="card-btn" style="background:var(--accent-l);color:var(--accent);font-weight:700" onclick="toggleEvalinMnd()">🔷 曼荼羅形式</button></div></div>${chartSelHTML}<div id="evalin-mnd-wrap" style="display:none;padding:14px;overflow-x:auto;border-bottom:1px solid var(--border)"></div><div class="card-body">`;
   h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-kgi">KGI</span><span class="eval-goal">${(d.center||'').replace(/\n/g,' ')}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'kgi',-1)}</div><textarea class="eval-cmt" rows="2" placeholder="KGIへの評価コメント…" oninput="saveMeval('${id}','kgi',-1,this.value)">${e.kgi.comment}</textarea>${selfKgi}</div>`;
   for(let si=0;si<8;si++)h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-csf">CSF-${si+1}</span><span class="eval-goal">${d.subs[si]}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'csf',si)}</div><textarea class="eval-cmt" rows="2" placeholder="CSF-${si+1}への評価コメント…" oninput="saveMeval('${id}','csf',${si},this.value)">${e.csf[si].comment}</textarea>${selfCsf(si)}</div>`;
   h+=`</div></div>`;
   document.getElementById('evalin-container').innerHTML=h;
+  if(_evalinMndOn){document.getElementById('evalin-mnd-wrap').style.display='';renderEvalinMnd();}
+}
+let _evalinMndOn=false;
+function toggleEvalinMnd(){
+  _evalinMndOn=!_evalinMndOn;
+  const box=document.getElementById('evalin-mnd-wrap');if(!box)return;
+  box.style.display=_evalinMndOn?'':'none';
+  if(_evalinMndOn)renderEvalinMnd();
+}
+function renderEvalinMnd(){
+  const box=document.getElementById('evalin-mnd-wrap');if(!box)return;
+  const id=document.getElementById('evalin-member').value;const d=MEMBERS[id];if(!d)return;
+  const charts=window._chartsCache[d.pid]||[];
+  const chart=charts.find(c=>c.id===_evalChartId)||{center:d.center,subs:d.subs,acts:d.acts,member_kpi_edits:d.memberKpiEdits||{}};
+  const API=window.VexumAPI;
+  if(API&&API.renderEvalMandala)API.renderEvalMandala(chart,chart.member_kpi_edits||chart.memberKpiEdits||{},box);
 }
 function saveMemberEval(){
   const id=document.getElementById('evalin-member').value;const period=document.getElementById('evalin-period').value;
@@ -959,6 +975,9 @@ function saveMemberEval(){
 
 /* ===== 評価記録（メンバー選択→CSFまで網羅的に表示） ===== */
 let _evalRecSel='';
+let _evalRecPeriod='';
+let _evalRecFrom='';
+let _evalRecTo='';
 function _evalRecMemberId(name){return EVAL_IDS.find(id=>MEMBERS[id]&&MEMBERS[id].name===name)||DASH_IDS.find(id=>MEMBERS[id]&&MEMBERS[id].name===name);}
 function renderEvalRec(){
   const con=document.getElementById('evalrec-container');if(!con)return;
@@ -972,7 +991,13 @@ function renderEvalRec(){
     <select class="fs" style="width:auto;min-width:200px" onchange="_evalRecSel=this.value;renderEvalRec()">
       ${list.map(n=>`<option value="${n}" ${n===_evalRecSel?'selected':''}>${n}</option>`).join('')}
     </select>
-    <span style="font-size:10px;color:var(--text3)">KGI・各CSF・タスクの★とコメントを網羅表示</span>
+    <label class="fl" style="margin:0">チャート作成期間</label>
+    <select class="fs" id="evalrec-period-sel" style="width:auto;min-width:180px" onchange="_evalRecPeriod=this.value;_evalRecDetail()"><option value="">全期間</option></select>
+    <label class="fl" style="margin:0">開始日〜終了日</label>
+    <input class="fi" type="date" style="width:130px" value="${_evalRecFrom}" onchange="_evalRecFrom=this.value;_evalRecDetail()">
+    <span style="color:var(--text3);font-size:11px">〜</span>
+    <input class="fi" type="date" style="width:130px" value="${_evalRecTo}" onchange="_evalRecTo=this.value;_evalRecDetail()">
+    <span style="font-size:10px;color:var(--text3)">KGI・各CSF・タスクの★とコメントを網羅表示（チャートの作成期間で絞り込み）</span>
   </div><div id="evalrec-detail" style="padding:14px 16px"><div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">読み込み中…</div></div>`;
   _evalRecDetail();
 }
@@ -984,8 +1009,30 @@ async function _evalRecDetail(){
   // 接続時: evaluations から CSF 詳細を取得
   if(API&&API.ready&&m&&m.pid){
     let data;try{data=await API.loadEvaluationsFor(m.pid);}catch(e){data=null;}
-    const evs=data?[].concat(data.fromLeader||[],data.fromExec||[],data.fromSelf||[]):[];
-    if(!evs.length){box.innerHTML=`<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">${_evalRecSel} さんの評価記録はまだありません</div>`;return;}
+    let evs=data?[].concat(data.fromLeader||[],data.fromExec||[],data.fromSelf||[]):[];
+    // チャート作成期間（mandala_charts.start_date/period）の選択肢を生成・絞り込み
+    let charts=window._chartsCache[m.pid];
+    if(!charts){try{charts=await API.loadChartsFor(m.pid);window._chartsCache[m.pid]=charts;}catch(e){charts=[];}}
+    charts=charts||[];
+    const chartMap={};charts.forEach(c=>chartMap[c.id]=c);
+    const psel=document.getElementById('evalrec-period-sel');
+    if(psel){
+      const periods=[...new Set(charts.map(c=>c.period).filter(Boolean))];
+      const cur=_evalRecPeriod;
+      psel.innerHTML='<option value="">全期間</option>'+periods.map(p=>`<option value="${p}" ${p===cur?'selected':''}>${p}</option>`).join('');
+    }
+    evs=evs.filter(ev=>{
+      const c=ev.chartId&&chartMap[ev.chartId];
+      if(_evalRecPeriod){if(!c||c.period!==_evalRecPeriod)return false;}
+      if(_evalRecFrom||_evalRecTo){
+        const sd=c&&c.start_date;const ed=(c&&(c.end_date||c.start_date))||sd;
+        if(!sd)return false;
+        if(_evalRecFrom&&ed&&ed<_evalRecFrom)return false;
+        if(_evalRecTo&&sd>_evalRecTo)return false;
+      }
+      return true;
+    });
+    if(!evs.length){box.innerHTML=`<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">${_evalRecSel} さんの評価記録はまだありません（絞り込み条件に一致する記録がない場合も含む）</div>`;return;}
     evs.sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
     let h=`<div style="font-size:12px;font-weight:700;margin-bottom:10px">${_evalRecSel} さんへの評価（${evs.length}件・CSFまで網羅）</div>`;
     evs.forEach(ev=>{
@@ -1082,27 +1129,27 @@ async function renderSubmissions(){
   // 日報
   const rep=document.getElementById('sub-reports');
   const reps=repList(mid).filter(r=>inDateRange(r.date)).sort((a,b)=>b.date.localeCompare(a.date));
-  if(view==='hours'){rep.parentElement.parentElement.style.display='none';}
+  if(view==='hours'){rep.parentElement.style.display='none';}
   else{
-    rep.parentElement.parentElement.style.display='';
+    rep.parentElement.style.display='';
     rep.innerHTML=reps.length?reps.map(r=>{
       const c=(typeof PCOND!=='undefined'&&PCOND[r.cond])||['📝','',''];
-      return `<div style="padding:10px 14px;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between"><div style="font-size:12px;font-weight:700">${r.date} ${c[0]||''}</div><div style="font-size:10px;color:var(--text3)">稼働 ${r.hours||'—'}</div></div><div style="font-size:11px;color:var(--text2);margin-top:3px">${(r.done||'').slice(0,80)}</div>${r.goal?`<div style="font-size:10px;color:#C2410C;margin-top:2px">🌅 ${r.goal}</div>`:''}</div>`;
+      return `<div onclick="jumpToReportFromSub('${mid}','${r.date}')" onmouseover="this.style.background='#FAFCFC'" onmouseout="this.style.background=''" style="cursor:pointer;padding:10px 14px;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between"><div style="font-size:12px;font-weight:700">${r.date} ${c[0]||''}</div><div style="font-size:10px;color:var(--text3)">稼働 ${r.hours||'—'}</div></div><div style="font-size:11px;color:var(--text2);margin-top:3px">${(r.done||'').slice(0,80)}</div>${r.goal?`<div style="font-size:10px;color:#C2410C;margin-top:2px">🌅 ${r.goal}</div>`:''}</div>`;
     }).join(''):'<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">日報はまだありません</div>';
   }
   // 工数履歴
   const hrsEl=document.getElementById('sub-hours');
   const flogs=(period?logs.filter(l=>l.period===period):logs).filter(l=>inDateRange(l.date));
   const totalEl=document.getElementById('sub-hours-total');
-  if(view==='report'){hrsEl.parentElement.parentElement.style.display='none';}
+  if(view==='report'){hrsEl.parentElement.style.display='none';}
   else{
-    hrsEl.parentElement.parentElement.style.display='';
+    hrsEl.parentElement.style.display='';
     if(!(API&&API.ready)){hrsEl.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">工数履歴はSupabase接続時に表示されます</div>';if(totalEl)totalEl.textContent='';}
     else if(!flogs.length){hrsEl.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">工数の記録はまだありません</div>';if(totalEl)totalEl.textContent='';}
     else{
       const total=flogs.reduce((a,l)=>a+(l.hours||0),0);
       if(totalEl)totalEl.textContent='合計 '+Math.round(total*10)/10+'h'+(period?'（'+period+'）':'');
-      hrsEl.innerHTML=flogs.map(l=>`<div style="padding:9px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${l.taskTitle}</div><div style="font-size:10px;color:var(--text3)">${l.date}${l.period?' ／ '+l.period:''}${l.progress!=null?' ／ 到達 '+l.progress+'%':''}</div></div><div style="font-size:13px;font-weight:800;color:var(--accent);flex-shrink:0">${l.hours}h</div></div>`).join('');
+      hrsEl.innerHTML=flogs.map(l=>`<div onclick="jumpToTaskFromSub('${l.taskId||''}')" onmouseover="this.style.background='#FAFCFC'" onmouseout="this.style.background=''" style="cursor:pointer;padding:9px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${l.taskTitle}</div><div style="font-size:10px;color:var(--text3)">${l.date}${l.period?' ／ '+l.period:''}${l.progress!=null?' ／ 到達 '+l.progress+'%':''}</div></div><div style="font-size:13px;font-weight:800;color:var(--accent);flex-shrink:0">${l.hours}h</div></div>`).join('');
     }
   }
   const sm=document.getElementById('sub-summary');if(sm)sm.textContent=m.name+(dFrom||dTo?'（'+(dFrom||'…')+' 〜 '+(dTo||'…')+'）':'')+' ／ 日報 '+reps.length+'件 ／ 工数記録 '+flogs.length+'件';
@@ -1111,6 +1158,19 @@ function clearSubDateFilter(){
   const f=document.getElementById('sub-date-from'),t=document.getElementById('sub-date-to');
   if(f)f.value='';if(t)t.value='';
   renderSubmissions();
+}
+function jumpToReportFromSub(mid,date){
+  _repMember=mid;_repSelDate='';
+  const p=date.split('-');_repYear=+p[0];_repMonth=+p[1]-1;
+  gotoTab('report');
+  setTimeout(()=>showReportDetail(date),60);
+}
+function jumpToTaskFromSub(taskId){
+  gotoTab('assign');
+  setTimeout(()=>{
+    const card=taskId&&document.getElementById('asgtask-'+taskId);
+    if(card){card.scrollIntoView({behavior:'smooth',block:'center'});card.style.outline='2px solid var(--accent)';setTimeout(()=>{card.style.outline='';},1800);}
+  },60);
 }
 function changeReportMonth(d){_repMonth+=d;if(_repMonth<0){_repMonth=11;_repYear--;}else if(_repMonth>11){_repMonth=0;_repYear++;}_repSelDate='';document.getElementById('report-detail').innerHTML='';renderReportCalendar();}
 function renderReportCalendar(){

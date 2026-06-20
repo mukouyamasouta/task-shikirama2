@@ -210,7 +210,6 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="sb-item" onclick="swTab('inbox',this);renderInbox()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="inbox-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('assign',this)"><span class="sb-icon">📌</span>割り当て<span class="sb-badge" id="assign-badge">3</span></button>
     <button class="sb-item" onclick="swTab('reviews',this);renderEval();refreshSelfEvalStatusCard()"><span class="sb-icon">★</span>評価管理</button>
-    <button class="sb-item" onclick="swTab('create',this);initCreate()"><span class="sb-icon">＋</span>新規作成</button>
     <button class="sb-item" onclick="swTab('report',this)"><span class="sb-icon">📝</span>日報</button>
   </div>
   <div class="sb-footer">v2.4.1 © 2025 VEXUM Inc.</div>
@@ -337,8 +336,12 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 </div>
 
 <!-- 新規作成 -->
-<div id="tc-create" class="tab-content">
-  <div class="sec-title">新規作成 <span style="font-size:11px;font-weight:400;color:var(--text3)">KGI / CSF / KPI を曼荼羅チャートで作成</span></div>
+<div id="newchart-modal" onclick="if(event.target===this)closeNewChartModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9993;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto">
+<div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:900px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+    <div class="sec-title" style="margin:0">＋ チャートを新規作成 <span style="font-size:11px;font-weight:400;color:var(--text3)">KGI / CSF / KPI を曼荼羅チャートで作成</span></div>
+    <button onclick="closeNewChartModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+  </div>
   <div id="mnd-send-success" style="display:none;align-items:center;gap:10px;background:#D1FAE5;border:1px solid #10B981;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#065F46;font-size:13px;font-weight:600">
     <span style="font-size:18px">✅</span><span id="mnd-send-success-msg">チャートを作成しました</span>
   </div>
@@ -443,10 +446,12 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
   </div>
 </div>
+</div>
 
 <!-- チャート管理 -->
 <div id="tc-chartmgr" class="tab-content">
   <div class="sec-title">チャート管理
+    <button class="f-submit" style="font-size:12px;padding:7px 16px" onclick="openNewChartModal()">＋ チャートを新規作成</button>
     <button class="f-submit" style="font-size:12px;padding:7px 16px;background:var(--green)" onclick="openCmAddTask()">＋ チャート追加</button>
   </div>
   <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;box-shadow:var(--shadow)">
@@ -556,7 +561,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <script>
 /* ===== タブ切替 ===== */
-const TITLES={progress:['進捗ダッシュボード','個人メニュー / 進捗'],tasks:['タスク管理','個人メニュー / タスク'],assign:['割り当て','個人メニュー / 割り当て'],reviews:['評価管理','個人メニュー / 評価'],create:['新規作成','個人メニュー / 新規作成'],report:['日報','個人メニュー / 日報'],chartmgr:['チャート管理','個人メニュー / チャート管理'],inbox:['受信ボックス','個人メニュー / 受信ボックス']};
+const TITLES={progress:['進捗ダッシュボード','個人メニュー / 進捗'],tasks:['タスク管理','個人メニュー / タスク'],assign:['割り当て','個人メニュー / 割り当て'],reviews:['評価管理','個人メニュー / 評価'],report:['日報','個人メニュー / 日報'],chartmgr:['チャート管理','個人メニュー / チャート管理'],inbox:['受信ボックス','個人メニュー / 受信ボックス']};
 /* 右上「新規作成」ボタンのタブ別制御（progress・assignでは非表示） */
 const TB_NEW={tasks:{label:'＋ タスク作成',fn:'openTaskCreate'},report:{label:'＋ 新規日報',fn:'newReport'}};
 function updateTbNewBtn(id){
@@ -579,6 +584,11 @@ function gotoTab(id){
   const btn=[...document.querySelectorAll('.sb-item')].find(b=>{const o=b.getAttribute('onclick');return o&&o.includes("'"+id+"'");});
   swTab(id,btn||null);
 }
+function openNewChartModal(){
+  document.getElementById('newchart-modal').style.display='flex';
+  initCreate();
+}
+function closeNewChartModal(){document.getElementById('newchart-modal').style.display='none';}
 function swCreate(id,btn){
   document.querySelectorAll('.cpane').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.ctab').forEach(b=>b.classList.remove('active'));
@@ -681,7 +691,7 @@ function renderAssign(){
       const stChip=late?'<span class="chip s-late" style="margin-left:6px">遅延</span>':(a.pct>0?'<span class="chip s-wip" style="margin-left:6px">進行中</span>':'<span class="chip s-todo" style="margin-left:6px">未着手</span>');
       const totH=a.hours!=null?a.hours:0;
       const planH=a.planned!=null?` / 予定 ${a.planned}h`:'';
-      h+=`<div class="asg-card">
+      h+=`<div class="asg-card" id="asg-card-${i}">
         <div class="asg-top"><div><div class="asg-name">${a.name}${chartChip}${stChip}</div><div class="asg-meta">${a.meta}</div></div><span class="asg-from ${a.fromClass}">${a.from}</span></div>
         <div class="asg-dates"><span>開始 <b>${a.start}</b></span><span>期限 <b${late?' style=\"color:var(--red)\"':''}>${a.end}${late?' ⚠':''}</b></span><span>合計工数 <b style="color:var(--accent)">${totH}h</b>${planH}</span></div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
@@ -1333,7 +1343,9 @@ function renderEval(){
   document.getElementById('eval-pct-big').textContent=getEvalProgress(k)+'%';
   const con=document.getElementById('eval-container');
   if(evalView==='mandala'){
-    con.innerHTML=`<div class="card"><div class="card-hd"><div><div class="card-title">${d.name} <span style="font-size:10px;color:var(--text3);font-weight:400">${d.scopeLabel}</span> <span style="font-size:11px;color:var(--accent);font-weight:700">（${d.period||''}）</span></div><div class="card-sub">KGI: ${(d.center||'').replace(/\n/,' ')} ／ KPIセルをクリックで進捗入力</div></div><button class="card-btn" onclick="openMandala('${k}',true)">⛶ 全画面で評価</button></div><div class="card-body"><div style="overflow-x:auto"><div style="display:grid;grid-template-columns:repeat(9,minmax(54px,1fr));gap:2px;min-width:500px">${buildGridHTML(k,true)}</div></div></div></div>`;
+    con.innerHTML=`<div class="card"><div class="card-hd"><div><div class="card-title">${d.name} <span style="font-size:10px;color:var(--text3);font-weight:400">${d.scopeLabel}</span> <span style="font-size:11px;color:var(--accent);font-weight:700">（${d.period||''}）</span></div><div class="card-sub">KGI: ${(d.center||'').replace(/\n/,' ')} ／ CSFセルをクリックでKPIの進捗%を展開</div></div><button class="card-btn" onclick="openMandala('${k}',true)">⛶ 全画面で評価</button></div><div class="card-body"><div style="overflow-x:auto" id="eval-mnd-wrap"></div></div></div>`;
+    const API=window.VexumAPI;
+    if(API&&API.renderEvalMandala)API.renderEvalMandala(d,d.memberKpiEdits||{},document.getElementById('eval-mnd-wrap'));
   }else{
     con.innerHTML=renderEvalBar(k);
   }
@@ -1451,9 +1463,8 @@ async function sendMandala(){
   const acts=Array.from({length:8},()=>Array(8).fill(''));
   const saved=await persistMyChart({name:center.slice(0,20),center,subs,acts});
   if(!saved)return;
-  const msg=document.getElementById('mnd-send-success'),msgTxt=document.getElementById('mnd-send-success-msg');
-  if(msgTxt)msgTxt.textContent=`「${center}」を自分の曼荼羅チャートに登録しました`;
-  if(msg){msg.style.display='flex';setTimeout(()=>{msg.style.display='none';},5000);}
+  closeNewChartModal();
+  gotoChartFromDashTask(center.slice(0,20));
 }
 /* 自分の曼荼羅チャートを Supabase に保存し、ローカル CHARTS にも反映 */
 async function persistMyChart(o){
@@ -1542,9 +1553,8 @@ async function saveGridChart(){
   if(!newChart.center){alert('KGI（中心目標）を入力してください');return;}
   const saved=await persistMyChart({name:newChart.center.slice(0,20),center:newChart.center,subs:[...newChart.subs],acts:newChart.acts.map(r=>[...r])});
   if(!saved)return;
-  const msg=document.getElementById('mnd-send-success'),msgTxt=document.getElementById('mnd-send-success-msg');
-  if(msgTxt)msgTxt.textContent=`「${newChart.center}」をグリッド作成で登録しました`;
-  if(msg){msg.style.display='flex';setTimeout(()=>{msg.style.display='none';},5000);}
+  closeNewChartModal();
+  gotoChartFromDashTask(newChart.center.slice(0,20));
 }
 function updateGridSummary(){
   const filled=newChart.acts.reduce((acc,row)=>acc+row.filter(v=>v).length,0);
@@ -2366,7 +2376,9 @@ function _epRenderTaskLists(){
       const badge=late?'<span class="chip s-late">遅延</span>':(dueToday?'<span class="chip s-hi">本日期限</span>':(a.pct>0?'<span class="chip s-wip">進行中</span>':'<span class="chip s-todo">未着手</span>'));
       const col=a.pct>=80?'var(--green)':a.pct>=40?'var(--accent)':'var(--amber)';
       const chartChip=a.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${a.chart}</span>`:'';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      const isChartTask=!!(a.chart||a.source_send_id||a.source_chart);
+      const jumpFn=isChartTask?`gotoChartFromDashTask(${JSON.stringify(a.chart||a.source_chart||'')})`:`gotoAssignFromDashTask(${ASSIGNMENTS.indexOf(a)})`;
+      return `<div onclick="${jumpFn}" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='transparent'" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);border-left:2px solid transparent;cursor:pointer;transition:.12s">
         <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">${a.name}${chartChip}</div>
         <div style="font-size:10px;color:${late?'var(--red)':'var(--text3)'}">期限 ${a.end||'—'}${late?' ⚠ 超過':''} ／ 工数 ${a.hours!=null?a.hours:0}h</div></div>
         <span class="chip ${pc[0]}">${pc[1]}</span>${badge}
@@ -2384,6 +2396,24 @@ function _epRenderTaskLists(){
       <div style="font-size:10px;color:var(--text3)">完了 ${a.completed||'—'} ／ 合計工数 <b style="color:var(--accent)">${a.hours!=null?a.hours:0}h</b></div></div></div>`).join('');
   }
   const dcc=document.getElementById('ep-d-done-count');if(dcc)dcc.textContent=done.length+'件';
+}
+function gotoChartFromDashTask(chartName){
+  gotoTab('chartmgr');
+  initChartMgr();
+  setTimeout(()=>{
+    const sel=document.getElementById('cm-chart-sel');
+    if(sel&&chartName){[...sel.options].forEach(o=>{if(CHARTS[o.value]&&CHARTS[o.value].name===chartName)sel.value=o.value;});onCmChartChange();}
+    const card=document.querySelector('#tc-chartmgr .card');
+    if(card)card.scrollIntoView({behavior:'smooth',block:'start'});
+  },60);
+}
+function gotoAssignFromDashTask(idx){
+  gotoTab('assign');
+  switchAssignView('current',document.getElementById('asgtab-current'));
+  setTimeout(()=>{
+    const card=document.getElementById('asg-card-'+idx);
+    if(card){card.scrollIntoView({behavior:'smooth',block:'center'});card.style.outline='2px solid var(--accent)';setTimeout(()=>{card.style.outline='';},1800);}
+  },60);
 }
 function renderProgressDash(){
   let st=window._epStats;
