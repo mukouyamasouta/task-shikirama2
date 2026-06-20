@@ -1402,7 +1402,8 @@ function renderFeedback(k){
       <div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:${kgi.comment?'4px':'0'}"><span style="font-size:10px;font-weight:700;padding:1px 8px;border-radius:8px;background:rgba(13,148,136,.12);color:var(--accent)">KGI</span><span style="flex:1;font-size:11.5px;font-weight:700;color:var(--text)">${(d.center||'').replace(/\n/g,' ')}</span><span style="color:var(--amber);letter-spacing:1px;font-size:13px;white-space:nowrap">${starStr(kgi.stars)}</span></div>
         ${kgi.comment?`<div style="font-size:11px;color:var(--text2);line-height:1.5">💬 ${kgi.comment}</div>`:''}
-      </div>`;
+      </div>
+      ${ev.execComment?`<div style="background:#F3E8FF;border:1px solid #9333EA;border-radius:6px;padding:8px 10px;margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:#7C3AED;margin-bottom:3px">◆ 幹部コメント</div><div style="font-size:11px;color:#581C87;line-height:1.5">💬 ${ev.execComment}</div></div>`:''}`;
     (ev.csf||[]).forEach((c,si)=>{
       const st=typeof c==='object'?c.stars:c;const cm=typeof c==='object'?c.comment:'';
       h+=`<div style="border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:6px">

@@ -55,6 +55,11 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 .pf{height:100%;border-radius:3px}
 .pp{font-size:11px;font-weight:700;width:32px;text-align:right}
 .sec-title{font-size:18px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+.tdot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.chip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap}
+.s-done{background:#D1FAE5;color:var(--green)}.s-wip{background:#DAEEE9;color:var(--accent)}
+.s-todo{background:#F3F4F6;color:var(--text3)}.s-late{background:#FEE2E2;color:var(--red)}
+.s-hi{background:#F3E8FF;color:#9333EA}.s-md{background:#DAEEE9;color:var(--amber)}.s-lo{background:#F3F4F6;color:var(--text3)}
 /* account */
 .team-panel{background:var(--card);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
 .team-panel-hd{padding:14px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
@@ -130,9 +135,11 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="sb-nav">
     <div class="sb-sec">幹部コンソール</div>
     <button class="sb-item active" onclick="swTab('users',this)"><span class="sb-icon">👤</span>アカウント管理</button>
-    <button class="sb-item" onclick="swTab('send',this);initSendForm()"><span class="sb-icon">◎</span>チャート送信</button>
-    <button class="sb-item" onclick="swTab('tasks',this);renderSendHistory()"><span class="sb-icon">📋</span>タスク管理</button>
+    <button class="sb-item" onclick="swTab('send',this);initSendForm();renderSendHistory()"><span class="sb-icon">◎</span>チャート送信</button>
+    <button class="sb-item" onclick="swTab('tasks',this);initExecTasks()"><span class="sb-icon">📋</span>タスク管理</button>
     <button class="sb-item" onclick="swTab('eval',this);renderTeamEval();renderMemberEval()"><span class="sb-icon">★</span>一覧・評価</button>
+    <button class="sb-item" onclick="swTab('report',this);initExecReports()"><span class="sb-icon">📅</span>日報</button>
+    <button class="sb-item" onclick="swTab('dashboard',this);initExecDashboard()"><span class="sb-icon">📈</span>ダッシュボード</button>
   </div>
   <div class="sb-footer">v2.4.1 © 2025 VEXUM Inc.</div>
 </aside>
@@ -210,15 +217,55 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       </div>
     </div>
   </div>
-</div>
-
-<!-- タスク管理（送信履歴・進捗） -->
-<div id="tc-tasks" class="tab-content">
-  <div class="sec-title">タスク管理 <span style="font-size:12px;font-weight:400;color:var(--text3)">チャート送信の履歴・進捗・記入者を確認</span></div>
+  <div class="sec-title" style="font-size:14px;margin-top:8px">送信履歴 <span style="font-size:11px;font-weight:400;color:var(--text3)">チャート送信の履歴・進捗・記入者を確認</span></div>
   <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
     <span style="font-size:14px">💡</span><span>送信したチャートの宛先・進捗率・誰がどのKPIを記入したかを一覧で確認できます。</span>
   </div>
   <div id="sendhist-container"></div>
+</div>
+
+<!-- タスク管理（全チーム横断のタスク割当・一覧） -->
+<div id="tc-tasks" class="tab-content">
+  <div class="sec-title">タスク管理 <span style="font-size:12px;font-weight:400;color:var(--text3)">全チームのタスクを作成・割当・一覧で確認</span></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-body" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
+      <div style="min-width:180px"><label class="fl">チーム</label><select class="fs" id="task-team-sel" onchange="onTaskTeamChange()"><option value="">全社員</option></select></div>
+    </div>
+  </div>
+  <div class="g2">
+    <div>
+      <div class="card">
+        <div class="card-hd"><div class="card-title">新規タスクを作成・割当</div></div>
+        <div class="card-body">
+          <div class="fg"><label class="fl">タスク名</label><input class="fi" id="task-asg-name" placeholder="例: Q3 提案書作成"></div>
+          <div class="fg"><label class="fl">割り当てるメンバー</label><select class="fs" id="task-asg-member"></select></div>
+          <div class="fg"><label class="fl">関連KPI（任意）</label><input class="fi" id="task-asg-kpi" placeholder="例: 訪問件数30件"></div>
+          <div class="fr" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="fg"><label class="fl">開始日</label><input class="fi" id="task-asg-start" type="date"></div>
+            <div class="fg"><label class="fl">期限</label><input class="fi" id="task-asg-due" type="date"></div>
+          </div>
+          <div class="fr" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="fg"><label class="fl">対象期間（評価に連携）</label><select class="fs" id="task-asg-period"></select></div>
+            <div class="fg"><label class="fl">予定工数（h・任意）</label><input class="fi" id="task-asg-planhours" type="number" min="0" step="0.5" placeholder="例: 8"></div>
+          </div>
+          <div class="fg"><label class="fl">優先度</label><select class="fs" id="task-asg-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select></div>
+          <button class="f-submit" onclick="submitExecAssign()">タスクを割り当てる</button>
+          <span class="toast" id="task-asg-saved">✅ 保存しました</span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-hd"><div><div class="card-title">割り当て済みタスク</div><div class="card-sub">チーム・メンバー・ステータス・期間で絞り込み</div></div></div>
+        <div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+          <select class="fs" id="task-f-member" style="min-width:130px" onchange="renderExecTasks()"><option value="">全メンバー</option></select>
+          <select class="fs" id="task-f-status" onchange="renderExecTasks()"><option value="">全ステータス</option><option value="todo">未着手</option><option value="wip">進行中</option><option value="done">完了</option><option value="late">遅延</option></select>
+          <select class="fs" id="task-f-period" onchange="renderExecTasks()"><option value="">全期間</option></select>
+        </div>
+        <div class="card-body" id="exec-assigned-list" style="padding:0"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- 一覧・評価 -->
@@ -255,6 +302,58 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <input class="search-in" id="evalhist-search" placeholder="🔍 氏名で検索…" oninput="renderEvalHistory()">
     </div>
     <div id="evalhist-container"></div>
+  </div>
+</div>
+
+<!-- 日報（全社員） -->
+<div id="tc-report" class="tab-content">
+  <div class="sec-title">日報 <span style="font-size:12px;font-weight:400;color:var(--text3)">全社員の日報をチーム・メンバー別に確認</span></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-body" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
+      <div style="min-width:180px"><label class="fl">チーム</label><select class="fs" id="report-team-sel" onchange="onReportTeamChange()"><option value="">全社員</option></select></div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:240px 1fr;gap:16px;align-items:start">
+    <div class="card" style="margin:0">
+      <div class="card-hd"><div class="card-title">メンバー</div></div>
+      <div class="card-body" style="padding:0" id="exec-report-member-list"></div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-hd">
+          <div><div class="card-title" id="exec-report-cal-name">メンバー</div><div class="card-sub" id="exec-report-cal-sub"></div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="card-btn" onclick="changeExecReportMonth(-1)">‹</button>
+            <span style="font-size:12px;font-weight:700;min-width:88px;text-align:center" id="exec-report-cal-month"></span>
+            <button class="card-btn" onclick="changeExecReportMonth(1)">›</button>
+          </div>
+        </div>
+        <div class="card-body" id="exec-report-calendar"></div>
+      </div>
+      <div id="exec-report-detail"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ダッシュボード（全社員集計） -->
+<div id="tc-dashboard" class="tab-content">
+  <div class="sec-title">ダッシュボード <span style="font-size:12px;font-weight:400;color:var(--text3)">全社員の達成率・進捗をチーム別に比較</span></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-body" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
+      <div style="min-width:180px"><label class="fl">チーム</label><select class="fs" id="dash-team-sel" onchange="onDashFilterChange()"><option value="">全社員</option></select></div>
+      <div style="min-width:150px"><label class="fl">期間</label><select class="fs" id="dash-period-sel" onchange="onDashPeriodChange()">
+        <option value="thisweek">今週</option><option value="thismonth" selected>今月</option><option value="lastmonth">先月</option><option value="custom">カスタム日付範囲</option>
+      </select></div>
+      <div id="dash-custom-range" style="display:none;gap:10px;align-items:flex-end">
+        <div><label class="fl">開始日</label><input class="fi" type="date" id="dash-date-from" onchange="onDashFilterChange()"></div>
+        <div><label class="fl">終了日</label><input class="fi" type="date" id="dash-date-to" onchange="onDashFilterChange()"></div>
+      </div>
+    </div>
+  </div>
+  <div id="dash-summary-cards" class="g4" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px"></div>
+  <div class="card">
+    <div class="card-hd"><div class="card-title">チーム別比較</div><div class="card-sub">平均達成率・遅延件数・日報提出率</div></div>
+    <div class="card-body" id="dash-team-compare" style="padding:0"></div>
   </div>
 </div>
 
@@ -529,7 +628,7 @@ function getRat(id){if(!RATINGS[id])RATINGS[id]={stars:0,comment:''};return RATI
 
 <script>
 /* ========== UI ========== */
-const TITLES={users:['アカウント管理','幹部コンソール / アカウント管理'],send:['チャート送信','幹部コンソール / チャート送信'],tasks:['タスク管理','幹部コンソール / タスク管理'],eval:['一覧・評価','幹部コンソール / 一覧・評価']};
+const TITLES={users:['アカウント管理','幹部コンソール / アカウント管理'],send:['チャート送信','幹部コンソール / チャート送信'],tasks:['タスク管理','幹部コンソール / タスク管理'],eval:['一覧・評価','幹部コンソール / 一覧・評価'],report:['日報','幹部コンソール / 日報'],dashboard:['ダッシュボード','幹部コンソール / ダッシュボード']};
 function swTab(id,btn){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.getElementById('tc-'+id).classList.add('active');
@@ -572,10 +671,6 @@ function memRowHTML(key,m,col){
     <div style="flex:1;min-width:0">
       <div class="mem-name">${m.name} <span class="badge ${badgeCls}">${m.role}</span></div>
       <div class="mem-meta">${m.email}</div>
-    </div>
-    <div class="pw" style="min-width:110px">
-      <div class="pt"><div class="pf" style="width:${m.rate}%;background:${rateColor(m.rate)}"></div></div>
-      <div class="pp" style="color:${rateColor(m.rate)}">${m.rate}%</div>
     </div>
     ${actions}
   </div>`;
@@ -1057,6 +1152,263 @@ function viewSendChart(id){
   openMandala('__sendview__');
 }
 
+/* ========== タスク管理（全チーム横断） ========== */
+let EXEC_OV={MEMBERS:{},MEMBER_TASKS:{},DASH_IDS:[],EVAL_IDS:[],memberPid:{},teamsList:[]};
+function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
+function fmtDate(id){const v=val(id);if(!v)return null;return v;}
+function fmtDateDisp(id){const v=val(id);if(!v)return'-';const p=v.split('-');return p.length===3?`${+p[1]}/${+p[2]}`:v;}
+function statusChip(s){return {wip:['s-wip','進行中'],done:['s-done','完了'],late:['s-late','遅延'],todo:['s-todo','未着手']}[s]||['s-todo','未着手'];}
+function priChip(p){return {hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低']}[p]||['s-md','中'];}
+function periodOptions(sel){
+  const y=new Date().getFullYear();
+  let o='<option value="">全期間</option>';
+  [1,2,3,4].forEach(q=>{o+=`<option value="${y} Q${q}"${sel===y+' Q'+q?' selected':''}>${y}年 Q${q}</option>`;});
+  for(let mo=1;mo<=12;mo++){const v=`${y}-${String(mo).padStart(2,'0')}`;o+=`<option value="${v}"${sel===v?' selected':''}>${y}年${mo}月</option>`;}
+  o+=`<option value="${y}年度"${sel===y+'年度'?' selected':''}>${y}年度（通年）</option>`;
+  return o;
+}
+async function initExecTasks(){
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    if(!EXEC_OV.teamsList.length){const d=await API.loadExecOverview(null);if(d)EXEC_OV=d;}
+    const sel=document.getElementById('task-team-sel');
+    if(sel&&sel.dataset.n!==String(EXEC_OV.teamsList.length)){
+      const cur=sel.value;
+      sel.innerHTML='<option value="">全社員</option>'+EXEC_OV.teamsList.map(t=>`<option value="${t.uid}">${t.name}</option>`).join('');
+      sel.value=cur; sel.dataset.n=String(EXEC_OV.teamsList.length);
+    }
+  }
+  const pSel=document.getElementById('task-asg-period');
+  if(pSel&&!pSel.dataset.init){pSel.innerHTML=periodOptions('');pSel.dataset.init='1';}
+  const fpSel=document.getElementById('task-f-period');
+  if(fpSel&&!fpSel.dataset.init){fpSel.innerHTML=periodOptions('');fpSel.dataset.init='1';}
+  populateExecMemberSelects();
+  renderExecTasks();
+}
+function onTaskTeamChange(){initExecTasks();}
+function populateExecMemberSelects(){
+  const teamUuid=document.getElementById('task-team-sel').value||'';
+  const ids=Object.keys(EXEC_OV.MEMBERS).filter(id=>!teamUuid||EXEC_OV.MEMBERS[id].teamUuid===teamUuid);
+  const asgSel=document.getElementById('task-asg-member');
+  if(asgSel){const cur=asgSel.value;asgSel.innerHTML=ids.map(id=>`<option value="${id}">${EXEC_OV.MEMBERS[id].name}（${EXEC_OV.MEMBERS[id].team}）</option>`).join('');if(ids.indexOf(cur)>=0)asgSel.value=cur;}
+  const fSel=document.getElementById('task-f-member');
+  if(fSel){const cur=fSel.value;fSel.innerHTML='<option value="">全メンバー</option>'+ids.map(id=>`<option value="${id}">${EXEC_OV.MEMBERS[id].name}</option>`).join('');if(ids.indexOf(cur)>=0)fSel.value=cur;}
+}
+function pidOfExec(id){return (EXEC_OV.MEMBERS[id]&&EXEC_OV.MEMBERS[id].pid)||EXEC_OV.memberPid[id]||id;}
+async function submitExecAssign(){
+  const name=val('task-asg-name');if(!name){alert('タスク名を入力してください');return;}
+  const id=document.getElementById('task-asg-member').value;
+  if(!id){alert('メンバーを選択してください');return;}
+  const API=window.VexumAPI;
+  const pid=pidOfExec(id);
+  if(API&&API.ready&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pid)){
+    alert('データ読み込み中です。少し待ってから再度お試しください。');return;
+  }
+  const m=EXEC_OV.MEMBERS[id];
+  const o={title:name,kpi:val('task-asg-kpi')||'—',assigneePid:pid,teamUuid:(m&&m.teamUuid)||null,
+    start:fmtDate('task-asg-start'),due:fmtDate('task-asg-due'),priority:document.getElementById('task-asg-pri').value,
+    period:(document.getElementById('task-asg-period')||{}).value||null,plannedHours:parseFloat(val('task-asg-planhours'))||null};
+  if(API&&API.ready){
+    const res=await API.assignTask(o);
+    if(res&&res.error){alert('割当失敗: '+res.error);return;}
+  }
+  if(!EXEC_OV.MEMBER_TASKS[id])EXEC_OV.MEMBER_TASKS[id]=[];
+  EXEC_OV.MEMBER_TASKS[id].push({name:name,kpi:o.kpi,start:fmtDateDisp('task-asg-start'),due:fmtDateDisp('task-asg-due'),pri:o.priority,status:'todo',period:o.period||'',pct:0,hours:0,teamUuid:o.teamUuid});
+  document.getElementById('task-asg-name').value='';document.getElementById('task-asg-kpi').value='';document.getElementById('task-asg-planhours').value='';
+  renderExecTasks();
+  showToast('✅ タスクを割り当てました');
+}
+function renderExecTasks(){
+  const teamUuid=document.getElementById('task-team-sel').value||'';
+  const fMem=(document.getElementById('task-f-member')||{}).value||'';
+  const fSt=(document.getElementById('task-f-status')||{}).value||'';
+  const fPe=(document.getElementById('task-f-period')||{}).value||'';
+  const ids=Object.keys(EXEC_OV.MEMBERS).filter(id=>!teamUuid||EXEC_OV.MEMBERS[id].teamUuid===teamUuid);
+  let h='',shown=0;
+  ids.filter(id=>!fMem||id===fMem).forEach(id=>{
+    const m=EXEC_OV.MEMBERS[id];let tasks=EXEC_OV.MEMBER_TASKS[id]||[];
+    if(fSt)tasks=tasks.filter(t=>(t.status||'todo')===fSt);
+    if(fPe)tasks=tasks.filter(t=>(t.period||'')===fPe);
+    h+=`<div style="padding:10px 16px;background:#FAFCFC;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);display:flex;align-items:center;gap:8px"><span class="tdot" style="background:${m.color||'#9CA3AF'}"></span>${m.name} <span style="font-weight:400;color:var(--text3)">（${m.team||'未所属'} ／ ${tasks.length}件）</span></div>`;
+    if(!tasks.length)h+=`<div style="padding:10px 16px;font-size:11px;color:var(--text3)">該当なし</div>`;
+    tasks.forEach(t=>{const sc=statusChip(t.status),pc=priChip(t.pri);shown++;
+      const pct=t.pct!=null?t.pct:0;
+      const hrs=t.hours!=null?` ／ ${t.hours}h`:'';
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${hrs}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${pct}%;background:${pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)'}"></div></div><div class="pp" style="font-size:10px">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
+  });
+  if(!shown&&(fMem||fSt||fPe))h+='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">絞り込み条件に該当するタスクがありません</div>';
+  if(!ids.length)h='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">対象メンバーがいません</div>';
+  document.getElementById('exec-assigned-list').innerHTML=h;
+}
+
+/* ========== 日報（全社員） ========== */
+let EXEC_REP={members:[],byKey:{},list:[]};
+let _execRepKey='';
+let _execRepYear=new Date().getFullYear(),_execRepMonth=new Date().getMonth();
+let _execRepSelDate='';
+const EXEC_COND={great:['😀','とても良い','#10B981'],good:['🙂','良い','#06B6D4'],normal:['😐','普通','#F59E0B'],bad:['😟','やや不調','#EF4444']};
+async function initExecReports(){
+  const API=window.VexumAPI;
+  const teamSel=document.getElementById('report-team-sel');
+  if(API&&API.ready){
+    if(!EXEC_OV.teamsList.length){const d=await API.loadExecOverview(null);if(d)EXEC_OV=d;}
+    if(teamSel&&teamSel.dataset.n!==String(EXEC_OV.teamsList.length)){
+      const cur=teamSel.value;
+      teamSel.innerHTML='<option value="">全社員</option>'+EXEC_OV.teamsList.map(t=>`<option value="${t.uid}">${t.name}</option>`).join('');
+      teamSel.value=cur;teamSel.dataset.n=String(EXEC_OV.teamsList.length);
+    }
+    const teamUuid=teamSel?teamSel.value:'';
+    const rows=await API.loadAllDailyReports(teamUuid||null);
+    const byPid={};
+    Object.keys(EXEC_OV.MEMBERS).forEach(k=>{byPid[EXEC_OV.MEMBERS[k].pid]=k;});
+    EXEC_REP.list=rows;
+    EXEC_REP.members=Object.keys(EXEC_OV.MEMBERS).filter(k=>!teamUuid||EXEC_OV.MEMBERS[k].teamUuid===teamUuid).map(k=>Object.assign({key:k},EXEC_OV.MEMBERS[k]));
+    EXEC_REP.byKey={};
+    rows.forEach(r=>{const key=byPid[r.authorPid]||r.authorPid;(EXEC_REP.byKey[key]=EXEC_REP.byKey[key]||[]).push(r);});
+  }
+  renderExecReports();
+}
+function onReportTeamChange(){initExecReports();}
+function renderExecReports(){
+  if(!_execRepKey||!EXEC_REP.members.find(m=>m.key===_execRepKey))_execRepKey=(EXEC_REP.members[0]||{}).key||'';
+  renderExecReportMembers();
+  renderExecReportCalendar();
+}
+function repListExec(key){return (EXEC_REP.byKey&&EXEC_REP.byKey[key])||[];}
+function repByDateExec(key,date){return repListExec(key).find(r=>r.date===date);}
+function renderExecReportMembers(){
+  const con=document.getElementById('exec-report-member-list');if(!con)return;
+  const ms=EXEC_REP.members;
+  if(!ms.length){con.innerHTML='<div style="padding:14px 16px;font-size:11px;color:var(--text3)">メンバーがいません</div>';return;}
+  let h=`<div style="padding:14px 16px">
+    <label class="fl">メンバーを選択</label>
+    <select class="fs" onchange="selectExecReportMember(this.value)">
+      ${ms.map(m=>{const cnt=repListExec(m.key).length;return `<option value="${m.key}" ${m.key===_execRepKey?'selected':''}>${m.name}（${m.team||'未所属'} ／ ${cnt}件）</option>`;}).join('')}
+    </select>
+    <div style="margin-top:10px;font-size:10px;color:var(--text3)">プルダウンでメンバーを切り替え、右のカレンダーの日付をクリックすると日報詳細が開きます。</div>
+  </div>`;
+  con.innerHTML=h;
+}
+function selectExecReportMember(key){_execRepKey=key;_execRepSelDate='';renderExecReportMembers();renderExecReportCalendar();document.getElementById('exec-report-detail').innerHTML='';}
+function changeExecReportMonth(d){_execRepMonth+=d;if(_execRepMonth<0){_execRepMonth=11;_execRepYear--;}else if(_execRepMonth>11){_execRepMonth=0;_execRepYear++;}_execRepSelDate='';document.getElementById('exec-report-detail').innerHTML='';renderExecReportCalendar();}
+function renderExecReportCalendar(){
+  const m=EXEC_REP.members.find(x=>x.key===_execRepKey);
+  if(!m){document.getElementById('exec-report-cal-name').textContent='メンバー';document.getElementById('exec-report-cal-sub').textContent='';document.getElementById('exec-report-cal-month').textContent='';document.getElementById('exec-report-calendar').innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">対象メンバーがいません</div>';return;}
+  document.getElementById('exec-report-cal-name').textContent=`${m.name} の日報`;
+  const monthList=repListExec(_execRepKey).filter(r=>{const p=r.date.split('-');return +p[0]===_execRepYear&&(+p[1]-1)===_execRepMonth;});
+  document.getElementById('exec-report-cal-sub').textContent=`${m.team||'未所属'} ／ 当月 ${monthList.length}件`;
+  document.getElementById('exec-report-cal-month').textContent=`${_execRepYear}年 ${_execRepMonth+1}月`;
+  const first=new Date(_execRepYear,_execRepMonth,1).getDay();
+  const days=new Date(_execRepYear,_execRepMonth+1,0).getDate();
+  const DOW=['日','月','火','水','木','金','土'];
+  let h='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">';
+  DOW.forEach((d,i)=>h+=`<div style="text-align:center;font-size:10px;font-weight:700;padding:4px 0;color:${i===0?'var(--red)':i===6?'var(--cyan)':'var(--text3)'}">${d}</div>`);
+  for(let i=0;i<first;i++)h+='<div></div>';
+  for(let day=1;day<=days;day++){
+    const ds=`${_execRepYear}-${String(_execRepMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const r=repByDateExec(_execRepKey,ds);
+    const sel=ds===_execRepSelDate;
+    if(r){
+      const c=EXEC_COND[r.cond]||EXEC_COND.normal;
+      h+=`<div onclick="showExecReportDetail('${ds}')" style="min-height:64px;border:1.5px solid ${sel?c[2]:'var(--border)'};border-radius:8px;padding:5px;cursor:pointer;background:${sel?c[2]+'1A':'#fff'};transition:.12s" title="${(r.done||'').replace(/"/g,'')}">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;font-weight:700;color:var(--text2)">${day}</span><span style="font-size:13px">${c[0]}</span></div>
+        <div style="font-size:8.5px;color:var(--text3);margin-top:1px">${r.hours||''}</div>
+        <div style="font-size:8.5px;color:var(--text2);line-height:1.3;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${r.done||''}</div>
+      </div>`;
+    }else{
+      h+=`<div style="min-height:64px;border:1px solid #F3F4F6;border-radius:8px;padding:5px;background:#FAFCFC"><span style="font-size:10px;color:var(--text3)">${day}</span></div>`;
+    }
+  }
+  h+='</div>';
+  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:10px;color:var(--text2)">';
+  Object.values(EXEC_COND).forEach(c=>h+=`<span style="display:flex;align-items:center;gap:4px"><span>${c[0]}</span>${c[1]}</span>`);
+  h+='</div>';
+  document.getElementById('exec-report-calendar').innerHTML=h;
+}
+function showExecReportDetail(ds){
+  _execRepSelDate=ds;renderExecReportCalendar();
+  const m=EXEC_REP.members.find(x=>x.key===_execRepKey);const r=repByDateExec(_execRepKey,ds);
+  if(!m||!r){document.getElementById('exec-report-detail').innerHTML='';return;}
+  const c=EXEC_COND[r.cond]||EXEC_COND.normal;
+  const p=ds.split('-');const dow=['日','月','火','水','木','金','土'][new Date(+p[0],+p[1]-1,+p[2]).getDay()];
+  const h=`<div class="card"><div class="card-hd" style="border-left:4px solid ${m.color||'#9CA3AF'}">
+      <div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:8px;background:${m.color||'#9CA3AF'};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px">${m.name.charAt(0)}</div><div><div class="card-title">${m.name} <span class="badge ${m.role==='リーダー'?'b-leader':'b-member'}" style="margin-left:2px">${m.role}</span></div><div class="card-sub">${m.team||'未所属'} ／ ${+p[0]}/${+p[1]}/${+p[2]} (${dow}) ／ 稼働 ${r.hours||'—'}</div></div></div>
+      <span style="font-size:12px;font-weight:700;color:${c[2]}">${c[0]} ${c[1]}</span>
+    </div><div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div><div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:3px">✅ 本日の達成タスク</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.done||'—'}</div></div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:3px">📅 明日の予定</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.plan||'—'}</div></div>
+      <div style="grid-column:1/3"><div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:3px">⚠ 課題・相談事項</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.issue||'—'}</div></div>
+    </div></div>`;
+  document.getElementById('exec-report-detail').innerHTML=h;
+}
+
+/* ========== ダッシュボード（全社員集計） ========== */
+let _dashStats=null;
+function dashDateRange(){
+  const sel=(document.getElementById('dash-period-sel')||{}).value||'thismonth';
+  const wrap=document.getElementById('dash-custom-range');
+  if(wrap)wrap.style.display=(sel==='custom')?'flex':'none';
+  const today=new Date();
+  const ymd=d=>d.toISOString().slice(0,10);
+  if(sel==='thisweek'){
+    const dow=today.getDay();const mon=new Date(today);mon.setDate(today.getDate()-((dow+6)%7));
+    const sun=new Date(mon);sun.setDate(mon.getDate()+6);
+    return {from:ymd(mon),to:ymd(sun)};
+  }else if(sel==='thismonth'){
+    const f=new Date(today.getFullYear(),today.getMonth(),1);const t=new Date(today.getFullYear(),today.getMonth()+1,0);
+    return {from:ymd(f),to:ymd(t)};
+  }else if(sel==='lastmonth'){
+    const f=new Date(today.getFullYear(),today.getMonth()-1,1);const t=new Date(today.getFullYear(),today.getMonth(),0);
+    return {from:ymd(f),to:ymd(t)};
+  }else{
+    return {from:val('dash-date-from')||null,to:val('dash-date-to')||null};
+  }
+}
+function onDashPeriodChange(){initExecDashboard();}
+function onDashFilterChange(){initExecDashboard();}
+async function initExecDashboard(){
+  const API=window.VexumAPI;
+  const teamSel=document.getElementById('dash-team-sel');
+  if(API&&API.ready){
+    if(!EXEC_OV.teamsList.length){const d=await API.loadExecOverview(null);if(d)EXEC_OV=d;}
+    if(teamSel&&teamSel.dataset.n!==String(EXEC_OV.teamsList.length)){
+      const cur=teamSel.value;
+      teamSel.innerHTML='<option value="">全社員</option>'+EXEC_OV.teamsList.map(t=>`<option value="${t.uid}">${t.name}</option>`).join('');
+      teamSel.value=cur;teamSel.dataset.n=String(EXEC_OV.teamsList.length);
+    }
+    const {from,to}=dashDateRange();
+    _dashStats=await API.loadDashboardStats(teamSel.value||null,from,to);
+  }
+  renderExecDashboard();
+}
+function renderExecDashboard(){
+  const s=_dashStats;
+  const cards=document.getElementById('dash-summary-cards');
+  if(!s){cards.innerHTML='<div class="card" style="margin:0"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px">Supabase未接続のため集計できません</div></div>';document.getElementById('dash-team-compare').innerHTML='';return;}
+  const cardHTML=(label,value,color)=>`<div class="card" style="margin:0"><div class="card-body" style="text-align:center;padding:16px"><div style="font-size:10px;color:var(--text3);font-weight:700;margin-bottom:4px">${label}</div><div style="font-size:24px;font-weight:800;color:${color}">${value}</div></div></div>`;
+  cards.innerHTML=cardHTML('平均達成率',s.avgRate+'%','var(--accent)')
+    +cardHTML('完了タスク',s.doneCount+'件','var(--green)')
+    +cardHTML('遅延タスク',s.lateCount+'件','var(--red)')
+    +cardHTML('対象人数',s.memberCount+'名','var(--cyan)');
+  const teams=Object.keys(s.byTeam||{});
+  if(!teams.length){document.getElementById('dash-team-compare').innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">チームデータがありません</div>';return;}
+  let h='';
+  teams.forEach(tid=>{
+    const t=s.byTeam[tid];
+    const submitRate=t.memberCount?Math.round(t.reportSubmitDays/(t.memberCount*30)*1000)/10:0;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #F3F4F6;gap:14px;flex-wrap:wrap">
+      <div style="min-width:120px;font-size:12px;font-weight:700">${t.name}</div>
+      <div style="display:flex;gap:18px;font-size:11px;color:var(--text2);flex-wrap:wrap">
+        <span>平均達成率 <b style="color:${rateColor(t.avgRate)}">${t.avgRate}%</b></span>
+        <span>遅延 <b style="color:var(--red)">${t.lateCount}件</b></span>
+        <span>完了 <b style="color:var(--green)">${t.doneCount}件</b></span>
+        <span>日報提出率 <b style="color:var(--accent)">${submitRate}%</b>（${t.reportSubmitDays}日分／${t.memberCount}名）</span>
+      </div>
+    </div>`;
+  });
+  document.getElementById('dash-team-compare').innerHTML=h;
+}
+
 /* ========== 曼荼羅モーダル ========== */
 function buildMndGrid(k){
   const d=getAllMnd()[k];if(!d)return null;
@@ -1363,7 +1715,28 @@ async function injectEvalRefs(memberId,pid){
       const sc=self&&self.csf&&self.csf[si]; const lc=leader&&leader.csf&&leader.csf[si];
       renderRef('ref-'+memberId+'-csf-'+si, '本人自己評価(CSF-'+(si+1)+')', sc&&sc.stars, sc&&sc.comment, 'リーダー評価(CSF-'+(si+1)+')', lc&&lc.stars, lc&&lc.comment, !!self, !!leader);
     }
+    window._execCommentEvalId[memberId]=leader&&leader.id||null;
+    const ecInput=document.getElementById('execcomment-input-'+memberId);
+    if(ecInput){
+      if(leader){ecInput.value=leader.execComment||'';ecInput.placeholder='リーダーの評価に対する幹部コメントを入力…';ecInput.disabled=false;}
+      else{ecInput.value='';ecInput.placeholder='リーダーがまだこのメンバーを評価していません…';ecInput.disabled=true;}
+    }
+    const ecMeta=document.getElementById('execcomment-meta-'+memberId);
+    if(ecMeta)ecMeta.textContent=(leader&&leader.execCommentedAt)?('最終保存: '+String(leader.execCommentedAt).slice(0,16).replace('T',' ')):'';
   }catch(e){console.warn('injectEvalRefs:',e);}
+}
+window._execCommentEvalId={};
+async function saveExecCommentFor(id){
+  const evalId=window._execCommentEvalId&&window._execCommentEvalId[id];
+  if(!evalId){alert('リーダーがまだこのメンバーの評価を保存していません。リーダー評価の保存後にコメントできます。');return;}
+  const API=window.VexumAPI;
+  if(!(API&&API.ready)){showToast('Supabase未接続のため保存できません');return;}
+  const v=(document.getElementById('execcomment-input-'+id)||{}).value||'';
+  const res=await API.saveExecComment(evalId,v);
+  if(res&&res.error){alert('保存失敗: '+res.error);return;}
+  const meta=document.getElementById('execcomment-meta-'+id);
+  if(meta)meta.textContent='最終保存: '+new Date().toISOString().slice(0,16).replace('T',' ');
+  showToast('✅ 幹部コメントを保存しました');
 }
 function onExecChartChange(memberId,chartId){
   window._execChartChoice[memberId]=chartId;
@@ -1408,6 +1781,14 @@ function renderMemberEval(){
         <select class="fs" style="width:auto;min-width:240px;font-size:11px;padding:5px 8px" onchange="onExecChartChange('${id}',this.value)">
           <option value="">— 読み込み中… —</option>
         </select>
+      </div>
+      <div id="execcomment-${id}" style="background:#F3E8FF;border:1px solid #9333EA;border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:#7C3AED;margin-bottom:6px">◆ 幹部コメント（リーダー評価に対するコメント）</div>
+        <textarea class="fi" rows="2" id="execcomment-input-${id}" style="resize:vertical;font-size:12px" placeholder="リーダーがまだこのメンバーを評価していません…"></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+          <span id="execcomment-meta-${id}" style="font-size:10px;color:var(--text3)"></span>
+          <button class="card-btn" onclick="saveExecCommentFor('${id}')">💾 幹部コメントを保存</button>
+        </div>
       </div>
       <div style="border-top:1px solid var(--border);padding-top:12px">`;
     if(d){
@@ -1504,6 +1885,8 @@ function vexumLogout(){
         if(typeof renderSendHistory==='function')renderSendHistory();
         if(window.VexumUI)VexumUI.refresh();
       }).catch(function(){});
+      var tasksTab=document.getElementById('tc-tasks');
+      if(tasksTab&&tasksTab.classList.contains('active')&&typeof initExecTasks==='function')initExecTasks();
     });
   }
   // 評価履歴読込

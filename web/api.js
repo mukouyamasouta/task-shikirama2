@@ -566,9 +566,10 @@
     (r.data || []).forEach(function (ev) {
       var evp = byId[ev.evaluator_id] || {};
       var item = {
-        evaluatorName: evp.full_name || '—', evaluatorRole: ev.evaluator_role,
+        id: ev.id, evaluatorName: evp.full_name || '—', evaluatorRole: ev.evaluator_role,
         period: ev.period || '', kgi: ev.kgi_stars || 0, kgiComment: ev.kgi_comment || '',
-        csf: ev.csf || [], chartId: ev.chart_id, createdAt: ev.created_at
+        csf: ev.csf || [], chartId: ev.chart_id, createdAt: ev.created_at,
+        execComment: ev.exec_comment || '', execCommentedAt: ev.exec_commented_at || null
       };
       if (ev.evaluator_id === pid) out.fromSelf.push(item);
       else if (ev.evaluator_role === 'executive') out.fromExec.push(item);
@@ -780,7 +781,8 @@
       if (!FEEDBACK[ck]) FEEDBACK[ck] = { period: ev.period, evals: [] };
       var evp = prof[ev.evaluator_id] || {};
       FEEDBACK[ck].evals.push({ role: ev.evaluator_role === 'executive' ? '幹部' : 'リーダー', name: evp.full_name || '',
-        kgi: { stars: ev.kgi_stars, comment: ev.kgi_comment }, csf: ev.csf || [] });
+        kgi: { stars: ev.kgi_stars, comment: ev.kgi_comment }, csf: ev.csf || [],
+        execComment: ev.exec_comment || '' });
     });
 
     var ASSIGNMENTS = [], ASSIGN_HISTORY = [];
@@ -1108,6 +1110,115 @@
     return null;
   }
 
+  // 幹部コメントを評価レコードに保存（評価そのものは編集しない／幹部のみが書く想定）
+  async function saveExecComment(evalId, comment) {
+    if (!sb || !evalId) return { error: '評価レコードが見つかりません' };
+    var r = await sb.from('evaluations').update({
+      exec_comment: comment || '', exec_commented_at: new Date().toISOString()
+    }).eq('id', evalId).select('id');
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    if (!r.data || r.data.length === 0) return { error: '更新できませんでした（権限不足の可能性）' };
+    return { ok: true };
+  }
+
+  // ===== 幹部画面：タスク管理（全チーム横断／teamUuid指定時はそのチームのみ） =====
+  async function loadExecOverview(teamUuid) {
+    var raw = await fetchAll(); if (!raw) return null;
+    var prof = byId(raw.profiles);
+    var teamById = byId(raw.teams);
+    var members = teamUuid ? raw.team_members.filter(function (m) { return m.team_id === teamUuid; }) : raw.team_members;
+    members = members.slice();
+    members.sort(function (a, b) { return (a.role_in_team === 'leader' ? 0 : 1) - (b.role_in_team === 'leader' ? 0 : 1); });
+    var MEMBERS = {}, DASH_IDS = [], EVAL_IDS = [];
+    members.forEach(function (m) {
+      var key = memKey(m.profile_id), p = prof[m.profile_id]; if (!key || !p) return;
+      var team = teamById[m.team_id] || { name: '' };
+      var tk = raw.tasks.filter(function (t) { return t.assignee_id === m.profile_id; });
+      var stats = {
+        done: tk.filter(function (t) { return t.status === 'done'; }).length,
+        wip: tk.filter(function (t) { return t.status === 'wip'; }).length,
+        late: tk.filter(function (t) { return t.status === 'late'; }).length
+      };
+      MEMBERS[key] = {
+        pid: p.id, name: p.full_name, role: m.role_in_team === 'leader' ? 'リーダー' : '従業員',
+        team: team.name, teamUuid: m.team_id, color: p.color, rate: m.achievement_rate || 0, stats: stats
+      };
+      DASH_IDS.push(key);
+      if (m.role_in_team !== 'leader') EVAL_IDS.push(key);
+    });
+    var MEMBER_TASKS = {};
+    raw.tasks.forEach(function (t) {
+      if (teamUuid && t.team_id !== teamUuid) return;
+      var key = memKey(t.assignee_id); if (!key || !MEMBERS[key]) return;
+      (MEMBER_TASKS[key] = MEMBER_TASKS[key] || []).push({
+        id: t.id, name: t.title, kpi: t.related_kgi || '—', start: fmtMD(t.start_date), due: fmtMD(t.due_date),
+        pri: t.priority, status: t.status, pct: t.progress || 0,
+        hours: (t.total_hours != null ? +t.total_hours : 0), period: t.period || '', teamUuid: t.team_id
+      });
+    });
+    var memberPid = {};
+    raw.profiles.forEach(function (p) { memberPid[memKey(p.id)] = p.id; });
+    var teamsList = raw.teams.map(function (t) { return { uid: t.id, name: t.name }; });
+    return { MEMBERS: MEMBERS, MEMBER_TASKS: MEMBER_TASKS, DASH_IDS: DASH_IDS, EVAL_IDS: EVAL_IDS, memberPid: memberPid, teamsList: teamsList };
+  }
+
+  // ===== 幹部画面：日報（全社員／teamUuid指定時はそのチームのみ） =====
+  async function loadAllDailyReports(teamUuid) {
+    var raw = await fetchAll(); if (!raw) return [];
+    var prof = byId(raw.profiles);
+    var teamById = byId(raw.teams);
+    var tmByProfile = {}; raw.team_members.forEach(function (m) { tmByProfile[m.profile_id] = m; });
+    var rows = raw.daily_reports;
+    if (teamUuid) rows = rows.filter(function (r) { var tm = tmByProfile[r.author_id]; return tm && tm.team_id === teamUuid; });
+    return rows.map(function (r) {
+      var p = prof[r.author_id] || {}; var tm = tmByProfile[r.author_id]; var team = tm ? teamById[tm.team_id] : null;
+      return {
+        id: r.id, authorPid: r.author_id, authorName: p.full_name || '—',
+        teamName: team ? team.name : '（未所属）', teamUuid: tm ? tm.team_id : null,
+        date: r.report_date, hours: r.hours, done: r.done, plan: r.plan, issue: r.issue, cond: r.condition
+      };
+    }).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
+  }
+
+  // ===== 幹部画面：ダッシュボード集計（teamUuid/期間指定時は絞り込み＋チーム別比較） =====
+  async function loadDashboardStats(teamUuid, fromDate, toDate) {
+    var raw = await fetchAll(); if (!raw) return null;
+    var tmByProfile = {}; raw.team_members.forEach(function (m) { tmByProfile[m.profile_id] = m; });
+    var inRange = function (d) { if (!d) return false; if (fromDate && d < fromDate) return false; if (toDate && d > toDate) return false; return true; };
+    var tmsAll = teamUuid ? raw.team_members.filter(function (m) { return m.team_id === teamUuid; }) : raw.team_members;
+    var tasksAll = raw.tasks.filter(function (t) {
+      if (teamUuid && t.team_id !== teamUuid) return false;
+      if (!fromDate && !toDate) return true;
+      var d = t.completed_date || t.due_date || t.start_date;
+      return inRange(d);
+    });
+    var reportsAll = raw.daily_reports.filter(function (r) {
+      var tm = tmByProfile[r.author_id];
+      if (teamUuid && (!tm || tm.team_id !== teamUuid)) return false;
+      return inRange(r.report_date);
+    });
+    var done = tasksAll.filter(function (t) { return t.status === 'done'; }).length;
+    var late = tasksAll.filter(function (t) { return t.status === 'late'; }).length;
+    var avgRate = tmsAll.length ? Math.round(tmsAll.reduce(function (a, m) { return a + (m.achievement_rate || 0); }, 0) / tmsAll.length) : 0;
+    var byTeam = {};
+    raw.teams.forEach(function (t) {
+      if (teamUuid && t.id !== teamUuid) return;
+      var tms = raw.team_members.filter(function (m) { return m.team_id === t.id; });
+      var tks = raw.tasks.filter(function (x) { return x.team_id === t.id && (!fromDate && !toDate || inRange(x.completed_date || x.due_date || x.start_date)); });
+      var reps = raw.daily_reports.filter(function (r) { var tm = tmByProfile[r.author_id]; return tm && tm.team_id === t.id && inRange(r.report_date); });
+      byTeam[t.id] = {
+        name: t.name,
+        avgRate: tms.length ? Math.round(tms.reduce(function (a, m) { return a + (m.achievement_rate || 0); }, 0) / tms.length) : 0,
+        lateCount: tks.filter(function (x) { return x.status === 'late'; }).length,
+        doneCount: tks.filter(function (x) { return x.status === 'done'; }).length,
+        taskCount: tks.length,
+        reportSubmitDays: new Set(reps.map(function (r) { return r.author_id + '|' + r.report_date; })).size,
+        memberCount: tms.length
+      };
+    });
+    return { avgRate: avgRate, doneCount: done, lateCount: late, taskCount: tasksAll.length, memberCount: tmsAll.length, reportCount: reportsAll.length, byTeam: byTeam };
+  }
+
   window.VexumAPI = {
     ready: ready,
     sb: sb,
@@ -1156,6 +1267,10 @@
     deleteSend: deleteSend,
     subscribeLive: subscribeLive,
     currentProfile: currentProfile,
+    saveExecComment: saveExecComment,
+    loadExecOverview: loadExecOverview,
+    loadAllDailyReports: loadAllDailyReports,
+    loadDashboardStats: loadDashboardStats,
     TEAM_KEY: TEAM_KEY,
     MEMBER_KEY: MEMBER_KEY
   };

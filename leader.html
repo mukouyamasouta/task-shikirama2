@@ -998,6 +998,7 @@ async function _evalRecDetail(){
             <div style="font-size:11px;font-weight:800;color:#92400E">🎯 KGI <span style="color:var(--amber);letter-spacing:1px;margin-left:6px">${starStr(ev.kgi)}</span></div>
             ${ev.kgiComment?`<div style="font-size:11px;color:var(--text2);margin-top:3px">💬 ${ev.kgiComment}</div>`:''}
           </div>
+          ${ev.execComment?`<div style="margin-bottom:10px;padding:8px 10px;background:#F3E8FF;border:1px solid #9333EA;border-radius:6px"><div style="font-size:11px;font-weight:800;color:#7C3AED">◆ 幹部コメント</div><div style="font-size:11px;color:#581C87;margin-top:3px">💬 ${ev.execComment}</div></div>`:''}
           <div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:4px">CSF評価（${csfArr.length}項目）</div>`;
       if(!csfArr.length)h+=`<div style="font-size:11px;color:var(--text3)">CSF評価は記録されていません</div>`;
       csfArr.forEach((c,i)=>{
