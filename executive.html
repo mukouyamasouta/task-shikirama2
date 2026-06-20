@@ -50,6 +50,19 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 .card-btn{font-size:11px;color:var(--accent);font-weight:600;background:var(--accent-l);padding:4px 10px;border-radius:5px;border:none;cursor:pointer;font-family:inherit}
 .card-body{padding:14px 18px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.stat-card{background:var(--card);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--shadow);padding:18px}
+.s-lbl{font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+.s-val{font-size:28px;font-weight:800;line-height:1}
+.s-trend{font-size:10px;font-weight:600;margin-top:6px}.up{color:var(--green)}.down{color:var(--red)}
+.team-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.team-row:last-child{border-bottom:none}
+.tname{font-size:12px;font-weight:600;min-width:90px;flex:1}
+.b-manager{background:rgba(245,158,11,.12);color:var(--amber)}
+.b-employee{background:rgba(16,185,129,.12);color:var(--green)}
+.seg{display:inline-flex;background:var(--accent-l);border-radius:7px;padding:2px;gap:2px}
+.seg-btn{border:none;background:none;font-family:inherit;font-size:11px;font-weight:700;color:var(--text2);padding:6px 12px;border-radius:5px;cursor:pointer}
+.seg-btn.active{background:var(--card);color:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .pw{display:flex;align-items:center;gap:8px}
 .pt{flex:1;height:6px;background:#F3F4F6;border-radius:3px;overflow:hidden}
 .pf{height:100%;border-radius:3px}
@@ -134,25 +147,25 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="sb-user" id="sb-user" onclick="openSelfModal()" style="cursor:pointer" title="クリックでプロフィール編集"><div class="sb-uname" id="sb-uname">（読み込み中）</div><div class="sb-uemail" id="sb-uemail">—</div><button onclick="event.stopPropagation();vexumLogout()" style="margin-top:6px;font-size:10px;color:var(--text3);background:none;border:1px solid var(--sb-border);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit">⎋ ログアウト</button></div>
   <div class="sb-nav">
     <div class="sb-sec">幹部コンソール</div>
-    <button class="sb-item active" onclick="swTab('users',this)"><span class="sb-icon">👤</span>アカウント管理</button>
+    <button class="sb-item active" onclick="swTab('dashboard',this);initExecDashboard()"><span class="sb-icon">📈</span>ダッシュボード</button>
+    <button class="sb-item" onclick="swTab('users',this)"><span class="sb-icon">👤</span>アカウント管理</button>
     <button class="sb-item" onclick="swTab('send',this);initSendForm();renderSendHistory()"><span class="sb-icon">◎</span>チャート送信</button>
     <button class="sb-item" onclick="swTab('tasks',this);initExecTasks()"><span class="sb-icon">📋</span>タスク管理</button>
     <button class="sb-item" onclick="swTab('eval',this);renderTeamEval();renderMemberEval()"><span class="sb-icon">★</span>一覧・評価</button>
     <button class="sb-item" onclick="swTab('report',this);initExecReports()"><span class="sb-icon">📅</span>日報</button>
-    <button class="sb-item" onclick="swTab('dashboard',this);initExecDashboard()"><span class="sb-icon">📈</span>ダッシュボード</button>
   </div>
   <div class="sb-footer">v2.4.1 © 2025 VEXUM Inc.</div>
 </aside>
 
 <div class="main">
   <div class="topbar">
-    <div><div class="topbar-title" id="tb-title">アカウント管理</div><div class="topbar-path" id="tb-path">幹部コンソール / アカウント管理</div></div>
+    <div><div class="topbar-title" id="tb-title">ダッシュボード</div><div class="topbar-path" id="tb-path">幹部コンソール / ダッシュボード</div></div>
     <div class="topbar-actions"><button class="tb-icon">🔔</button><button class="tb-icon">⚙</button></div>
   </div>
   <div class="content">
 
 <!-- アカウント管理 -->
-<div id="tc-users" class="tab-content active">
+<div id="tc-users" class="tab-content">
   <div class="sec-title">アカウント管理
     <div style="display:flex;gap:8px">
       <button class="f-submit" style="padding:8px 16px;font-size:12px" onclick="openAccModal()">＋ アカウント発行</button>
@@ -343,32 +356,38 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 </div>
 
 <!-- ダッシュボード（全社員集計） -->
-<div id="tc-dashboard" class="tab-content">
-  <div class="sec-title">ダッシュボード <span style="font-size:12px;font-weight:400;color:var(--text3)">全社・全従業員の達成率・進捗をチーム横断で確認</span></div>
+<div id="tc-dashboard" class="tab-content active">
+  <div class="sec-title">全社ダッシュボード <span style="font-size:12px;font-weight:400;color:var(--text3)">全チーム・全従業員の達成率・進捗を確認</span></div>
+  <!-- 絞り込みバー -->
   <div class="card" style="margin-bottom:16px">
-    <div class="card-body" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
+    <div class="card-body" style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
       <div style="min-width:170px"><label class="fl">チーム</label><select class="fs" id="dash-team-sel" onchange="onDashTeamChange()"><option value="">全チーム</option></select></div>
-      <div style="min-width:160px"><label class="fl">担当者</label><select class="fs" id="dash-assignee-sel"><option value="">全員</option></select></div>
-      <div style="min-width:150px"><label class="fl">期間</label><select class="fs" id="dash-period-sel" onchange="onDashPeriodChange()">
-        <option value="thisweek">今週</option><option value="thismonth" selected>今月</option><option value="lastmonth">先月</option><option value="custom">カスタム日付範囲</option>
-      </select></div>
+      <div style="min-width:170px"><label class="fl">担当者</label><select class="fs" id="dash-assignee-sel"><option value="">全員</option></select></div>
+      <div>
+        <label class="fl">期間</label>
+        <div class="seg" id="dash-period-seg">
+          <button class="seg-btn" data-period="thisweek" onclick="setDashPeriod('thisweek',this)">今週</button>
+          <button class="seg-btn active" data-period="thismonth" onclick="setDashPeriod('thismonth',this)">今月</button>
+          <button class="seg-btn" data-period="lastmonth" onclick="setDashPeriod('lastmonth',this)">先月</button>
+          <button class="seg-btn" data-period="custom" onclick="setDashPeriod('custom',this)">カスタム</button>
+        </div>
+      </div>
       <div id="dash-custom-range" style="display:none;gap:10px;align-items:flex-end">
         <div><label class="fl">開始日</label><input class="fi" type="date" id="dash-date-from"></div>
         <div><label class="fl">終了日</label><input class="fi" type="date" id="dash-date-to"></div>
       </div>
-      <button class="f-submit" style="padding:8px 18px;font-size:12px" onclick="applyDashFilter()">絞り込む</button>
+      <button class="f-submit" style="padding:9px 20px;font-size:12px" onclick="applyDashFilter()">絞り込む</button>
       <button class="card-btn" onclick="resetDashFilter()">リセット</button>
     </div>
   </div>
-  <div id="dash-summary-cards" class="g4" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px"></div>
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-hd"><div class="card-title">メンバー進捗</div><div class="card-sub" id="dash-member-sub">全チーム・全員</div></div>
-    <div class="card-body" id="dash-member-table" style="padding:0"></div>
+  <!-- KPIサマリ（4枚） -->
+  <div class="g4" id="dash-stat-cards"></div>
+  <!-- 説明バナー -->
+  <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
+    <span style="font-size:14px">💡</span><span>全チーム・全従業員の個人ダッシュボードと曼荼羅チャートを確認できます。「📊 個人DB」で詳細、「🧿 曼荼羅」でチャートを表示します。</span>
   </div>
-  <div class="card">
-    <div class="card-hd"><div class="card-title">チーム別比較</div><div class="card-sub">平均達成率・遅延件数・日報提出率</div></div>
-    <div class="card-body" id="dash-team-compare" style="padding:0"></div>
-  </div>
+  <!-- メンバーカード（チーム名つき） -->
+  <div class="g2" id="dash-members"></div>
 </div>
 
   </div><!-- /content -->
@@ -1400,12 +1419,11 @@ function showExecReportDetail(ds){
   document.getElementById('exec-report-detail').innerHTML=h;
 }
 
-/* ========== ダッシュボード（全社・全従業員集計 ＝ リーダー画面と同仕様＋全社対応） ========== */
+/* ========== 全社ダッシュボード（リーダー画面と同デザイン＋全社対応＋絞り込み） ========== */
 let _dashStats=null;
+let _dashPeriod='thismonth';
 function dashDateRange(){
-  const sel=(document.getElementById('dash-period-sel')||{}).value||'thismonth';
-  const wrap=document.getElementById('dash-custom-range');
-  if(wrap)wrap.style.display=(sel==='custom')?'flex':'none';
+  const sel=_dashPeriod||'thismonth';
   const today=new Date();
   const ymd=d=>d.toISOString().slice(0,10);
   if(sel==='thisweek'){
@@ -1422,8 +1440,13 @@ function dashDateRange(){
     return {from:val('dash-date-from')||null,to:val('dash-date-to')||null};
   }
 }
-// 期間プルダウン変更時はカスタム範囲の表示だけ切り替え（適用は「絞り込む」ボタン）
-function onDashPeriodChange(){const wrap=document.getElementById('dash-custom-range');const sel=(document.getElementById('dash-period-sel')||{}).value;if(wrap)wrap.style.display=(sel==='custom')?'flex':'none';}
+// 期間セグメントボタン：選択を切り替え、カスタム時のみ日付ピッカーを表示（適用は「絞り込む」）
+function setDashPeriod(p,btn){
+  _dashPeriod=p;
+  document.querySelectorAll('#dash-period-seg .seg-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  const wrap=document.getElementById('dash-custom-range');if(wrap)wrap.style.display=(p==='custom')?'flex':'none';
+}
 // チーム変更時：担当者プルダウンをそのチームのメンバーに更新
 function onDashTeamChange(){populateDashAssignee();}
 function populateDashAssignee(){
@@ -1453,13 +1476,14 @@ async function applyDashFilter(){
   const teamUid=(document.getElementById('dash-team-sel')||{}).value||'';
   if(API&&API.ready){
     const {from,to}=dashDateRange();
-    _dashStats=await API.loadDashboardStats(teamUid||null,from,to);
+    try{_dashStats=await API.loadDashboardStats(teamUid||null,from,to);}catch(e){_dashStats=null;}
   }
   renderExecDashboard();
 }
 function resetDashFilter(){
   const t=document.getElementById('dash-team-sel');if(t)t.value='';
-  const p=document.getElementById('dash-period-sel');if(p)p.value='thismonth';
+  _dashPeriod='thismonth';
+  document.querySelectorAll('#dash-period-seg .seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.period==='thismonth'));
   const cr=document.getElementById('dash-custom-range');if(cr)cr.style.display='none';
   const df=document.getElementById('dash-date-from');if(df)df.value='';
   const dt=document.getElementById('dash-date-to');if(dt)dt.value='';
@@ -1480,58 +1504,43 @@ function renderExecDashboard(){
   const teamUid=(document.getElementById('dash-team-sel')||{}).value||'';
   const asgId=(document.getElementById('dash-assignee-sel')||{}).value||'';
   const teamName=(EXEC_OV.teamsList.find(t=>t.uid===teamUid)||{}).name||'';
-  const scopeLabel=asgId?(EXEC_OV.MEMBERS[asgId]||{}).name:(teamUid?teamName:'全社');
-  const cards=document.getElementById('dash-summary-cards');
-  const cardHTML=(label,value,color)=>`<div class="card" style="margin:0"><div class="card-body" style="text-align:center;padding:16px"><div style="font-size:10px;color:var(--text3);font-weight:700;margin-bottom:4px">${label}</div><div style="font-size:24px;font-weight:800;color:${color}">${value}</div></div></div>`;
-  // KPIカード：チーム＋担当者でフロントエンド絞り込みしたメンバー集合から再集計
+  const scopePrefix=asgId?'担当者':(teamUid?'チーム':'全社');
   const fm=dashFilteredMembers();
-  if(!fm.length&&!(_dashStats)){cards.innerHTML='<div class="card" style="margin:0"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px">Supabase未接続のため集計できません</div></div>';document.getElementById('dash-team-compare').innerHTML='';document.getElementById('dash-member-table').innerHTML='';return;}
-  const avgRate=fm.length?Math.round(fm.reduce((a,[id,m])=>a+(m.rate||0),0)/fm.length):0;
-  let doneC=0,lateC=0;
-  fm.forEach(([id,m])=>{const st=m.stats||{};doneC+=st.done||0;lateC+=st.late||0;});
-  cards.innerHTML=cardHTML((asgId?'担当者の達成率':teamUid?'チームの平均達成率':'全社の平均達成率'),avgRate+'%','var(--accent)')
-    +cardHTML('完了タスク',doneC+'件','var(--green)')
-    +cardHTML('遅延タスク',lateC+'件','var(--red)')
-    +cardHTML('対象人数',fm.length+'名','var(--cyan)');
-  // メンバー進捗テーブル（チーム名カラムあり）
-  renderDashMemberTable(fm,scopeLabel);
-  // チーム別比較（期間反映・サーバ集計）
-  const s=_dashStats;
-  const tc=document.getElementById('dash-team-compare');
-  if(!s||!Object.keys(s.byTeam||{}).length){tc.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">チームデータがありません</div>';return;}
+  const stat=document.getElementById('dash-stat-cards');
+  const members=document.getElementById('dash-members');
+  if(!fm.length){
+    stat.innerHTML='';
+    members.innerHTML='<div class="card" style="grid-column:1/3"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:24px">'+((window.VexumAPI&&window.VexumAPI.ready)?'該当するメンバーがいません':'Supabase未接続のため集計できません')+'</div></div>';
+    return;
+  }
+  // ===== KPIサマリ4枚（リーダーと同じ stat-card デザイン・全社集計） =====
+  // チーム＋期間はサーバ集計(_dashStats)を優先、担当者選択時はそのメンバーで再計算
+  let avgRate,doneC,lateC,cnt;
+  if(_dashStats&&!asgId){
+    avgRate=_dashStats.avgRate;doneC=_dashStats.doneCount;lateC=_dashStats.lateCount;cnt=_dashStats.memberCount;
+  }else{
+    avgRate=Math.round(fm.reduce((a,[id,m])=>a+(m.rate||0),0)/fm.length);
+    doneC=0;lateC=0;cnt=fm.length;
+    fm.forEach(([id,m])=>{const st=m.stats||{};doneC+=st.done||0;lateC+=st.late||0;});
+  }
+  const statCard=(lbl,val,color,trend)=>`<div class="stat-card"><div class="s-lbl">${lbl}</div><div class="s-val"${color?` style="color:${color}"`:''}>${val}</div><div class="s-trend" style="color:var(--text3)">${trend||''}</div></div>`;
+  stat.innerHTML=statCard(scopePrefix+'平均達成率',avgRate+'%','var(--accent)',scopePrefix==='全社'?'全チーム横断':teamName||'')
+    +statCard('対象人数',cnt+'名','',scopePrefix==='全社'?'全従業員':(scopePrefix==='チーム'?teamName:''))
+    +statCard('完了タスク',doneC,'var(--green)','')
+    +statCard('遅延タスク',lateC,'var(--red)','');
+  // ===== メンバーカード（リーダーと同じ .g2 カード・チーム名つき） =====
   let h='';
-  Object.keys(s.byTeam).forEach(tid=>{
-    const t=s.byTeam[tid];
-    const submitRate=t.memberCount?Math.round(t.reportSubmitDays/(t.memberCount*30)*1000)/10:0;
-    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #F3F4F6;gap:14px;flex-wrap:wrap">
-      <div style="min-width:120px;font-size:12px;font-weight:700">${t.name}</div>
-      <div style="display:flex;gap:18px;font-size:11px;color:var(--text2);flex-wrap:wrap">
-        <span>平均達成率 <b style="color:${rateColor(t.avgRate)}">${t.avgRate}%</b></span>
-        <span>遅延 <b style="color:var(--red)">${t.lateCount}件</b></span>
-        <span>完了 <b style="color:var(--green)">${t.doneCount}件</b></span>
-        <span>日報提出率 <b style="color:var(--accent)">${submitRate}%</b>（${t.reportSubmitDays}日分／${t.memberCount}名）</span>
-      </div>
-    </div>`;
-  });
-  tc.innerHTML=h;
-}
-function renderDashMemberTable(fm,scopeLabel){
-  const el=document.getElementById('dash-member-table');if(!el)return;
-  const sub=document.getElementById('dash-member-sub');if(sub)sub.textContent=(scopeLabel||'全社')+' ／ '+fm.length+'名';
-  if(!fm.length){el.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">該当するメンバーがいません</div>';return;}
-  let h=`<div style="display:grid;grid-template-columns:1.4fr 1fr 1.4fr auto auto;gap:8px;padding:8px 16px;background:#FAFCFC;border-bottom:1px solid var(--border);font-size:10px;font-weight:700;color:var(--text3)">
-    <div>メンバー</div><div>チーム名</div><div>達成率</div><div style="text-align:center">完了/進行/遅延</div><div></div></div>`;
   fm.sort((a,b)=>(b[1].rate||0)-(a[1].rate||0)).forEach(([id,m])=>{
-    const st=m.stats||{};const col=rateColor(m.rate||0);
-    h+=`<div style="display:grid;grid-template-columns:1.4fr 1fr 1.4fr auto auto;gap:8px;align-items:center;padding:9px 16px;border-bottom:1px solid #F3F4F6">
-      <div style="font-size:12px;font-weight:600;min-width:0;display:flex;align-items:center;gap:6px"><span class="tdot" style="display:inline-block;background:${m.color||'#9CA3AF'}"></span><span>${m.name} <span style="font-size:9px;color:var(--text3)">${m.role||''}</span></span></div>
-      <div style="font-size:11px;color:var(--text2)">${m.team||'—'}</div>
-      <div class="pw" style="max-width:160px"><div class="pt"><div class="pf" style="width:${m.rate||0}%;background:${col}"></div></div><div class="pp" style="color:${col}">${m.rate||0}%</div></div>
-      <div style="font-size:10px;color:var(--text2);text-align:center;white-space:nowrap">${st.done||0} / ${st.wip||0} / ${st.late||0}</div>
-      <div><button class="card-btn" onclick="openExecMemberDash('${id}')">📊 個人DB</button></div>
-    </div>`;
+    const col=rateColor(m.rate||0);const st=m.stats||{};
+    const kpis=m.kpis||[];
+    h+=`<div class="card"><div class="card-hd" style="border-left:4px solid ${m.color||'#9CA3AF'}"><div><div class="card-title">${m.name} <span class="badge ${m.role==='リーダー'?'b-manager':'b-employee'}" style="margin-left:4px">${m.role||''}</span></div><div class="card-sub">${m.team||'—'}</div></div><span style="font-size:20px;font-weight:800;color:${col}">${m.rate||0}%</span></div><div class="card-body" style="padding:10px 14px">`;
+    kpis.forEach(kp=>{const c=kp.p>=80?'var(--green)':kp.p>=50?'var(--amber)':'var(--accent)';h+=`<div class="team-row" style="padding:6px 0"><div class="tname" style="font-size:11px">${kp.n}</div><div class="pw" style="max-width:160px"><div class="pt"><div class="pf" style="width:${kp.p}%;background:${c}"></div></div><div class="pp" style="color:${c}">${kp.p}%</div></div></div>`;});
+    if(!kpis.length)h+=`<div style="font-size:10px;color:var(--text3);padding:6px 0">CSF/KPIデータがありません</div>`;
+    const kpiEditCnt=m.memberKpiEdits?Object.keys(m.memberKpiEdits).length:0;
+    const kpiEditBadge=kpiEditCnt>0?`<span style="font-size:9px;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;padding:2px 7px;border-radius:10px;font-weight:700">✏ KPI編集 ${kpiEditCnt}件</span>`:'';
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:10px;color:var(--text3)">完了 ${st.done||0} ・ 進行 ${st.wip||0} ・ 遅延 ${st.late||0}</span>${kpiEditBadge}</div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openExecMemberDash('${id}')">📊 個人DB</button><button class="card-btn" onclick="openMandala('${id}')">🧿 曼荼羅</button></div></div></div></div>`;
   });
-  el.innerHTML=h;
+  members.innerHTML=h;
 }
 // 個人DB（個人ダッシュボード）— チャート由来タスクのみ表示
 async function openExecMemberDash(id){
@@ -1991,6 +2000,7 @@ function toggleExecEvalMnd(id,forceRerender){
 
 /* ========== 初期化 ========== */
 renderAccount();
+initExecDashboard();
 </script>
 
 <!-- ===== Supabase 連携（未設定時は上の内蔵デモデータのまま動作） ===== -->
@@ -2038,6 +2048,7 @@ function vexumLogout(){
     if(typeof renderAccount==='function') renderAccount();
     if(typeof renderTeamEval==='function') renderTeamEval();
     if(typeof renderMemberEval==='function') renderMemberEval();
+    if(typeof initExecDashboard==='function') initExecDashboard();
     console.log('[VEXUM] Supabaseデータを反映しました');
   }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:', e); });
   // 自分のプロフィールをサイドバーに反映

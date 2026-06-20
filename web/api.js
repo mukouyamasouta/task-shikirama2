@@ -1136,6 +1136,9 @@
     var members = teamUuid ? raw.team_members.filter(function (m) { return m.team_id === teamUuid; }) : raw.team_members;
     members = members.slice();
     members.sort(function (a, b) { return (a.role_in_team === 'leader' ? 0 : 1) - (b.role_in_team === 'leader' ? 0 : 1); });
+    // メンバーの主チャート（個人曼荼羅）を owner_user_id で引けるように
+    var chartByUser = {};
+    raw.mandala_charts.forEach(function (c) { if (c.owner_type === 'user' && c.id.indexOf('_q2') < 0) chartByUser[c.owner_user_id] = c; });
     var MEMBERS = {}, DASH_IDS = [], EVAL_IDS = [];
     members.forEach(function (m) {
       var key = memKey(m.profile_id), p = prof[m.profile_id]; if (!key || !p) return;
@@ -1146,9 +1149,20 @@
         wip: tk.filter(function (t) { return t.status === 'wip'; }).length,
         late: tk.filter(function (t) { return t.status === 'late'; }).length
       };
+      var c = chartByUser[m.profile_id] || { subs: [], acts: [], center: '' };
+      // KPI進捗 = そのCSFに紐づくタスクの平均進捗（タスクが無いCSFは達成率で代替）— リーダー画面と同ロジック
+      var kpis = (c.subs || []).slice(0, 4).map(function (s) {
+        var rel = tk.filter(function (t) { return t.related_kgi === s; });
+        var pp = rel.length
+          ? Math.round(rel.reduce(function (a, t) { return a + (t.progress || 0); }, 0) / rel.length)
+          : (m.achievement_rate || 0);
+        return { n: s, p: Math.max(0, Math.min(100, pp)) };
+      });
       MEMBERS[key] = {
         pid: p.id, name: p.full_name, role: m.role_in_team === 'leader' ? 'リーダー' : '従業員',
-        team: team.name, teamUuid: m.team_id, color: p.color, rate: m.achievement_rate || 0, stats: stats
+        team: team.name, teamUuid: m.team_id, color: p.color, rate: m.achievement_rate || 0, stats: stats,
+        kpis: kpis, memberKpiEdits: c.member_kpi_edits || {},
+        center: c.center || '', subs: c.subs || [], acts: c.acts || []
       };
       DASH_IDS.push(key);
       if (m.role_in_team !== 'leader') EVAL_IDS.push(key);
