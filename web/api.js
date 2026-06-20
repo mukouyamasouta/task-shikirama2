@@ -1228,9 +1228,12 @@
 
   // ===== 評価管理タブ共通: 曼荼羅形式で進捗%を表示・CSFクリックでKPI展開 =====
   // chart: {center, subs:[8], acts:[8][8]} / edits: mandala_charts.member_kpi_edits 形式 { 'si-ai': {progress, ...} }
-  function renderEvalMandala(chart, edits, containerEl) {
+  function renderEvalMandala(chart, edits, containerEl, opts) {
     if (!chart || !containerEl) return;
     edits = edits || {};
+    opts = opts || {};
+    var evalData = opts.evalData || null;
+    containerEl.__cellClick = opts.onCellClick || null;
     var SP_MAP = [
       { cr: 3, cc: 3, oc: [1, 1], si: 0 }, { cr: 3, cc: 4, oc: [1, 4], si: 1 }, { cr: 3, cc: 5, oc: [1, 7], si: 2 },
       { cr: 4, cc: 3, oc: [4, 1], si: 3 }, { cr: 4, cc: 5, oc: [4, 7], si: 4 },
@@ -1275,22 +1278,28 @@
       var txt = '', badge = '', onclick = '';
       if (!meta) { sty += 'background:#fff;'; }
       else if (meta.type === 'center') {
-        sty += 'background:#0D9488;color:#fff;font-weight:800;';
+        sty += 'background:#0D9488;color:#fff;font-weight:800;' + (containerEl.__cellClick ? 'cursor:pointer;' : '');
         txt = (chart.center || '').slice(0, 10);
+        if (evalData) {
+          var kgiTxt = (evalData.submitted && evalData.kgi) ? ('★' + evalData.kgi) : '未評価';
+          badge = '<span style="position:absolute;bottom:1px;right:2px;font-size:10px;font-weight:800">' + kgiTxt + '</span>';
+        }
+        if (containerEl.__cellClick) onclick = ' onclick="var _c=this.closest(\'[data-eval-mnd]\');_c.__cellClick&&_c.__cellClick(\'kgi\',0,0)"';
       } else if (meta.type === 'sub') {
         var pct = csfProgress(meta.si); var col = colorOf(pct);
         sty += 'background:' + col.bg + ';color:' + col.fg + ';font-weight:700;border:1.5px solid ' + col.bd + ';cursor:pointer;';
         txt = ((chart.subs || [])[meta.si] || '').slice(0, 8);
         badge = '<span style="position:absolute;bottom:1px;right:2px;font-size:7px;font-weight:800">' + pct + '%</span>';
-        onclick = ' onclick="this.closest(\'[data-eval-mnd]\').__toggleCsf(' + meta.si + ')"';
+        onclick = ' onclick="var _c=this.closest(\'[data-eval-mnd]\');_c.__toggleCsf(' + meta.si + ');_c.__cellClick&&_c.__cellClick(\'csf\',' + meta.si + ',0)"';
       } else {
         var visible = !!expanded[meta.si];
         if (!visible) { sty += 'background:#F9FAFB;color:#E5E7EB;'; }
         else {
           var apct = progressOf(meta.si, meta.ai); var acol = colorOf(apct);
-          sty += 'background:' + acol.bg + ';color:' + acol.fg + ';border:1px solid ' + acol.bd + ';';
+          sty += 'background:' + acol.bg + ';color:' + acol.fg + ';border:1px solid ' + acol.bd + ';' + (containerEl.__cellClick ? 'cursor:pointer;' : '');
           txt = (((chart.acts || [])[meta.si] || [])[meta.ai] || '').slice(0, 8);
           badge = '<span style="position:absolute;bottom:0;right:2px;font-size:6.5px;font-weight:700">' + apct + '%</span>';
+          if (containerEl.__cellClick) onclick = ' onclick="var _c=this.closest(\'[data-eval-mnd]\');_c.__cellClick&&_c.__cellClick(\'kpi\',' + meta.si + ',' + meta.ai + ')"';
         }
       }
       html += '<div style="' + sty + '"' + onclick + '>' + txt + badge + '</div>';
@@ -1300,7 +1309,7 @@
     containerEl.innerHTML = html;
     containerEl.__toggleCsf = function (si) {
       expanded[si] = !expanded[si];
-      renderEvalMandala(chart, edits, containerEl);
+      renderEvalMandala(chart, edits, containerEl, opts);
     };
   }
 

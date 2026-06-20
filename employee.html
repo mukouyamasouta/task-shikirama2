@@ -294,6 +294,16 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
   </div>
 
+  <div id="eval-detail-modal" onclick="if(event.target===this)closeEvalDetailModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
+    <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:460px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div id="edm-title" style="font-size:15px;font-weight:800;color:var(--accent)"></div>
+        <button onclick="closeEvalDetailModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+      </div>
+      <div id="edm-body" style="font-size:12px;color:var(--text2);line-height:1.6"></div>
+    </div>
+  </div>
+
   <!-- コントロールバー -->
   <div class="eval-select-bar">
     <div style="flex:1;min-width:220px">
@@ -1332,25 +1342,119 @@ async function submitSelfEval(isSubmit){
     const res=await API.upsertSelfEval({chartId,period,kgi:_seStars,kgiComment:comment,csf:csfArr,submitted:!!isSubmit});
     if(res&&res.error){alert('保存失敗: '+res.error);return;}
   }
+  _evalDataCache={};
   if(isSubmit){alert('✅ 提出しました。リーダー・幹部画面に反映されます。');closeSelfEval();}
   else{alert('💾 下書きを保存しました。引き続き編集できます。');await loadExistingSelfEval();}
+  if(document.getElementById('tc-reviews').classList.contains('active'))renderEval();
 }
 
+let _evalDataCache={};   // chartKey -> {kgi,kgiComment,csf:[{stars,comment}],submitted} | null
+function evalDbId(k,d){return (d&&d.dbId)||(k==='self_q3'?'user_nakamura':k==='self_q2'?'user_nakamura_q2':k);}
 function renderEval(){
   const k=evalChartKey;const d=getAllMnd()[k];
   if(!d)return;
   if(!evalStates[k])evalStates[k]={};
   document.getElementById('eval-pct-big').textContent=getEvalProgress(k)+'%';
+  closeEvalDetailModal();
   const con=document.getElementById('eval-container');
   if(evalView==='mandala'){
-    con.innerHTML=`<div class="card"><div class="card-hd"><div><div class="card-title">${d.name} <span style="font-size:10px;color:var(--text3);font-weight:400">${d.scopeLabel}</span> <span style="font-size:11px;color:var(--accent);font-weight:700">（${d.period||''}）</span></div><div class="card-sub">KGI: ${(d.center||'').replace(/\n/,' ')} ／ CSFセルをクリックでKPIの進捗%を展開</div></div><button class="card-btn" onclick="openMandala('${k}',true)">⛶ 全画面で評価</button></div><div class="card-body"><div style="overflow-x:auto" id="eval-mnd-wrap"></div></div></div>`;
-    const API=window.VexumAPI;
-    if(API&&API.renderEvalMandala)API.renderEvalMandala(d,d.memberKpiEdits||{},document.getElementById('eval-mnd-wrap'));
+    con.innerHTML=`<div class="card"><div class="card-hd"><div><div class="card-title">${d.name} <span style="font-size:10px;color:var(--text3);font-weight:400">${d.scopeLabel}</span> <span style="font-size:11px;color:var(--accent);font-weight:700">（${d.period||''}）</span></div><div class="card-sub">KGI: ${(d.center||'').replace(/\n/,' ')} ／ セルをクリックで評価詳細を表示</div></div><button class="card-btn" onclick="openMandala('${k}',true)">⛶ 全画面で評価</button></div><div class="card-body"><div style="overflow-x:auto" id="eval-mnd-wrap"></div></div></div>`;
+    renderEvalMndOverlay(k,d);
   }else{
     con.innerHTML=renderEvalBar(k);
   }
   renderFeedback(k);
 }
+async function renderEvalMndOverlay(k,d){
+  const API=window.VexumAPI;if(!(API&&API.renderEvalMandala))return;
+  const wrap=document.getElementById('eval-mnd-wrap');if(!wrap)return;
+  const draw=()=>{
+    const wrap2=document.getElementById('eval-mnd-wrap');
+    if(!wrap2||evalChartKey!==k||evalView!=='mandala')return;
+    API.renderEvalMandala(d,d.memberKpiEdits||{},wrap2,{
+      evalData:_evalDataCache[k]||null,
+      onCellClick:(kind,si,ai)=>onEvalMndCellClick(k,kind,si,ai)
+    });
+  };
+  draw();
+  if(API.ready&&!(k in _evalDataCache)){
+    try{ _evalDataCache[k]=await API.loadMySelfEval(evalDbId(k,d)); }catch(e){ _evalDataCache[k]=null; }
+    draw();
+  }
+}
+function evalCsfProgress(edits,si){let s=0;for(let ai=0;ai<8;ai++){const e=edits[si+'-'+ai];s+=e&&e.progress!=null?Math.round(+e.progress):0;}return Math.round(s/8);}
+function evalKgiProgress(edits){let s=0;for(let si=0;si<8;si++)s+=evalCsfProgress(edits,si);return Math.round(s/8);}
+function evalColorOf(pct){
+  if(pct>=100)return{bg:'#D1FAE5',fg:'#065F46'};
+  if(pct>=50)return{bg:'#DBEAFE',fg:'#1E40AF'};
+  if(pct>=1)return{bg:'#FEF3C7',fg:'#92400E'};
+  return{bg:'#F3F4F6',fg:'#6B7280'};
+}
+function evalBar(pct,color){return `<div style="display:flex;align-items:center;gap:8px;margin:4px 0 10px"><div style="flex:1;height:8px;background:#F3F4F6;border-radius:4px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${color}"></div></div><div style="font-size:12px;font-weight:800;color:${color};min-width:34px;text-align:right">${pct}%</div></div>`;}
+function evalStars(n){let h='';for(let i=1;i<=5;i++)h+=`<span style="color:${i<=n?'#F59E0B':'#D1D5DB'}">★</span>`;return h;}
+function onEvalMndCellClick(k,kind,si,ai){
+  const d=getAllMnd()[k];if(!d)return;
+  const edits=d.memberKpiEdits||{};
+  const ev=_evalDataCache[k]||null;
+  if(kind==='kgi'){
+    openEvalDetailModal('kgi',0,{center:d.center,edits,ev});
+  }else if(kind==='csf'){
+    openEvalDetailModal('csf',si,{name:(d.subs||[])[si]||`CSF${si+1}`,acts:(d.acts||[])[si]||[],edits,si,ev});
+  }else{
+    openEvalDetailModal('kpi',{si,ai},{name:((d.acts||[])[si]||[])[ai]||`KPI${ai+1}`,parentName:(d.subs||[])[si]||'',edit:edits[si+'-'+ai]||{}});
+  }
+}
+function openEvalDetailModal(kind,index,data){
+  const modal=document.getElementById('eval-detail-modal');if(!modal)return;
+  const title=document.getElementById('edm-title'),body=document.getElementById('edm-body');
+  if(kind==='kgi'){
+    const pct=evalKgiProgress(data.edits);const col=evalColorOf(pct);
+    const ev=data.ev;
+    title.innerHTML='🎯 KGI（中心目標）';
+    let h=`<div style="font-size:13px;font-weight:700;margin-bottom:10px">${(data.center||'').replace(/\n/g,' ')}</div><hr style="border:none;border-top:1px solid var(--border);margin:10px 0">`;
+    if(ev&&ev.submitted){
+      h+=`<div style="font-weight:700;margin-bottom:4px">自己評価</div><div style="font-size:18px;margin-bottom:10px">${evalStars(ev.kgi)} <span style="font-size:12px;color:var(--text3)">${ev.kgi} / 5</span></div>`;
+      if(ev.kgiComment)h+=`<div style="font-weight:700;margin-bottom:4px">所感・振り返り</div><div style="margin-bottom:10px;color:var(--text2)">${ev.kgiComment}</div>`;
+      h+=`<div style="font-weight:700;margin-bottom:4px">達成率</div>${evalBar(pct,col.fg)}`;
+      h+=`<div style="font-size:11px;color:#065F46;background:#D1FAE5;display:inline-block;padding:3px 10px;border-radius:10px;font-weight:700">✅ 提出済み</div>`;
+    }else{
+      h+=`<div style="font-weight:700;margin-bottom:4px">達成率</div>${evalBar(pct,col.fg)}`;
+      h+=`<div style="font-size:11px;color:var(--text3);background:#F3F4F6;display:inline-block;padding:3px 10px;border-radius:10px;font-weight:700;margin-bottom:10px">未評価</div>`;
+      h+=`<button class="f-submit" style="margin-top:10px" onclick="closeEvalDetailModal();openSelfEval()">📝 自己評価を入力</button>`;
+    }
+    body.innerHTML=h;
+  }else if(kind==='csf'){
+    const pct=evalCsfProgress(data.edits,data.si);const col=evalColorOf(pct);
+    const evCsf=data.ev&&data.ev.csf&&data.ev.csf[data.si];
+    title.innerHTML='📊 CSF'+(data.si+1)+' '+data.name;
+    let h=`<div style="font-weight:700;margin-bottom:4px">達成率</div>${evalBar(pct,col.fg)}`;
+    if(evCsf&&data.ev.submitted){
+      h+=`<div style="font-weight:700;margin-bottom:4px">自己評価</div><div style="font-size:18px;margin-bottom:10px">${evalStars(evCsf.stars)} <span style="font-size:12px;color:var(--text3)">${evCsf.stars||0} / 5</span></div>`;
+      if(evCsf.comment)h+=`<div style="font-weight:700;margin-bottom:4px">コメント</div><div style="margin-bottom:10px;color:var(--text2)">${evCsf.comment}</div>`;
+    }else{
+      h+=`<div style="font-size:11px;color:var(--text3);background:#F3F4F6;display:inline-block;padding:3px 10px;border-radius:10px;font-weight:700;margin-bottom:10px">未評価</div>`;
+      h+=`<button class="f-submit" style="margin-bottom:10px" onclick="closeEvalDetailModal();openSelfEval()">📝 自己評価を入力</button>`;
+    }
+    h+=`<div style="font-weight:700;margin-bottom:6px">紐づくKPI（${(data.acts||[]).filter(Boolean).length}件）</div><div>`;
+    (data.acts||[]).forEach((name,ai)=>{
+      if(!name)return;
+      const e=data.edits[data.si+'-'+ai];const apct=e&&e.progress!=null?Math.round(+e.progress):0;
+      h+=`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F3F4F6"><span>・${name}</span><span style="font-weight:700;color:${evalColorOf(apct).fg}">${apct}%${apct>=100?'✅':''}</span></div>`;
+    });
+    h+='</div>';
+    body.innerHTML=h;
+  }else{
+    const e=data.edit||{};const pct=e.progress!=null?Math.round(+e.progress):0;const col=evalColorOf(pct);
+    title.innerHTML='✅ '+(data.name||'KPI');
+    let h=`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">親CSF: ${data.parentName||''}</div><hr style="border:none;border-top:1px solid var(--border);margin:10px 0">`;
+    h+=`<div style="font-weight:700;margin-bottom:4px">進捗</div>${evalBar(pct,col.fg)}`;
+    h+=`<div style="font-weight:700;margin-bottom:4px">作業時間</div><div style="margin-bottom:10px">${e.hoursTotal!=null?e.hoursTotal+'h':'—'}</div>`;
+    if(e.note)h+=`<div style="font-weight:700;margin-bottom:4px">メモ・コメント</div><div style="color:var(--text2)">${e.note}</div>`;
+    body.innerHTML=h;
+  }
+  modal.style.display='flex';
+}
+function closeEvalDetailModal(){const m=document.getElementById('eval-detail-modal');if(m)m.style.display='none';}
 
 function renderEvalBar(k){
   const d=getAllMnd()[k];const r=_rat(k);const yr=d.period||'';
