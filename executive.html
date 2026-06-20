@@ -791,7 +791,10 @@ async function submitAccount(){
     showIssued(email,res.password);
     showToast(`${name} を発行しました ✓`);
   }else{
-    showToast(`${name} を作成しました（ログイン発行はSQL 08適用後に有効）`);
+    // ログインRPC(vexum_create_login)が未デプロイ等で失敗 → profilesは作成済みだが認証未作成。
+    // REBUILD.sql のRPC適用後にパスワード再発行、または 24_fix_account_links.sql でリンク修復する。
+    alert(`${name} のプロフィールは作成しましたが、ログイン（認証）の発行に失敗しました。\n\nSupabaseで REBUILD.sql のRPC（vexum_create_login）を適用後、アカウント一覧の「パスワード再発行」から有効化してください。`);
+    showToast(`${name} を作成しました（ログイン発行は未完了）`);
   }
 }
 /* 発行完了モーダル */
