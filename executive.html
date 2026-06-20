@@ -344,20 +344,27 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- ダッシュボード（全社員集計） -->
 <div id="tc-dashboard" class="tab-content">
-  <div class="sec-title">ダッシュボード <span style="font-size:12px;font-weight:400;color:var(--text3)">全社員の達成率・進捗をチーム別に比較</span></div>
+  <div class="sec-title">ダッシュボード <span style="font-size:12px;font-weight:400;color:var(--text3)">全社・全従業員の達成率・進捗をチーム横断で確認</span></div>
   <div class="card" style="margin-bottom:16px">
     <div class="card-body" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
-      <div style="min-width:180px"><label class="fl">チーム</label><select class="fs" id="dash-team-sel" onchange="onDashFilterChange()"><option value="">全社員</option></select></div>
+      <div style="min-width:170px"><label class="fl">チーム</label><select class="fs" id="dash-team-sel" onchange="onDashTeamChange()"><option value="">全チーム</option></select></div>
+      <div style="min-width:160px"><label class="fl">担当者</label><select class="fs" id="dash-assignee-sel"><option value="">全員</option></select></div>
       <div style="min-width:150px"><label class="fl">期間</label><select class="fs" id="dash-period-sel" onchange="onDashPeriodChange()">
         <option value="thisweek">今週</option><option value="thismonth" selected>今月</option><option value="lastmonth">先月</option><option value="custom">カスタム日付範囲</option>
       </select></div>
       <div id="dash-custom-range" style="display:none;gap:10px;align-items:flex-end">
-        <div><label class="fl">開始日</label><input class="fi" type="date" id="dash-date-from" onchange="onDashFilterChange()"></div>
-        <div><label class="fl">終了日</label><input class="fi" type="date" id="dash-date-to" onchange="onDashFilterChange()"></div>
+        <div><label class="fl">開始日</label><input class="fi" type="date" id="dash-date-from"></div>
+        <div><label class="fl">終了日</label><input class="fi" type="date" id="dash-date-to"></div>
       </div>
+      <button class="f-submit" style="padding:8px 18px;font-size:12px" onclick="applyDashFilter()">絞り込む</button>
+      <button class="card-btn" onclick="resetDashFilter()">リセット</button>
     </div>
   </div>
   <div id="dash-summary-cards" class="g4" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px"></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-hd"><div class="card-title">メンバー進捗</div><div class="card-sub" id="dash-member-sub">全チーム・全員</div></div>
+    <div class="card-body" id="dash-member-table" style="padding:0"></div>
+  </div>
   <div class="card">
     <div class="card-hd"><div class="card-title">チーム別比較</div><div class="card-sub">平均達成率・遅延件数・日報提出率</div></div>
     <div class="card-body" id="dash-team-compare" style="padding:0"></div>
@@ -511,6 +518,17 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- 個人DB（個人ダッシュボード）モーダル -->
+<div id="exec-member-modal" onclick="if(event.target===this)closeExecMemberDash()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:680px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+      <div><div id="exmd-name" style="font-size:16px;font-weight:800;color:var(--accent)">メンバー</div><div id="exmd-team" style="font-size:10px;color:var(--text3);margin-top:2px"></div></div>
+      <button onclick="closeExecMemberDash()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div id="exmd-body"></div>
+  </div>
+</div>
 
 <!-- 曼荼羅モーダル -->
 <div id="mandala-modal" onclick="if(event.target===this)closeMandala()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
@@ -1382,7 +1400,7 @@ function showExecReportDetail(ds){
   document.getElementById('exec-report-detail').innerHTML=h;
 }
 
-/* ========== ダッシュボード（全社員集計） ========== */
+/* ========== ダッシュボード（全社・全従業員集計 ＝ リーダー画面と同仕様＋全社対応） ========== */
 let _dashStats=null;
 function dashDateRange(){
   const sel=(document.getElementById('dash-period-sel')||{}).value||'thismonth';
@@ -1404,8 +1422,18 @@ function dashDateRange(){
     return {from:val('dash-date-from')||null,to:val('dash-date-to')||null};
   }
 }
-function onDashPeriodChange(){initExecDashboard();}
-function onDashFilterChange(){initExecDashboard();}
+// 期間プルダウン変更時はカスタム範囲の表示だけ切り替え（適用は「絞り込む」ボタン）
+function onDashPeriodChange(){const wrap=document.getElementById('dash-custom-range');const sel=(document.getElementById('dash-period-sel')||{}).value;if(wrap)wrap.style.display=(sel==='custom')?'flex':'none';}
+// チーム変更時：担当者プルダウンをそのチームのメンバーに更新
+function onDashTeamChange(){populateDashAssignee();}
+function populateDashAssignee(){
+  const teamUid=(document.getElementById('dash-team-sel')||{}).value||'';
+  const asgSel=document.getElementById('dash-assignee-sel');if(!asgSel)return;
+  const cur=asgSel.value;
+  const mems=Object.entries(EXEC_OV.MEMBERS||{}).filter(([id,m])=>!teamUid||m.teamUuid===teamUid);
+  asgSel.innerHTML='<option value="">全員</option>'+mems.map(([id,m])=>`<option value="${id}">${m.name}（${m.team||'—'}）</option>`).join('');
+  if([...asgSel.options].some(o=>o.value===cur))asgSel.value=cur;else asgSel.value='';
+}
 async function initExecDashboard(){
   const API=window.VexumAPI;
   const teamSel=document.getElementById('dash-team-sel');
@@ -1413,27 +1441,66 @@ async function initExecDashboard(){
     if(!EXEC_OV.teamsList.length){const d=await API.loadExecOverview(null);if(d)EXEC_OV=d;}
     if(teamSel&&teamSel.dataset.n!==String(EXEC_OV.teamsList.length)){
       const cur=teamSel.value;
-      teamSel.innerHTML='<option value="">全社員</option>'+EXEC_OV.teamsList.map(t=>`<option value="${t.uid}">${t.name}</option>`).join('');
+      teamSel.innerHTML='<option value="">全チーム</option>'+EXEC_OV.teamsList.map(t=>`<option value="${t.uid}">${t.name}</option>`).join('');
       teamSel.value=cur;teamSel.dataset.n=String(EXEC_OV.teamsList.length);
     }
+    populateDashAssignee();
+  }
+  await applyDashFilter();
+}
+async function applyDashFilter(){
+  const API=window.VexumAPI;
+  const teamUid=(document.getElementById('dash-team-sel')||{}).value||'';
+  if(API&&API.ready){
     const {from,to}=dashDateRange();
-    _dashStats=await API.loadDashboardStats(teamSel.value||null,from,to);
+    _dashStats=await API.loadDashboardStats(teamUid||null,from,to);
   }
   renderExecDashboard();
 }
+function resetDashFilter(){
+  const t=document.getElementById('dash-team-sel');if(t)t.value='';
+  const p=document.getElementById('dash-period-sel');if(p)p.value='thismonth';
+  const cr=document.getElementById('dash-custom-range');if(cr)cr.style.display='none';
+  const df=document.getElementById('dash-date-from');if(df)df.value='';
+  const dt=document.getElementById('dash-date-to');if(dt)dt.value='';
+  populateDashAssignee();
+  applyDashFilter();
+}
+// 現在のフィルタに該当するメンバー[id,m]の配列（チーム＋担当者・フロントエンド絞り込み）
+function dashFilteredMembers(){
+  const teamUid=(document.getElementById('dash-team-sel')||{}).value||'';
+  const asgId=(document.getElementById('dash-assignee-sel')||{}).value||'';
+  return Object.entries(EXEC_OV.MEMBERS||{}).filter(([id,m])=>{
+    if(teamUid&&m.teamUuid!==teamUid)return false;
+    if(asgId&&id!==asgId)return false;
+    return true;
+  });
+}
 function renderExecDashboard(){
-  const s=_dashStats;
+  const teamUid=(document.getElementById('dash-team-sel')||{}).value||'';
+  const asgId=(document.getElementById('dash-assignee-sel')||{}).value||'';
+  const teamName=(EXEC_OV.teamsList.find(t=>t.uid===teamUid)||{}).name||'';
+  const scopeLabel=asgId?(EXEC_OV.MEMBERS[asgId]||{}).name:(teamUid?teamName:'全社');
   const cards=document.getElementById('dash-summary-cards');
-  if(!s){cards.innerHTML='<div class="card" style="margin:0"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px">Supabase未接続のため集計できません</div></div>';document.getElementById('dash-team-compare').innerHTML='';return;}
   const cardHTML=(label,value,color)=>`<div class="card" style="margin:0"><div class="card-body" style="text-align:center;padding:16px"><div style="font-size:10px;color:var(--text3);font-weight:700;margin-bottom:4px">${label}</div><div style="font-size:24px;font-weight:800;color:${color}">${value}</div></div></div>`;
-  cards.innerHTML=cardHTML('平均達成率',s.avgRate+'%','var(--accent)')
-    +cardHTML('完了タスク',s.doneCount+'件','var(--green)')
-    +cardHTML('遅延タスク',s.lateCount+'件','var(--red)')
-    +cardHTML('対象人数',s.memberCount+'名','var(--cyan)');
-  const teams=Object.keys(s.byTeam||{});
-  if(!teams.length){document.getElementById('dash-team-compare').innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">チームデータがありません</div>';return;}
+  // KPIカード：チーム＋担当者でフロントエンド絞り込みしたメンバー集合から再集計
+  const fm=dashFilteredMembers();
+  if(!fm.length&&!(_dashStats)){cards.innerHTML='<div class="card" style="margin:0"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px">Supabase未接続のため集計できません</div></div>';document.getElementById('dash-team-compare').innerHTML='';document.getElementById('dash-member-table').innerHTML='';return;}
+  const avgRate=fm.length?Math.round(fm.reduce((a,[id,m])=>a+(m.rate||0),0)/fm.length):0;
+  let doneC=0,lateC=0;
+  fm.forEach(([id,m])=>{const st=m.stats||{};doneC+=st.done||0;lateC+=st.late||0;});
+  cards.innerHTML=cardHTML((asgId?'担当者の達成率':teamUid?'チームの平均達成率':'全社の平均達成率'),avgRate+'%','var(--accent)')
+    +cardHTML('完了タスク',doneC+'件','var(--green)')
+    +cardHTML('遅延タスク',lateC+'件','var(--red)')
+    +cardHTML('対象人数',fm.length+'名','var(--cyan)');
+  // メンバー進捗テーブル（チーム名カラムあり）
+  renderDashMemberTable(fm,scopeLabel);
+  // チーム別比較（期間反映・サーバ集計）
+  const s=_dashStats;
+  const tc=document.getElementById('dash-team-compare');
+  if(!s||!Object.keys(s.byTeam||{}).length){tc.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">チームデータがありません</div>';return;}
   let h='';
-  teams.forEach(tid=>{
+  Object.keys(s.byTeam).forEach(tid=>{
     const t=s.byTeam[tid];
     const submitRate=t.memberCount?Math.round(t.reportSubmitDays/(t.memberCount*30)*1000)/10:0;
     h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #F3F4F6;gap:14px;flex-wrap:wrap">
@@ -1446,8 +1513,54 @@ function renderExecDashboard(){
       </div>
     </div>`;
   });
-  document.getElementById('dash-team-compare').innerHTML=h;
+  tc.innerHTML=h;
 }
+function renderDashMemberTable(fm,scopeLabel){
+  const el=document.getElementById('dash-member-table');if(!el)return;
+  const sub=document.getElementById('dash-member-sub');if(sub)sub.textContent=(scopeLabel||'全社')+' ／ '+fm.length+'名';
+  if(!fm.length){el.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">該当するメンバーがいません</div>';return;}
+  let h=`<div style="display:grid;grid-template-columns:1.4fr 1fr 1.4fr auto auto;gap:8px;padding:8px 16px;background:#FAFCFC;border-bottom:1px solid var(--border);font-size:10px;font-weight:700;color:var(--text3)">
+    <div>メンバー</div><div>チーム名</div><div>達成率</div><div style="text-align:center">完了/進行/遅延</div><div></div></div>`;
+  fm.sort((a,b)=>(b[1].rate||0)-(a[1].rate||0)).forEach(([id,m])=>{
+    const st=m.stats||{};const col=rateColor(m.rate||0);
+    h+=`<div style="display:grid;grid-template-columns:1.4fr 1fr 1.4fr auto auto;gap:8px;align-items:center;padding:9px 16px;border-bottom:1px solid #F3F4F6">
+      <div style="font-size:12px;font-weight:600;min-width:0;display:flex;align-items:center;gap:6px"><span class="tdot" style="display:inline-block;background:${m.color||'#9CA3AF'}"></span><span>${m.name} <span style="font-size:9px;color:var(--text3)">${m.role||''}</span></span></div>
+      <div style="font-size:11px;color:var(--text2)">${m.team||'—'}</div>
+      <div class="pw" style="max-width:160px"><div class="pt"><div class="pf" style="width:${m.rate||0}%;background:${col}"></div></div><div class="pp" style="color:${col}">${m.rate||0}%</div></div>
+      <div style="font-size:10px;color:var(--text2);text-align:center;white-space:nowrap">${st.done||0} / ${st.wip||0} / ${st.late||0}</div>
+      <div><button class="card-btn" onclick="openExecMemberDash('${id}')">📊 個人DB</button></div>
+    </div>`;
+  });
+  el.innerHTML=h;
+}
+// 個人DB（個人ダッシュボード）— チャート由来タスクのみ表示
+async function openExecMemberDash(id){
+  const m=(EXEC_OV.MEMBERS||{})[id];if(!m)return;
+  document.getElementById('exmd-name').textContent=m.name+'（'+(m.role||'')+'）';
+  document.getElementById('exmd-team').textContent=(m.team||'—')+' ／ 達成率 '+(m.rate||0)+'%';
+  // チャート由来タスクのみ（source_send_id / source_chart / source_cell のいずれかを持つ）
+  const tasks=((EXEC_OV.MEMBER_TASKS||{})[id]||[]).filter(t=>t.sendId||t.chart||t.cell);
+  const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length;
+  const wip=tasks.filter(t=>t.status==='wip').length;
+  const late=tasks.filter(t=>t.status==='late').length;
+  const totalH=tasks.reduce((a,t)=>a+(t.hours||0),0);
+  let h=`<div class="g4" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+    <div class="card" style="margin:0"><div class="card-body" style="text-align:center;padding:12px"><div style="font-size:10px;color:var(--text3);font-weight:700">チャートタスク</div><div style="font-size:22px;font-weight:800;color:var(--accent)">${tasks.length}</div></div></div>
+    <div class="card" style="margin:0"><div class="card-body" style="text-align:center;padding:12px"><div style="font-size:10px;color:var(--text3);font-weight:700">完了</div><div style="font-size:22px;font-weight:800;color:var(--green)">${done}</div></div></div>
+    <div class="card" style="margin:0"><div class="card-body" style="text-align:center;padding:12px"><div style="font-size:10px;color:var(--text3);font-weight:700">進行中</div><div style="font-size:22px;font-weight:800">${wip}</div></div></div>
+    <div class="card" style="margin:0"><div class="card-body" style="text-align:center;padding:12px"><div style="font-size:10px;color:var(--text3);font-weight:700">遅延</div><div style="font-size:22px;font-weight:800;color:var(--red)">${late}</div></div></div>
+  </div>`;
+  h+=`<div class="card"><div class="card-hd"><div class="card-title">チャート由来タスクの状況</div><div class="card-sub">合計工数 ${Math.round(totalH*10)/10}h</div></div><div class="card-body" style="padding:0">`;
+  if(!tasks.length)h+=`<div style="padding:14px;color:var(--text3);font-size:12px">チャートに紐づくタスクがありません</div>`;
+  tasks.forEach(t=>{const sc=statusChip(t.status),pc=priChip(t.pri);const pct=t.pct!=null?t.pct:0;
+    const col=pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)';
+    const chartChip=t.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${t.chart}</span>`:'';
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${chartChip}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${t.hours?' ／ '+t.hours+'h':''}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
+  h+=`</div></div>`;
+  document.getElementById('exmd-body').innerHTML=h;
+  document.getElementById('exec-member-modal').style.display='flex';
+}
+function closeExecMemberDash(){document.getElementById('exec-member-modal').style.display='none';}
 
 /* ========== 曼荼羅モーダル ========== */
 function buildMndGrid(k){

@@ -559,8 +559,8 @@ async function openMemberDash(id){
   const m=MEMBERS[id];
   document.getElementById('md-name').textContent=m.name+'（'+m.role+'）';
   document.getElementById('md-team').textContent=m.team+' ／ 達成率 '+m.rate+'%';
-  // タスクのサマリ（割り当てがどんな感じか把握）
-  const tasks=MEMBER_TASKS[id]||[];
+  // タスクのサマリ（チャート由来タスクのみ＝source_send_id/source_chart/source_cell のいずれかを持つ）
+  const tasks=(MEMBER_TASKS[id]||[]).filter(t=>t.sendId||t.chart||t.cell);
   const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length;
   const wip=tasks.filter(t=>t.status==='wip').length;
   const late=tasks.filter(t=>t.status==='late').length;
@@ -581,7 +581,7 @@ async function openMemberDash(id){
   h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div class="card-title">🧿 曼荼羅チャート</div><div class="card-sub">${charts.length>1?'複数のチャートから種類を選択して表示':'メンバーの曼荼羅チャート'}</div></div><div class="card-body" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${chartSel}</div></div>`;
   // 割り当てタスク（どんな感じか: 進捗バー・工数・期間つき）
   h+=`<div class="card"><div class="card-hd"><div class="card-title">割り当てタスクの状況</div><div class="card-sub">合計工数 ${Math.round(totalH*10)/10}h</div></div><div class="card-body" style="padding:0">`;
-  if(!tasks.length)h+=`<div style="padding:14px;color:var(--text3);font-size:12px">割り当てタスクはありません</div>`;
+  if(!tasks.length)h+=`<div style="padding:14px;color:var(--text3);font-size:12px">チャートに紐づくタスクがありません</div>`;
   tasks.forEach(t=>{const sc=statusChip(t.status),pc=priChip(t.pri);const pct=t.pct!=null?t.pct:0;
     const col=pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)';
     const chartChip=t.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${t.chart}</span>`:'';

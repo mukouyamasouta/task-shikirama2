@@ -1160,7 +1160,8 @@
       (MEMBER_TASKS[key] = MEMBER_TASKS[key] || []).push({
         id: t.id, name: t.title, kpi: t.related_kgi || '—', start: fmtMD(t.start_date), due: fmtMD(t.due_date),
         pri: t.priority, status: t.status, pct: t.progress || 0,
-        hours: (t.total_hours != null ? +t.total_hours : 0), period: t.period || '', teamUuid: t.team_id
+        hours: (t.total_hours != null ? +t.total_hours : 0), period: t.period || '', teamUuid: t.team_id,
+        chart: t.source_chart || null, sendId: t.source_send_id || null, cell: t.source_cell || null
       });
     });
     var memberPid = {};
