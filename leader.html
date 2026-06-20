@@ -559,52 +559,102 @@ async function openMemberDash(id){
   const m=MEMBERS[id];
   document.getElementById('md-name').textContent=m.name+'（'+m.role+'）';
   document.getElementById('md-team').textContent=m.team+' ／ 達成率 '+m.rate+'%';
-  // 曼荼羅チャートを先に取得（タスクのチャート紐づき判定にも利用）
+  // そのメンバーの全チャートを取得（mandala_charts WHERE owner_user_id=pid）
   let charts=[];const API=window.VexumAPI;
   if(API&&API.ready&&m.pid){ try{charts=window._chartsCache[m.pid]||await API.loadChartsFor(m.pid);window._chartsCache[m.pid]=charts;}catch(e){charts=[];} }
-  window._mdCharts=charts;window._mdMemberId=id;
-  // チャート（CSF/KPI）の文言セットを構築：本人の主チャート＋取得した全チャート
-  const chartLabels=new Set();
-  const addLabels=(subs,acts)=>{(subs||[]).forEach(s=>{if(s)chartLabels.add(String(s).trim());});(acts||[]).forEach(r=>(r||[]).forEach(a=>{if(a)chartLabels.add(String(a).trim());}));};
-  addLabels(m.subs,m.acts);
-  charts.forEach(c=>addLabels(c.subs,c.acts));
-  // 表示対象＝チャートに紐づくタスクのみ。除外するのは「チャートに一切紐づかない純粋な割り当てタスク」だけ。
-  //   ✅ source_send_id / source_chart / source_cell のいずれかを持つ（チャート送信・由来）
-  //   ✅ related_kgi(=t.kpi) がチャートのCSF/KPI文言に一致（チャートのCSF/KPI紐づき）
-  const tasks=(MEMBER_TASKS[id]||[]).filter(t=>
-    t.sendId||t.chart||t.cell||(t.kpi&&t.kpi!=='—'&&chartLabels.has(String(t.kpi).trim()))
-  );
+  // 接続なし/チャート未取得時は、MEMBERSの主チャートを1件分の擬似チャートとして使う
+  if(!charts.length&&(m.subs&&m.subs.length)){charts=[{id:'__main__',name:m.name+' のチャート',center:m.center||'',subs:m.subs||[],acts:m.acts||[],color:m.color,bg:'#CCEDE9',member_kpi_edits:m.memberKpiEdits||{},period:''}];}
+  // 状態を毎回リセット（別メンバーを開いたときに前のデータが残らない）
+  window._mdCharts=charts;window._mdMemberId=id;window._mdTasks=(MEMBER_TASKS[id]||[]).slice();
+  // 個人DBの骨組み：①KPIサマリ ②曼荼羅（プルダウン＋インライングリッド）③タスク（プルダウン＋一覧）
+  const mndSel=charts.length>1
+    ? `<select class="fs" id="md-chart-sel" style="flex:1;min-width:180px" onchange="onMdMndChange()">${charts.map(c=>`<option value="${c.id}">${mdChartLabel(c)}</option>`).join('')}</select><button class="card-btn" onclick="mdViewChart()">⛶ 全画面</button>`
+    : (charts.length===1
+        ? `<span style="font-size:12px;font-weight:700;color:var(--text2)">${mdChartLabel(charts[0])}</span><button class="card-btn" onclick="mdViewChart()">⛶ 全画面</button>`
+        : `<span style="font-size:12px;color:var(--text3)">チャートがありません</span>`);
+  const taskSel=`<select class="fs" id="md-task-chart-sel" style="min-width:200px" onchange="onMdTaskChartChange()"><option value="">全チャート</option>${charts.filter(c=>c.id!=='__main__').map(c=>`<option value="${c.id}">${mdChartLabel(c)}</option>`).join('')}</select>`;
+  let h=`<div class="g4" id="md-stat-cards" style="margin-bottom:14px"></div>`;
+  h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div class="card-title">🧿 曼荼羅チャート</div><div class="card-sub">${charts.length>1?'プルダウンでチャートを切り替え':'メンバーの曼荼羅チャート'}</div></div><div class="card-body"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">${mndSel}</div><div id="md-mnd-wrap" style="overflow-x:auto"></div></div></div>`;
+  h+=`<div class="card"><div class="card-hd" style="gap:10px;flex-wrap:wrap"><div class="card-title">割り当てタスクの状況</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:10px;color:var(--text3)">チャート絞り込み</span>${taskSel}</div></div><div class="card-body" style="padding:0"><div id="md-task-list"></div></div></div>`;
+  document.getElementById('md-body').innerHTML=h;
+  document.getElementById('member-modal').style.display='flex';
+  // 初期表示：タスクは「全チャート」、曼荼羅は先頭チャート
+  mdRenderTasks('');
+  if(charts.length)mdRenderMnd(charts[0].id);
+}
+// チャートの表示ラベル（KGI中心テキスト優先・コードに合わせ chart.center を使用）
+function mdChartLabel(c){
+  const t=(c.name||'').trim()||((c.center||'').split('\n')[0]||'').trim()||c.scope_label||'チャート';
+  return t+(c.period?'（'+c.period+'）':'');
+}
+// チャートのCSF/KPI文言セット
+function mdChartLabelSet(c){
+  const s=new Set();
+  (c&&c.subs||[]).forEach(x=>{if(x)s.add(String(x).trim());});
+  (c&&c.acts||[]).forEach(r=>(r||[]).forEach(a=>{if(a)s.add(String(a).trim());}));
+  return s;
+}
+// タスクが指定チャートに紐づくか（related_kgi一致 or source_chartタイトル一致）
+function mdTaskMatchesChart(t,c){
+  if(!c)return false;
+  const labels=mdChartLabelSet(c);
+  if(t.kpi&&t.kpi!=='—'&&labels.has(String(t.kpi).trim()))return true;
+  const titles=new Set();
+  if(c.name)titles.add(String(c.name).trim());
+  if(c.center)titles.add(String(c.center).split('\n')[0].trim());
+  if(t.chart&&titles.has(String(t.chart).trim()))return true;
+  return false;
+}
+// 選択チャートに応じてタスクを絞り込む
+function mdFilterTasks(chartId){
+  const all=window._mdTasks||[];const charts=window._mdCharts||[];
+  if(!chartId){
+    // 全チャート：チャート由来タスク全件（source系 or いずれかのチャートのCSF/KPIに一致）
+    const allLabels=new Set();charts.forEach(c=>mdChartLabelSet(c).forEach(x=>allLabels.add(x)));
+    return all.filter(t=>t.sendId||t.chart||t.cell||(t.kpi&&t.kpi!=='—'&&allLabels.has(String(t.kpi).trim())));
+  }
+  const c=charts.find(x=>String(x.id)===String(chartId));
+  return all.filter(t=>mdTaskMatchesChart(t,c));
+}
+function onMdTaskChartChange(){const v=(document.getElementById('md-task-chart-sel')||{}).value||'';mdRenderTasks(v);}
+// タスク一覧＋KPIサマリを再描画
+function mdRenderTasks(chartId){
+  const tasks=mdFilterTasks(chartId);
   const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length;
   const wip=tasks.filter(t=>t.status==='wip').length;
   const late=tasks.filter(t=>t.status==='late').length;
   const totalH=tasks.reduce((a,t)=>a+(t.hours||0),0);
-  let h=`<div class="g4" style="margin-bottom:14px">
-    <div class="stat-card" style="padding:14px"><div class="s-lbl">割り当て</div><div class="s-val" style="font-size:22px;color:var(--accent)">${tasks.length}</div></div>
+  const sc=document.getElementById('md-stat-cards');
+  if(sc)sc.innerHTML=`<div class="stat-card" style="padding:14px"><div class="s-lbl">タスク</div><div class="s-val" style="font-size:22px;color:var(--accent)">${tasks.length}</div></div>
     <div class="stat-card" style="padding:14px"><div class="s-lbl">完了</div><div class="s-val" style="font-size:22px;color:var(--green)">${done}</div></div>
     <div class="stat-card" style="padding:14px"><div class="s-lbl">進行中</div><div class="s-val" style="font-size:22px">${wip}</div></div>
-    <div class="stat-card" style="padding:14px"><div class="s-lbl">遅延</div><div class="s-val" style="font-size:22px;color:var(--red)">${late}</div></div>
-  </div>`;
-  // 曼荼羅チャートの種類プルダウン（複数チャートがあれば選択して表示）
-  const chartSel=charts.length
-    ? `<select class="fs" id="md-chart-sel" style="flex:1;min-width:160px">${charts.map((c,i)=>`<option value="${i}">${c.name||'チャート'}（${c.scope_label||c.period||''}）</option>`).join('')}</select><button class="card-btn" onclick="mdViewChart()">🧿 表示</button>`
-    : `<button class="card-btn" onclick="openMandala('${id}',false)">🧿 曼荼羅チャートを見る</button>`;
-  h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div class="card-title">🧿 曼荼羅チャート</div><div class="card-sub">${charts.length>1?'複数のチャートから種類を選択して表示':'メンバーの曼荼羅チャート'}</div></div><div class="card-body" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${chartSel}</div></div>`;
-  // 割り当てタスク（どんな感じか: 進捗バー・工数・期間つき）
-  h+=`<div class="card"><div class="card-hd"><div class="card-title">割り当てタスクの状況</div><div class="card-sub">合計工数 ${Math.round(totalH*10)/10}h</div></div><div class="card-body" style="padding:0">`;
-  if(!tasks.length)h+=`<div style="padding:14px;color:var(--text3);font-size:12px">チャートに紐づくタスクがありません</div>`;
-  tasks.forEach(t=>{const sc=statusChip(t.status),pc=priChip(t.pri);const pct=t.pct!=null?t.pct:0;
+    <div class="stat-card" style="padding:14px"><div class="s-lbl">遅延</div><div class="s-val" style="font-size:22px;color:var(--red)">${late}</div></div>`;
+  const el=document.getElementById('md-task-list');if(!el)return;
+  if(!tasks.length){el.innerHTML=`<div style="padding:14px;color:var(--text3);font-size:12px">${chartId?'このチャートに紐づくタスクはありません':'チャートに紐づくタスクはありません'}</div>`;return;}
+  let h='';
+  tasks.forEach(t=>{const sch=statusChip(t.status),pc=priChip(t.pri);const pct=t.pct!=null?t.pct:0;
     const col=pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)';
     const chartChip=t.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${t.chart}</span>`:'';
-    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${chartChip}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${t.hours?' ／ '+t.hours+'h':''}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
-  h+=`</div></div>`;
-  document.getElementById('md-body').innerHTML=h;
-  document.getElementById('member-modal').style.display='flex';
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${chartChip}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${t.hours?' ／ '+t.hours+'h':''}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sch[0]}">${sch[1]}</span></div></div>`;});
+  el.innerHTML=h;
 }
-// メンバーDBで選択した種類の曼荼羅チャートを表示
+function onMdMndChange(){const v=(document.getElementById('md-chart-sel')||{}).value||'';mdRenderMnd(v);}
+// 選択チャートの曼荼羅グリッドをインライン描画（member_kpi_edits・acts で進捗反映）
+function mdRenderMnd(chartId){
+  const box=document.getElementById('md-mnd-wrap');if(!box)return;
+  const charts=window._mdCharts||[];
+  const c=charts.find(x=>String(x.id)===String(chartId))||charts[0];
+  if(!c){box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートがありません</div>';return;}
+  const API=window.VexumAPI;
+  if(API&&API.renderEvalMandala)API.renderEvalMandala(c,c.member_kpi_edits||c.memberKpiEdits||{},box);
+  else box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートを表示できません</div>';
+}
+// 全画面で曼荼羅を表示（現在選択中のチャート）
 function mdViewChart(){
-  const charts=window._mdCharts||[];const sel=document.getElementById('md-chart-sel');
+  const charts=window._mdCharts||[];
   if(!charts.length){if(window._mdMemberId)openMandala(window._mdMemberId,false);return;}
-  const c=charts[+(sel?sel.value:0)]||charts[0];
+  const sel=document.getElementById('md-chart-sel');
+  const c=charts.find(x=>String(x.id)===String((sel||{}).value))||charts[0];
   const m=MEMBERS[window._mdMemberId]||{};
   MEMBERS['__mdview__']={name:c.name||m.name,role:m.role,team:m.team,scopeLabel:c.scope_label||c.period||'',color:c.color||m.color||'#0D9488',bg:c.bg||'#CCEDE9',center:c.center||'',subs:c.subs||[],acts:c.acts||[]};
   openMandala('__mdview__',false);
