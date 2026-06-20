@@ -384,7 +384,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="g4" id="dash-stat-cards"></div>
   <!-- 説明バナー -->
   <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
-    <span style="font-size:14px">💡</span><span>全チーム・全従業員の個人ダッシュボードと曼荼羅チャートを確認できます。「📊 個人DB」で詳細、「🧿 曼荼羅」でチャートを表示します。</span>
+    <span style="font-size:14px">💡</span><span>各メンバーの「📊 個人DB」で、担当タスク・進捗・曼荼羅チャート（開閉可）を確認できます。</span>
   </div>
   <!-- メンバーカード（チーム名つき） -->
   <div class="g2" id="dash-members"></div>
@@ -1538,15 +1538,22 @@ function renderExecDashboard(){
     if(!kpis.length)h+=`<div style="font-size:10px;color:var(--text3);padding:6px 0">CSF/KPIデータがありません</div>`;
     const kpiEditCnt=m.memberKpiEdits?Object.keys(m.memberKpiEdits).length:0;
     const kpiEditBadge=kpiEditCnt>0?`<span style="font-size:9px;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;padding:2px 7px;border-radius:10px;font-weight:700">✏ KPI編集 ${kpiEditCnt}件</span>`:'';
-    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:10px;color:var(--text3)">完了 ${st.done||0} ・ 進行 ${st.wip||0} ・ 遅延 ${st.late||0}</span>${kpiEditBadge}</div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openExecMemberDash('${id}')">📊 個人DB</button><button class="card-btn" onclick="openMandala('${id}')">🧿 曼荼羅</button></div></div></div></div>`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:10px;color:var(--text3)">完了 ${st.done||0} ・ 進行 ${st.wip||0} ・ 遅延 ${st.late||0}</span>${kpiEditBadge}</div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openExecMemberDash('${id}')">📊 個人DB</button></div></div></div></div>`;
   });
   members.innerHTML=h;
 }
 // 個人DB（個人ダッシュボード）— チャート由来タスクのみ表示
+let _execChartsCache={};
 async function openExecMemberDash(id){
   const m=(EXEC_OV.MEMBERS||{})[id];if(!m)return;
   document.getElementById('exmd-name').textContent=m.name+'（'+(m.role||'')+'）';
   document.getElementById('exmd-team').textContent=(m.team||'—')+' ／ 達成率 '+(m.rate||0)+'%';
+  // そのメンバーの全チャートを取得（mandala_charts WHERE owner_user_id=pid）
+  let charts=[];const API=window.VexumAPI;const pid=pidOfExec(id);
+  if(API&&API.ready&&pid){ try{charts=_execChartsCache[pid]||await API.loadChartsFor(pid);_execChartsCache[pid]=charts;}catch(e){charts=[];} }
+  // 接続なし/未取得時は、メンバーの主チャートを1件分の擬似チャートとして使う
+  if(!charts.length&&(m.subs&&m.subs.length)){charts=[{id:'__main__',name:m.name+' のチャート',center:m.center||'',subs:m.subs||[],acts:m.acts||[],color:m.color,bg:'#CCEDE9',member_kpi_edits:m.memberKpiEdits||{},period:''}];}
+  window._exmdCharts=charts;window._exmdMemberId=id;window._exmdMndOpen=false;
   // チャート由来タスクのみ（source_send_id / source_chart / source_cell のいずれかを持つ）
   const tasks=((EXEC_OV.MEMBER_TASKS||{})[id]||[]).filter(t=>t.sendId||t.chart||t.cell);
   const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length;
@@ -1559,6 +1566,13 @@ async function openExecMemberDash(id){
     <div class="card" style="margin:0"><div class="card-body" style="text-align:center;padding:12px"><div style="font-size:10px;color:var(--text3);font-weight:700">進行中</div><div style="font-size:22px;font-weight:800">${wip}</div></div></div>
     <div class="card" style="margin:0"><div class="card-body" style="text-align:center;padding:12px"><div style="font-size:10px;color:var(--text3);font-weight:700">遅延</div><div style="font-size:22px;font-weight:800;color:var(--red)">${late}</div></div></div>
   </div>`;
+  // 曼荼羅チャート（初期は閉じている。ボタンで開閉・個人画面のチャート管理と同じ展開表示）
+  const mndSel=charts.length>1
+    ? `<select class="fs" id="exmd-chart-sel" style="flex:1;min-width:180px" onchange="onExecMndChange()">${charts.map(c=>`<option value="${c.id}">${execChartLabel(c)}</option>`).join('')}</select><button class="card-btn" onclick="execMdViewChart()">⛶ 全画面</button>`
+    : (charts.length===1
+        ? `<span style="font-size:12px;font-weight:700;color:var(--text2)">${execChartLabel(charts[0])}</span><button class="card-btn" onclick="execMdViewChart()">⛶ 全画面</button>`
+        : `<span style="font-size:12px;color:var(--text3)">チャートがありません</span>`);
+  h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd" style="gap:10px;flex-wrap:wrap"><div><div class="card-title">🧿 曼荼羅チャート</div><div class="card-sub">${charts.length>1?'プルダウンでチャートを切り替え':'メンバーの曼荼羅チャート'}</div></div><button class="card-btn" id="exmd-mnd-toggle" onclick="toggleExecMnd()">▶ 曼荼羅チャートを見る</button></div><div class="card-body" id="exmd-mnd-body" style="display:none"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">${mndSel}</div><div id="exmd-mnd-wrap" style="overflow-x:auto"></div></div></div>`;
   h+=`<div class="card"><div class="card-hd"><div class="card-title">チャート由来タスクの状況</div><div class="card-sub">合計工数 ${Math.round(totalH*10)/10}h</div></div><div class="card-body" style="padding:0">`;
   if(!tasks.length)h+=`<div style="padding:14px;color:var(--text3);font-size:12px">チャートに紐づくタスクがありません</div>`;
   tasks.forEach(t=>{const sc=statusChip(t.status),pc=priChip(t.pri);const pct=t.pct!=null?t.pct:0;
@@ -1566,8 +1580,67 @@ async function openExecMemberDash(id){
     const chartChip=t.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${t.chart}</span>`:'';
     h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${chartChip}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${t.hours?' ／ '+t.hours+'h':''}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
   h+=`</div></div>`;
+  // 最近の日報（daily_reports WHERE author_id = pid）
+  h+=`<div class="card" style="margin-top:14px"><div class="card-hd"><div class="card-title">📝 最近の日報</div><div class="card-sub">直近の提出分</div></div><div class="card-body" id="exmd-reports" style="padding:0"><div style="padding:14px;color:var(--text3);font-size:12px">読み込み中…</div></div></div>`;
   document.getElementById('exmd-body').innerHTML=h;
   document.getElementById('exec-member-modal').style.display='flex';
+  loadExecMemberReports(id,pid,m.teamUuid);
+}
+// 個人DBの最近の日報を取得して描画
+async function loadExecMemberReports(id,pid,teamUuid){
+  const box=document.getElementById('exmd-reports');if(!box)return;
+  const API=window.VexumAPI;
+  if(!(API&&API.ready&&API.loadAllDailyReports&&pid)){box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">日報データを取得できません</div>';return;}
+  let reps=[];
+  try{reps=(await API.loadAllDailyReports(teamUuid||null)).filter(r=>r.authorPid===pid).slice(0,5);}catch(e){reps=[];}
+  // モーダルが別メンバーに切り替わっていたら描画しない
+  if(window._exmdMemberId!==id)return;
+  if(!reps.length){box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">日報の提出がありません</div>';return;}
+  let rh='';
+  reps.forEach(r=>{
+    const cond=r.cond?`<span style="font-size:9px;background:#EEF2FF;color:#4338CA;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">${r.cond}</span>`:'';
+    rh+=`<div style="padding:10px 16px;border-bottom:1px solid #F3F4F6"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-size:12px;font-weight:700">${r.date||'—'}${cond}</div><span style="font-size:10px;color:var(--text3)">${r.hours!=null?r.hours+'h':''}</span></div>${r.done?`<div style="font-size:11px;color:var(--text2);margin-top:4px"><b>実績:</b> ${r.done}</div>`:''}${r.plan?`<div style="font-size:11px;color:var(--text2);margin-top:2px"><b>予定:</b> ${r.plan}</div>`:''}${r.issue?`<div style="font-size:11px;color:var(--text2);margin-top:2px"><b>課題:</b> ${r.issue}</div>`:''}</div>`;
+  });
+  box.innerHTML=rh;
+}
+// チャートの表示ラベル（KGI中心テキスト優先）
+function execChartLabel(c){
+  const t=(c.name||'').trim()||((c.center||'').split('\n')[0]||'').trim()||c.scope_label||'チャート';
+  return t+(c.period?'（'+c.period+'）':'');
+}
+// 個人DBの曼荼羅チャートを開閉（初期は閉じている。開いた時に遅延描画）
+function toggleExecMnd(){
+  window._exmdMndOpen=!window._exmdMndOpen;
+  const body=document.getElementById('exmd-mnd-body'),btn=document.getElementById('exmd-mnd-toggle');
+  if(!body)return;
+  body.style.display=window._exmdMndOpen?'':'none';
+  if(btn)btn.textContent=window._exmdMndOpen?'▼ 曼荼羅チャートを閉じる':'▶ 曼荼羅チャートを見る';
+  if(window._exmdMndOpen){
+    const charts=window._exmdCharts||[];const sel=document.getElementById('exmd-chart-sel');
+    const cid=(sel&&sel.value)||(charts[0]&&charts[0].id);
+    if(cid)execRenderMnd(cid);
+  }
+}
+function onExecMndChange(){const v=(document.getElementById('exmd-chart-sel')||{}).value||'';execRenderMnd(v);}
+// 選択チャートの曼荼羅グリッドをインライン描画（member_kpi_edits で進捗反映）
+function execRenderMnd(chartId){
+  const box=document.getElementById('exmd-mnd-wrap');if(!box)return;
+  const charts=window._exmdCharts||[];
+  const c=charts.find(x=>String(x.id)===String(chartId))||charts[0];
+  if(!c){box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートがありません</div>';return;}
+  const API=window.VexumAPI;
+  if(API&&API.renderMandalaSimple)API.renderMandalaSimple(box,c,c.member_kpi_edits||c.memberKpiEdits||{});
+  else if(API&&API.renderEvalMandala)API.renderEvalMandala(c,c.member_kpi_edits||c.memberKpiEdits||{},box);
+  else box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートを表示できません</div>';
+}
+// 全画面で曼荼羅を表示（現在選択中のチャート）
+function execMdViewChart(){
+  const charts=window._exmdCharts||[];if(!charts.length)return;
+  const sel=document.getElementById('exmd-chart-sel');
+  const c=charts.find(x=>String(x.id)===String((sel||{}).value))||charts[0];
+  const m=(EXEC_OV.MEMBERS||{})[window._exmdMemberId]||{};
+  EXTRA['__exmdview__']={name:c.name||m.name,team:m.team||'—',color:c.color||m.color||'#0D9488',bg:c.bg||'#CCEDE9',center:c.center||'',subs:c.subs||[],acts:c.acts||[]};
+  openMandala('__exmdview__');
 }
 function closeExecMemberDash(){document.getElementById('exec-member-modal').style.display='none';}
 

@@ -1328,11 +1328,115 @@
     };
   }
 
+  // ===== 個人画面のチャート管理(renderCmSimpleGrid)と同じ見た目で曼荼羅を表示（参照のみ） =====
+  // containerEl: 描画先DOM / chart: {center,subs,acts,color,bg} / edits: member_kpi_edits（keys: 'center' / 'csf-{si}' / '{si}-{ai}'）
+  function renderMandalaSimple(containerEl, chart, edits, opts) {
+    if (!containerEl || !chart) return;
+    edits = edits || {};
+    opts = opts || {};
+    var color = chart.color || '#0D9488';
+    var bg = chart.bg || '#CCEDE9';
+    var subs = chart.subs || [];
+    var acts = chart.acts || [];
+    if (containerEl._kpiOn === undefined) containerEl._kpiOn = false;
+    var SP_MAP = [
+      { cr: 3, cc: 3, oc: [1, 1], si: 0 }, { cr: 3, cc: 4, oc: [1, 4], si: 1 }, { cr: 3, cc: 5, oc: [1, 7], si: 2 },
+      { cr: 4, cc: 3, oc: [4, 1], si: 3 }, { cr: 4, cc: 5, oc: [4, 7], si: 4 },
+      { cr: 5, cc: 3, oc: [7, 1], si: 5 }, { cr: 5, cc: 4, oc: [7, 4], si: 6 }, { cr: 5, cc: 5, oc: [7, 7], si: 7 }
+    ];
+    function badge(ed) {
+      if (!ed) return '';
+      var b = '<span style="position:absolute;top:3px;right:5px;font-size:9px;color:#D97706" title="' + (ed.by || '') + '">✎</span>';
+      if (ed.progress != null) b += '<span style="font-size:9px;font-weight:800;margin-top:3px;color:' + (ed.progress >= 100 ? '#059669' : '#D97706') + '">' + ed.progress + '%' + (ed.hoursTotal ? ' / ' + ed.hoursTotal + 'h' : '') + '</span>';
+      if (ed.by) b += '<span style="font-size:7px;color:#D97706;font-weight:700">' + ed.by + '</span>';
+      return b;
+    }
+    function simpleHTML() {
+      var order = [0, 1, 2, 7, -1, 3, 6, 5, 4];
+      var h = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:560px;margin:0 auto">';
+      order.forEach(function (si) {
+        if (si === -1) {
+          var ed = edits['center'];
+          var eb = ed ? 'box-shadow:inset 0 0 0 2px #F59E0B;' : '';
+          var tx = ((ed && ed.text != null ? ed.text : chart.center) || '').replace(/\n/g, '<br>');
+          h += '<div style="position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:13px;font-weight:800;color:#fff;background:' + color + ';border-radius:10px;padding:8px;line-height:1.4;' + eb + '">' + tx + badge(ed) + '</div>';
+        } else {
+          var ed2 = edits['csf-' + si];
+          var label = (ed2 && ed2.text != null ? ed2.text : subs[si]) || '';
+          var eb2 = ed2 ? 'box-shadow:inset 0 0 0 2px #F59E0B;background:#FEF3C7;' : 'background:' + bg + ';';
+          h += '<div style="position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:' + color + ';border:1.5px solid ' + color + ';border-radius:10px;padding:8px;line-height:1.4;' + eb2 + '"><div style="font-size:8px;color:#9CA3AF;font-weight:600;margin-bottom:2px">CSF ' + (si + 1) + '</div>' + label + badge(ed2) + '</div>';
+        }
+      });
+      h += '</div>';
+      return h;
+    }
+    function fullHTML() {
+      var G = [];
+      for (var i = 0; i < 9; i++) G.push(Array(9).fill(null));
+      G[4][4] = { t: 'center' };
+      SP_MAP.forEach(function (sp) {
+        G[sp.cr][sp.cc] = { t: 'sub', si: sp.si };
+        G[sp.oc[0]][sp.oc[1]] = { t: 'sub', si: sp.si };
+        var ai = 0;
+        for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          var r = sp.oc[0] + dr, c = sp.oc[1] + dc;
+          if (!G[r][c]) G[r][c] = { t: 'action', si: sp.si, ai: ai };
+          ai++;
+        }
+      });
+      var h = '<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:2px;background:#D1D5DB;border-radius:6px;overflow:hidden;min-width:480px">';
+      for (var r2 = 0; r2 < 9; r2++) for (var c2 = 0; c2 < 9; c2++) {
+        var cell = G[r2][c2];
+        var sty = 'min-height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.3;padding:3px 2px;word-break:break-all;position:relative;box-sizing:border-box;';
+        if (c2 === 2 || c2 === 5) sty += 'border-right:3px solid #9CA3AF;';
+        if (r2 === 2 || r2 === 5) sty += 'border-bottom:3px solid #9CA3AF;';
+        var tx = '';
+        if (cell && cell.t === 'center') {
+          var ed = edits['center'];
+          sty += 'background:' + color + ';color:#fff;font-weight:800;font-size:10px;' + (ed ? 'box-shadow:inset 0 0 0 2px #F59E0B;' : '');
+          tx = ((ed && ed.text != null ? ed.text : chart.center) || '').replace(/\n/g, '<br>') + (ed && ed.progress != null ? '<span style="font-size:7px;display:block">' + ed.progress + '%</span>' : '');
+        } else if (cell && cell.t === 'sub') {
+          var ed3 = edits['csf-' + cell.si];
+          sty += (ed3 ? 'background:#FEF3C7;box-shadow:inset 0 0 0 1.5px #F59E0B;' : 'background:' + bg + ';') + 'color:' + color + ';font-weight:700;';
+          var stext = (ed3 && ed3.text != null ? ed3.text : (subs[cell.si] || ''));
+          tx = stext + (ed3 ? '<span style="font-size:7px;position:absolute;top:1px;right:2px;color:#D97706">✏</span>' : '') + (ed3 && ed3.progress != null ? '<span style="font-size:7px;display:block">' + ed3.progress + '%</span>' : '');
+        } else if (cell && cell.t === 'action') {
+          var ed4 = edits[cell.si + '-' + cell.ai];
+          var atext = ((acts[cell.si] || [])[cell.ai] || '');
+          if (ed4) {
+            sty += 'background:#FEF3C7;color:#92400E;border:1.5px solid #F59E0B;';
+            var pg = ed4.progress > 0 ? '<span style="font-size:7px;margin-top:1px">' + ed4.progress + '%</span>' : '';
+            tx = '<span style="font-size:7px;position:absolute;top:1px;right:2px;color:#D97706">✏</span>' + (ed4.text || atext) + pg;
+          } else {
+            sty += 'background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;';
+            tx = atext;
+          }
+        } else { sty += 'background:#E5E7EB;'; }
+        h += '<div style="' + sty + '">' + tx + '</div>';
+      }
+      h += '</div>';
+      return h;
+    }
+    function paint() {
+      var on = containerEl._kpiOn;
+      var btnTxt = on ? '− KPIを隠す' : '＋ KPIを表示';
+      var inner = on ? fullHTML() : simpleHTML();
+      containerEl.innerHTML =
+        '<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button type="button" class="card-btn" style="background:var(--accent-l,#CCEDE9);color:var(--accent,#0D9488);border-color:var(--accent,#0D9488);font-weight:700" data-mnd-kpi-toggle>' + btnTxt + '</button></div>' +
+        '<div style="overflow-x:auto">' + inner + '</div>';
+      var btn = containerEl.querySelector('[data-mnd-kpi-toggle]');
+      if (btn) btn.onclick = function () { containerEl._kpiOn = !containerEl._kpiOn; paint(); };
+    }
+    paint();
+  }
+
   window.VexumAPI = {
     ready: ready,
     sb: sb,
     fetchAll: fetchAll,
     renderEvalMandala: renderEvalMandala,
+    renderMandalaSimple: renderMandalaSimple,
     loadAdminData: loadAdminData,
     loadLeaderData: loadLeaderData,
     addTeamMember: addTeamMember,

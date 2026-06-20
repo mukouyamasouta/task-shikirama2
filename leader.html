@@ -171,7 +171,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)">2</div><div class="s-trend down">▲ 1 先週比</div></div>
   </div>
   <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
-    <span style="font-size:14px">💡</span><span>各メンバーの個人ダッシュボードと曼荼羅チャートを確認できます。「📊 個人DB」で詳細、「🧿 曼荼羅」でチャートを表示します。</span>
+    <span style="font-size:14px">💡</span><span>各メンバーの「📊 個人DB」で、担当タスク・進捗・曼荼羅チャート（開閉可）を確認できます。</span>
   </div>
   <div class="g2" id="dash-members"></div>
 </div>
@@ -551,7 +551,7 @@ function renderDashboard(){
     m.kpis.forEach(kp=>{const c=kp.p>=80?'var(--green)':kp.p>=50?'var(--amber)':'var(--accent)';h+=`<div class="team-row" style="padding:6px 0"><div class="tname" style="font-size:11px">${kp.n}</div><div class="pw" style="max-width:160px"><div class="pt"><div class="pf" style="width:${kp.p}%;background:${c}"></div></div><div class="pp" style="color:${c}">${kp.p}%</div></div></div>`;});
     const kpiEditCnt=m.memberKpiEdits?Object.keys(m.memberKpiEdits).length:0;
     const kpiEditBadge=kpiEditCnt>0?`<span style="font-size:9px;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;padding:2px 7px;border-radius:10px;font-weight:700">✏ KPI編集 ${kpiEditCnt}件</span>`:'';
-    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:10px;color:var(--text3)">完了 ${m.stats.done} ・ 進行 ${m.stats.wip} ・ 遅延 ${m.stats.late}</span>${kpiEditBadge}</div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMemberDash('${id}')">📊 個人DB</button><button class="card-btn" onclick="openMemberMandala('${id}')">🧿 曼荼羅</button></div></div></div></div>`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:10px;color:var(--text3)">完了 ${m.stats.done} ・ 進行 ${m.stats.wip} ・ 遅延 ${m.stats.late}</span>${kpiEditBadge}</div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMemberDash('${id}')">📊 個人DB</button></div></div></div></div>`;
   });
   document.getElementById('dash-members').innerHTML=h;
 }
@@ -574,13 +574,26 @@ async function openMemberDash(id){
         : `<span style="font-size:12px;color:var(--text3)">チャートがありません</span>`);
   const taskSel=`<select class="fs" id="md-task-chart-sel" style="min-width:200px" onchange="onMdTaskChartChange()"><option value="">全チャート</option>${charts.filter(c=>c.id!=='__main__').map(c=>`<option value="${c.id}">${mdChartLabel(c)}</option>`).join('')}</select>`;
   let h=`<div class="g4" id="md-stat-cards" style="margin-bottom:14px"></div>`;
-  h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div class="card-title">🧿 曼荼羅チャート</div><div class="card-sub">${charts.length>1?'プルダウンでチャートを切り替え':'メンバーの曼荼羅チャート'}</div></div><div class="card-body"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">${mndSel}</div><div id="md-mnd-wrap" style="overflow-x:auto"></div></div></div>`;
+  h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd" style="gap:10px;flex-wrap:wrap"><div><div class="card-title">🧿 曼荼羅チャート</div><div class="card-sub">${charts.length>1?'プルダウンでチャートを切り替え':'メンバーの曼荼羅チャート'}</div></div><button class="card-btn" id="md-mnd-toggle" onclick="toggleMdMnd()">▶ 曼荼羅チャートを見る</button></div><div class="card-body" id="md-mnd-body" style="display:none"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">${mndSel}</div><div id="md-mnd-wrap" style="overflow-x:auto"></div></div></div>`;
   h+=`<div class="card"><div class="card-hd" style="gap:10px;flex-wrap:wrap"><div class="card-title">割り当てタスクの状況</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:10px;color:var(--text3)">チャート絞り込み</span>${taskSel}</div></div><div class="card-body" style="padding:0"><div id="md-task-list"></div></div></div>`;
   document.getElementById('md-body').innerHTML=h;
   document.getElementById('member-modal').style.display='flex';
-  // 初期表示：タスクは「全チャート」、曼荼羅は先頭チャート
+  // 初期表示：タスクは「全チャート」、曼荼羅は閉じた状態（ボタンで開閉）
+  window._mdMndOpen=false;
   mdRenderTasks('');
-  if(charts.length)mdRenderMnd(charts[0].id);
+}
+// 個人DBの曼荼羅チャートを開閉（初期は閉じている。開いた時に遅延描画）
+function toggleMdMnd(){
+  window._mdMndOpen=!window._mdMndOpen;
+  const body=document.getElementById('md-mnd-body'),btn=document.getElementById('md-mnd-toggle');
+  if(!body)return;
+  body.style.display=window._mdMndOpen?'':'none';
+  if(btn)btn.textContent=window._mdMndOpen?'▼ 曼荼羅チャートを閉じる':'▶ 曼荼羅チャートを見る';
+  if(window._mdMndOpen){
+    const charts=window._mdCharts||[];const sel=document.getElementById('md-chart-sel');
+    const cid=(sel&&sel.value)||(charts[0]&&charts[0].id);
+    if(cid)mdRenderMnd(cid);
+  }
 }
 // チャートの表示ラベル（KGI中心テキスト優先・コードに合わせ chart.center を使用）
 function mdChartLabel(c){
@@ -646,7 +659,8 @@ function mdRenderMnd(chartId){
   const c=charts.find(x=>String(x.id)===String(chartId))||charts[0];
   if(!c){box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートがありません</div>';return;}
   const API=window.VexumAPI;
-  if(API&&API.renderEvalMandala)API.renderEvalMandala(c,c.member_kpi_edits||c.memberKpiEdits||{},box);
+  if(API&&API.renderMandalaSimple)API.renderMandalaSimple(box,c,c.member_kpi_edits||c.memberKpiEdits||{});
+  else if(API&&API.renderEvalMandala)API.renderEvalMandala(c,c.member_kpi_edits||c.memberKpiEdits||{},box);
   else box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートを表示できません</div>';
 }
 // 全画面で曼荼羅を表示（現在選択中のチャート）
