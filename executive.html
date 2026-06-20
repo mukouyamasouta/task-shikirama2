@@ -1681,17 +1681,20 @@ function renderEvalHistory(){
   con.innerHTML=h;
 }
 function evalBlock(id,type,si,tag,tagColor,goal){
+  // 並び順（最優先要件）: ①目標 → ②従業員の自己評価＋リーダー評価（参照）→ ③幹部の評価入力欄
   return `<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:${tagColor}1A;color:${tagColor}">${tag}</span>
       <span style="font-size:12.5px;font-weight:700;color:var(--text)">${goal}</span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <span style="font-size:10px;color:var(--text3)">5段階評価</span>
-      <span id="mevstars-${id}-${type}-${si}" style="display:flex;gap:1px">${mevStarHTML(id,type,si)}</span>
+    <div id="ref-${id}-${type}-${si}" style="margin-bottom:8px"></div>
+    <div style="border-top:1px dashed var(--border);padding-top:8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:10px;font-weight:700;color:#7C3AED">🏢 幹部評価（5段階）</span>
+        <span id="mevstars-${id}-${type}-${si}" style="display:flex;gap:1px">${mevStarHTML(id,type,si)}</span>
+      </div>
+      <textarea class="fi" rows="2" style="resize:vertical;font-size:12px" placeholder="${tag}への幹部評価コメント…" oninput="saveMevCmt('${id}','${type}',${si},this.value)">${type==='kgi'?_mev(id).kgi.comment:_mev(id).csf[si].comment}</textarea>
     </div>
-    <textarea class="fi" rows="2" style="resize:vertical;font-size:12px" placeholder="${tag}への評価コメント…" oninput="saveMevCmt('${id}','${type}',${si},this.value)">${type==='kgi'?_mev(id).kgi.comment:_mev(id).csf[si].comment}</textarea>
-    <div id="ref-${id}-${type}-${si}" style="margin-top:6px"></div>
   </div>`;
 }
 /* 自己評価マーカー更新（プルダウン用） */
@@ -1736,23 +1739,29 @@ async function injectEvalRefs(memberId,pid){
       if(!self)self=evAll.fromSelf[0]||null;
       if(!leader)leader=evAll.fromLeader[0]||null;
     }
-    const renderRef=(targetId,sLabel,sStars,sComment,lLabel,lStars,lComment,hasSelf,hasLeader)=>{
+    // 達成率（曼荼羅と同じく member_kpi_edits の進捗から算出）
+    const selChart=(charts||[]).find(c=>c.id===chartId)||(charts||[])[0]||null;
+    const kpiEdits=(selChart&&selChart.member_kpi_edits)||{};
+    const csfRate=si=>{let s=0;for(let ai=0;ai<8;ai++){const e=kpiEdits[si+'-'+ai];s+=e&&e.progress!=null?Math.round(+e.progress):0;}return Math.round(s/8);};
+    const kgiRate=()=>{let s=0;for(let si=0;si<8;si++)s+=csfRate(si);return Math.round(s/8);};
+    const renderRef=(targetId,sLabel,sStars,sComment,lLabel,lStars,lComment,hasSelf,hasLeader,sRate)=>{
       const el=document.getElementById(targetId);if(!el)return;
       let h='';
       if(hasSelf){
-        const txt=(sStars||sComment)?`<span style="color:#F59E0B;letter-spacing:1px">${starStr(sStars||0)}</span> <span style="color:var(--text2)">「${sComment||'—'}」</span>`:`<span style="color:var(--text3)">本人未入力</span>`;
-        h+=`<div style="padding:5px 9px;background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:4px;font-size:10.5px;color:#92400E;line-height:1.5;margin-bottom:4px"><span style="font-weight:700">📝 ${sLabel}: </span>${txt}</div>`;
+        const txt=(sStars||sComment)?`<span style="color:#F59E0B;letter-spacing:1px">${starStr(sStars||0)}</span> <span style="font-weight:700;color:#92400E">${sStars||0}/5</span> <span style="color:var(--text2)">「${sComment||'—'}」</span>`:`<span style="color:var(--text3)">本人未入力</span>`;
+        const rate=(sRate!=null)?`<span style="margin-left:6px;font-weight:700;color:#B45309">達成率 ${sRate}%</span>`:'';
+        h+=`<div style="padding:5px 9px;background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:4px;font-size:10.5px;color:#92400E;line-height:1.5;margin-bottom:4px"><span style="font-weight:700">👤 ${sLabel}: </span>${txt}${rate}</div>`;
       }
       if(hasLeader){
-        const txt=(lStars||lComment)?`<span style="color:#F59E0B;letter-spacing:1px">${starStr(lStars||0)}</span> <span style="color:var(--text2)">「${lComment||'—'}」</span>`:`<span style="color:var(--text3)">リーダー未入力</span>`;
-        h+=`<div style="padding:5px 9px;background:#CCEDE9;border-left:3px solid var(--accent);border-radius:4px;font-size:10.5px;color:#0F766E;line-height:1.5"><span style="font-weight:700">📌 ${lLabel}: </span>${txt}</div>`;
+        const txt=(lStars||lComment)?`<span style="color:#F59E0B;letter-spacing:1px">${starStr(lStars||0)}</span> <span style="font-weight:700;color:#0F766E">${lStars||0}/5</span> <span style="color:var(--text2)">「${lComment||'—'}」</span>`:`<span style="color:var(--text3)">リーダー未入力</span>`;
+        h+=`<div style="padding:5px 9px;background:#CCEDE9;border-left:3px solid var(--accent);border-radius:4px;font-size:10.5px;color:#0F766E;line-height:1.5"><span style="font-weight:700">👔 ${lLabel}: </span>${txt}</div>`;
       }
       el.innerHTML=h;
     };
-    renderRef('ref-'+memberId+'-kgi--1', '本人自己評価(KGI)', self&&self.kgi, self&&self.kgiComment, 'リーダー評価(KGI)', leader&&leader.kgi, leader&&leader.kgiComment, !!self, !!leader);
+    renderRef('ref-'+memberId+'-kgi--1', '従業員の自己評価', self&&self.kgi, self&&self.kgiComment, 'リーダーの評価', leader&&leader.kgi, leader&&leader.kgiComment, !!self, !!leader, kgiRate());
     for(let si=0;si<8;si++){
       const sc=self&&self.csf&&self.csf[si]; const lc=leader&&leader.csf&&leader.csf[si];
-      renderRef('ref-'+memberId+'-csf-'+si, '本人自己評価(CSF-'+(si+1)+')', sc&&sc.stars, sc&&sc.comment, 'リーダー評価(CSF-'+(si+1)+')', lc&&lc.stars, lc&&lc.comment, !!self, !!leader);
+      renderRef('ref-'+memberId+'-csf-'+si, '従業員の自己評価', sc&&sc.stars, sc&&sc.comment, 'リーダーの評価', lc&&lc.stars, lc&&lc.comment, !!self, !!leader, csfRate(si));
     }
     window._execCommentEvalId[memberId]=leader&&leader.id||null;
     const ecInput=document.getElementById('execcomment-input-'+memberId);
