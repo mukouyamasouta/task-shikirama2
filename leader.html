@@ -559,8 +559,21 @@ async function openMemberDash(id){
   const m=MEMBERS[id];
   document.getElementById('md-name').textContent=m.name+'（'+m.role+'）';
   document.getElementById('md-team').textContent=m.team+' ／ 達成率 '+m.rate+'%';
-  // タスクのサマリ（チャート由来タスクのみ＝source_send_id/source_chart/source_cell のいずれかを持つ）
-  const tasks=(MEMBER_TASKS[id]||[]).filter(t=>t.sendId||t.chart||t.cell);
+  // 曼荼羅チャートを先に取得（タスクのチャート紐づき判定にも利用）
+  let charts=[];const API=window.VexumAPI;
+  if(API&&API.ready&&m.pid){ try{charts=window._chartsCache[m.pid]||await API.loadChartsFor(m.pid);window._chartsCache[m.pid]=charts;}catch(e){charts=[];} }
+  window._mdCharts=charts;window._mdMemberId=id;
+  // チャート（CSF/KPI）の文言セットを構築：本人の主チャート＋取得した全チャート
+  const chartLabels=new Set();
+  const addLabels=(subs,acts)=>{(subs||[]).forEach(s=>{if(s)chartLabels.add(String(s).trim());});(acts||[]).forEach(r=>(r||[]).forEach(a=>{if(a)chartLabels.add(String(a).trim());}));};
+  addLabels(m.subs,m.acts);
+  charts.forEach(c=>addLabels(c.subs,c.acts));
+  // 表示対象＝チャートに紐づくタスクのみ。除外するのは「チャートに一切紐づかない純粋な割り当てタスク」だけ。
+  //   ✅ source_send_id / source_chart / source_cell のいずれかを持つ（チャート送信・由来）
+  //   ✅ related_kgi(=t.kpi) がチャートのCSF/KPI文言に一致（チャートのCSF/KPI紐づき）
+  const tasks=(MEMBER_TASKS[id]||[]).filter(t=>
+    t.sendId||t.chart||t.cell||(t.kpi&&t.kpi!=='—'&&chartLabels.has(String(t.kpi).trim()))
+  );
   const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length;
   const wip=tasks.filter(t=>t.status==='wip').length;
   const late=tasks.filter(t=>t.status==='late').length;
@@ -572,9 +585,6 @@ async function openMemberDash(id){
     <div class="stat-card" style="padding:14px"><div class="s-lbl">遅延</div><div class="s-val" style="font-size:22px;color:var(--red)">${late}</div></div>
   </div>`;
   // 曼荼羅チャートの種類プルダウン（複数チャートがあれば選択して表示）
-  let charts=[];const API=window.VexumAPI;
-  if(API&&API.ready&&m.pid){ try{charts=window._chartsCache[m.pid]||await API.loadChartsFor(m.pid);window._chartsCache[m.pid]=charts;}catch(e){charts=[];} }
-  window._mdCharts=charts;window._mdMemberId=id;
   const chartSel=charts.length
     ? `<select class="fs" id="md-chart-sel" style="flex:1;min-width:160px">${charts.map((c,i)=>`<option value="${i}">${c.name||'チャート'}（${c.scope_label||c.period||''}）</option>`).join('')}</select><button class="card-btn" onclick="mdViewChart()">🧿 表示</button>`
     : `<button class="card-btn" onclick="openMandala('${id}',false)">🧿 曼荼羅チャートを見る</button>`;
