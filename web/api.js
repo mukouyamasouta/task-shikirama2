@@ -304,6 +304,7 @@
     if (!sb) return { error: 'Supabase未接続' };
     if (!id) return { error: 'タスクIDが不明です（デモデータは保存対象外）' };
     var up = {};
+    if (patch.title != null) up.title = patch.title;
     if (patch.progress != null) up.progress = patch.progress;
     if (patch.status) up.status = patch.status;
     if (patch.comment != null) up.comment = patch.comment;
@@ -317,6 +318,15 @@
     if (!r.data || r.data.length === 0) return { error: '更新できませんでした（権限不足の可能性）' };
     // 受信チャート由来のタスクなら、チャート（chart_sends）の該当セルと全体進捗へ自動反映
     try { await propagateTaskToSend(id); } catch (e) {}
+    return { ok: true };
+  }
+  // タスクを削除（本人のタスクのみ。RLSで保護）。返り値で削除行数を検証。
+  async function deleteTask(id) {
+    if (!sb) return { error: 'Supabase未接続' };
+    if (!id) return { error: 'タスクIDが不明です（デモデータは保存対象外）' };
+    var r = await sbRetry(function () { return sb.from('tasks').delete().eq('id', id).select('id'); });
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    if (!r.data || r.data.length === 0) return { error: '削除できませんでした（権限不足の可能性）' };
     return { ok: true };
   }
   // タスク進捗 → chart_sends（送信チャート）への逆反映
@@ -1444,6 +1454,7 @@
     updateTeam: updateTeam,
     assignTask: assignTask,
     updateTask: updateTask,
+    deleteTask: deleteTask,
     logTaskTime: logTaskTime,
     setTaskProgress: setTaskProgress,
     loadTaskTimeLogs: loadTaskTimeLogs,

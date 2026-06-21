@@ -173,8 +173,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 .eval-pct-input{width:72px;padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:14px;font-weight:700;color:var(--accent);font-family:inherit;text-align:center;outline:none}
 .eval-pct-input:focus{border-color:var(--accent)}
 /* cell editor overlay */
-#cell-editor-overlay{display:none;position:fixed;inset:0;z-index:8888;background:transparent}
-#cell-editor-box{display:none;position:fixed;z-index:8889;background:#fff;border:2px solid var(--accent);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px;min-width:180px}
+#cell-editor-overlay{display:none;position:fixed;inset:0;z-index:9995;background:transparent}
+#cell-editor-box{display:none;position:fixed;z-index:9996;background:#fff;border:2px solid var(--accent);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px;min-width:180px}
 /* ===== レスポンシブ（iOS/Android = 上部タブ） ===== */
 @media(max-width:768px){
   body{flex-direction:column}
@@ -229,9 +229,11 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)" id="ep-d-late">—</div><div class="s-trend" style="color:var(--text3)">期限超過・未完了</div></div>
     <div class="stat-card"><div class="s-lbl">合計作業時間</div><div class="s-val" style="color:var(--accent)" id="ep-d-hours">—</div><div class="s-trend" style="color:var(--text3)">全タスク累計工数</div></div>
   </div>
-  <!-- 自分のKGI / KPI 進捗（最上部） -->
+  <!-- KGI進捗（最上部）：自分の全チャートのKGI（達成率100%未満）を表示 -->
   <div class="card">
-    <div class="card-hd"><div><div class="card-title">自分のKGI / KPI 進捗</div><div class="card-sub" id="ep-kgi-name">Q3個人売上 ¥15M達成</div></div><span style="font-size:20px;font-weight:800;color:var(--accent)" id="ep-kgi-pct">—</span></div>
+    <div class="card-hd"><div><div class="card-title">KGI進捗</div><div class="card-sub">達成率100%未満のKGIを表示・クリックでチャート管理へ</div></div>
+      <select class="fs" id="ep-kgi-filter" onchange="renderKgiProgress()" style="font-size:11px;padding:6px 10px;font-weight:600;max-width:220px;width:auto"><option value="all">全チャート</option></select>
+    </div>
     <div class="card-body" id="ep-kpi-rows"></div>
   </div>
   <!-- 本日対応が必要・未完了タスク（期限が迫っている順） -->
@@ -462,7 +464,6 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <div id="tc-chartmgr" class="tab-content">
   <div class="sec-title">チャート管理
     <button class="f-submit" style="font-size:12px;padding:7px 16px" onclick="openNewChartModal()">＋ チャートを新規作成</button>
-    <button class="f-submit" style="font-size:12px;padding:7px 16px;background:var(--green)" onclick="openCmAddTask()">＋ チャート追加</button>
   </div>
   <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;box-shadow:var(--shadow)">
     <div style="flex:1;min-width:200px">
@@ -920,6 +921,29 @@ function resetReportForm(){
     <div style="display:flex;gap:8px;margin-top:4px">
       <button class="f-submit" style="flex:1;background:var(--text3)" onclick="clearKpiEdit()">元に戻す</button>
       <button class="f-submit" style="flex:1" onclick="saveKpiEdit()">✓ 保存してリーダーに通知</button>
+    </div>
+  </div>
+</div>
+
+<!-- チャート外タスク編集モーダル（タスク管理） -->
+<div id="task-edit-modal" onclick="if(event.target===this)closeTaskEdit()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9991;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:460px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="font-size:15px;font-weight:800;color:var(--accent)">✏ タスクを編集</div>
+      <button onclick="closeTaskEdit()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div id="te-meta" style="font-size:10px;color:var(--text3);margin-bottom:12px">—</div>
+    <div class="fg"><label class="fl">タスク名</label><input class="fi" id="te-name" placeholder="タスク名を入力…"></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">進捗 <span id="te-prog-val" style="color:var(--accent);font-weight:700">0%</span></label>
+        <input type="range" id="te-prog" min="0" max="100" value="0" style="width:100%;accent-color:var(--accent)" oninput="document.getElementById('te-prog-val').textContent=this.value+'%'"></div>
+      <div class="fg"><label class="fl">本日の作業時間(h)</label><input class="fi" id="te-hours" type="number" min="0" step="0.5" placeholder="0"></div>
+    </div>
+    <div class="fg"><label class="fl">メモ・コメント</label>
+      <textarea class="fi" id="te-note" rows="3" placeholder="進捗状況・メモ・リーダーへの報告…" style="resize:vertical;font-size:12px"></textarea></div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="f-submit" style="flex:1;background:var(--text3)" onclick="closeTaskEdit()">キャンセル</button>
+      <button class="f-submit" style="flex:1" onclick="saveTaskEdit()">💾 保存</button>
     </div>
   </div>
 </div>
@@ -2353,8 +2377,11 @@ updateInboxBadge();
 
 /* ===== タスク管理タブ（実データ描画） ===== */
 function _epShortMD(d){if(!d||d==='—')return'-';const p=String(d).split('/');return p.length===3?(+p[1])+'/'+(+p[2]):d;}
-let _tmFilter='all';
+let _tmFilter='all',_tmChartFilter='all';
 function tmFilter(st,btn){_tmFilter=st;document.querySelectorAll('#ep-task-filters .f-btn').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');renderTaskTable();}
+function tmFilterChart(v){_tmChartFilter=v;renderTaskTable();}
+function tmFilterStatus(v){_tmFilter=v;renderTaskTable();}
+function tmFilterReset(){_tmFilter='all';_tmChartFilter='all';renderTaskTable();}
 // タスク管理: チャートごとに「CSF（チャートのタスク）＋割当タスク」、最後に「チャート以外のタスク」
 function renderTaskTable(){
   const con=document.getElementById('task-groups');if(!con)return;
@@ -2379,18 +2406,36 @@ function renderTaskTable(){
   });
   const all=[...chartRows,...taskRows];
   const match=t=>_tmFilter==='all'||stOf(t)===_tmFilter;
-  // フィルタボタン
+  // 絞り込みバー: [全チャート ▼] [全ステータス ▼] [リセット]
   const f=document.getElementById('ep-task-filters');
-  if(f){const cnt=st=>st==='all'?all.length:all.filter(t=>stOf(t)===st).length;
-    f.innerHTML=[['all','全て'],['wip','進行中'],['done','完了'],['late','遅延'],['todo','未着手']].map(([k,l])=>`<button class="f-btn${k===_tmFilter?' active':''}" onclick="tmFilter('${k}',this)">${l} (${cnt(k)})</button>`).join('');}
+  if(f){
+    const chartKeys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
+    if(_tmChartFilter!=='all'&&_tmChartFilter!=='__none__'&&chartKeys.indexOf(_tmChartFilter)<0)_tmChartFilter='all';
+    const chartOpts='<option value="all">全チャート</option>'
+      +chartKeys.map(k=>{const nm=((CHARTS[k].center||CHARTS[k].name||k)+'').replace(/\n/g,' ');return `<option value="${k}"${k===_tmChartFilter?' selected':''}>${nm}</option>`;}).join('')
+      +`<option value="__none__"${_tmChartFilter==='__none__'?' selected':''}>チャートなし</option>`;
+    const statusOpts=[['all','全ステータス'],['todo','未着手'],['wip','進行中'],['done','完了'],['late','遅延']]
+      .map(([k,l])=>`<option value="${k}"${k===_tmFilter?' selected':''}>${l}</option>`).join('');
+    f.innerHTML=`<select class="fs" onchange="tmFilterChart(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto;max-width:240px">${chartOpts}</select>
+      <select class="fs" onchange="tmFilterStatus(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto">${statusOpts}</select>
+      <button class="f-btn" onclick="tmFilterReset()">リセット</button>`;
+  }
+  // チャート絞り込み判定（選択チャートのCSF群＋そのチャート名を持つタスク群を表示）
+  function _chartFilterMatch(groupKey){
+    if(_tmChartFilter==='all')return true;
+    if(_tmChartFilter==='__none__')return groupKey==='__none__';
+    if(groupKey===_tmChartFilter)return true;
+    const nm=(CHARTS[_tmChartFilter]||{}).name;
+    return !!nm&&groupKey==='name:'+nm;
+  }
   // グルーピング: チャート名キー、チャート以外は __none__
   const groups={};const order=[];
   function push(key,name,row){if(!groups[key]){groups[key]={name,rows:[]};order.push(key);}groups[key].rows.push(row);}
   Object.entries(CHARTS).forEach(([k,d])=>{if(!k.startsWith('__'))push(k,d.name||k,null);}); // チャート順を確保
   chartRows.filter(match).forEach(r=>push(r.chartKey,r.chartName,r));
   taskRows.filter(match).forEach(r=>push(r.chart?('name:'+r.chart):'__none__',r.chart||'チャート以外のタスク',r));
-  // 空グループ除去（行なし）
-  const keys=order.filter(k=>groups[k].rows.filter(Boolean).length);
+  // 空グループ除去（行なし）＋チャート絞り込み
+  const keys=order.filter(k=>groups[k].rows.filter(Boolean).length&&_chartFilterMatch(k));
   keys.sort((a,b)=>a==='__none__'?1:b==='__none__'?-1:0);
   if(!keys.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:24px">該当するタスクはありません</div></div>';return;}
   let h='';
@@ -2408,46 +2453,31 @@ function renderTaskTable(){
       const pcChip=t.kind==='task'?`<span class="chip ${(priMap[t.pri]||priMap.md)[0]}">${(priMap[t.pri]||priMap.md)[1]}</span>`:'';
       const meta=t.kind==='csf'?`チャートのCSF ／ 合計 ${t.hours}h`:`${t.kpi} ／ 期限 ${t.end} ／ 合計 ${t.hours}h`;
       const rid=t.kind==='csf'?('C_'+t.chartKey+'_'+t.si):(t.arr+t.idx);
+      const refObj=t.ref||{};
+      // チャート紐付き（source_chart / source_send_id あり）は削除不可。チャート外タスクのみ削除可
+      const isChartTask=!!(t.chart||refObj.chart||refObj.sendId);
+      const deletable=t.kind==='task'&&!isChartTask;
       h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
           <div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${tagCsf}${editor}</div><div style="font-size:10px;color:var(--text3)">${meta}</div></div>
           <div style="display:flex;gap:6px;align-items:center">${pcChip}<span class="chip ${sc[0]}">${sc[1]}</span><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${t.pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${t.pct}%</div></div></div>
         </div>`;
+      let acts='';
       if(!t.done){
-        if(t.kind==='csf'){
-          h+=`<div style="margin-top:8px;text-align:right"><button class="card-btn" style="background:var(--amber);color:#fff;border-color:var(--amber)" onclick="openCellEdit('${t.chartKey}','csf',${t.si})">✏ 進捗・作業時間を記入</button></div>`;
-        }else{
-          h+=`<div style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;flex-wrap:wrap">
-            <div><div style="font-size:9px;font-weight:700;color:var(--text2)">進捗%</div><input type="number" id="tmp-${rid}" min="0" max="100" value="${t.pct}" style="width:64px;padding:5px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;text-align:center"></div>
-            <div><div style="font-size:9px;font-weight:700;color:var(--text2)">本日の作業時間(h)</div><input type="number" id="tmh-${rid}" min="0" step="0.5" placeholder="0" style="width:64px;padding:5px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;text-align:center"></div>
-            <button class="card-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="tmTaskSave('${rid}',this)">💾 記入</button>
-          </div>`;
-        }
+        if(t.kind==='csf')acts+=`<button class="card-btn" style="background:var(--amber);color:#fff;border-color:var(--amber)" onclick="openCellEdit('${t.chartKey}','csf',${t.si})">✏ 進捗・作業時間を記入</button>`;
+        else acts+=`<button class="card-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="openTaskEdit('${rid}')">✏ 進捗・作業時間を記入</button>`;
       }
+      if(deletable)acts+=`<button class="card-btn" style="background:#FEE2E2;color:var(--red);border-color:#FCA5A5" onclick="tmAskDelete('${rid}')">🗑 削除</button>`;
+      if(acts)h+=`<div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">${acts}</div>`;
+      if(deletable)h+=`<div id="tmdel-${rid}" style="display:none;margin-top:8px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:10px">
+        <div style="font-size:12px;color:#991B1B;font-weight:700;margin-bottom:8px">このタスクを削除しますか？</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><button class="card-btn" onclick="tmCancelDelete('${rid}')">キャンセル</button><button class="card-btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="tmDoDelete('${rid}',this)">削除する</button></div>
+      </div>`;
       h+=`</div>`;
     });
     h+=`</div></div>`;
   });
   con.innerHTML=h;
-}
-// タスク管理タブから進捗・作業時間を記入（永続化＝logTaskTime）
-async function tmTaskSave(rid,btn){
-  const arr=rid[0],idx=+rid.slice(1);
-  const a=arr==='A'?ASSIGNMENTS[idx]:ASSIGN_HISTORY[idx];if(!a)return;
-  const pct=Math.max(0,Math.min(100,parseInt((document.getElementById('tmp-'+rid)||{}).value)||0));
-  const hours=Math.max(0,parseFloat((document.getElementById('tmh-'+rid)||{}).value)||0);
-  a.pct=pct;
-  const API=window.VexumAPI;
-  if(API&&API.ready&&a.id){
-    const res=await API.logTaskTime(a.id,{hours,progressAfter:pct});
-    if(res&&res.error){a.hours=(a.hours||0)+hours;_pendingTaskAdd(a.id,pct,a.hours);_updateSyncBadge();console.warn('[VEXUM] タスク保存失敗→再送キューへ:',res.error);}
-    else if(res)a.hours=res.totalHours!=null?res.totalHours:(a.hours||0)+hours;
-  }else{a.hours=(a.hours||0)+hours;}
-  a.status=pct>=100?'done':pct>0?'wip':(a.dueRaw&&a.dueRaw<_epToday()?'late':'todo');
-  const me=(document.getElementById('sb-uname')||{}).textContent;if(me&&me!=='（読み込み中）')a.editedBy=me;
-  _taskPersist(a);
-  btn.textContent='✓ 記入しました';btn.style.background='var(--green)';
-  setTimeout(()=>{ if(pct>=100&&arr==='A'){processAssignCompletion();} renderTaskTable();renderAssign();updateAssignBadge();if(typeof renderProgressDash==='function')renderProgressDash(); },1200);
 }
 // タスクの進捗・工数をlocalStorageへ（リロードしても残す）
 function _taskKey(a){return 'vexum_task_'+(a.id||('n:'+a.name));}
@@ -2458,6 +2488,76 @@ function restoreTasksFromLS(){
     const s=_lsGet(_taskKey(a));
     if(s){if(s.pct!=null)a.pct=s.pct;if(s.hours!=null)a.hours=s.hours;if(s.status)a.status=s.status;if(s.editedBy)a.editedBy=s.editedBy;}
   });
+}
+
+/* ===== チャート外タスクの編集モーダル（CSFと同じ操作感） ===== */
+let _editingTask=null;
+function _tmTaskOf(rid){const arr=rid[0],idx=+rid.slice(1);const a=arr==='A'?ASSIGNMENTS[idx]:ASSIGN_HISTORY[idx];return a?{arr,idx,a}:null;}
+function openTaskEdit(rid){
+  const x=_tmTaskOf(rid);if(!x)return;
+  _editingTask={arr:x.arr,idx:x.idx};
+  const a=x.a;
+  document.getElementById('te-name').value=a.name||'';
+  document.getElementById('te-meta').textContent=(a.kpi&&a.kpi!=='—'?'関連: '+a.kpi+' ／ ':'')+'期限 '+(a.end||'—')+' ／ 合計 '+(a.hours!=null?a.hours:0)+'h';
+  const pg=a.pct||0;
+  document.getElementById('te-prog').value=pg;
+  document.getElementById('te-prog-val').textContent=pg+'%';
+  document.getElementById('te-hours').value='';
+  document.getElementById('te-note').value=a.comment||'';
+  document.getElementById('task-edit-modal').style.display='flex';
+}
+function closeTaskEdit(){document.getElementById('task-edit-modal').style.display='none';_editingTask=null;}
+async function saveTaskEdit(){
+  if(!_editingTask)return;
+  const {arr,idx}=_editingTask;
+  const a=arr==='A'?ASSIGNMENTS[idx]:ASSIGN_HISTORY[idx];if(!a)return;
+  const name=(document.getElementById('te-name').value||'').trim();
+  const pct=Math.max(0,Math.min(100,parseInt(document.getElementById('te-prog').value)||0));
+  const hours=Math.max(0,parseFloat(document.getElementById('te-hours').value)||0);
+  const memo=document.getElementById('te-note').value||'';
+  const nameChanged=name&&name!==a.name;
+  if(name)a.name=name;
+  a.pct=pct;a.comment=memo;
+  const API=window.VexumAPI;
+  if(API&&API.ready&&a.id){
+    if(nameChanged&&API.updateTask){try{await API.updateTask(a.id,{title:name});}catch(e){}}
+    const res=await API.logTaskTime(a.id,{hours,progressAfter:pct,comment:memo});
+    if(res&&res.error){a.hours=(a.hours||0)+hours;_pendingTaskAdd(a.id,pct,a.hours);_updateSyncBadge();console.warn('[VEXUM] タスク保存失敗→再送キューへ:',res.error);}
+    else if(res)a.hours=res.totalHours!=null?res.totalHours:(a.hours||0)+hours;
+  }else{a.hours=(a.hours||0)+hours;}
+  a.status=pct>=100?'done':pct>0?'wip':(a.dueRaw&&a.dueRaw<_epToday()?'late':'todo');
+  const me=(document.getElementById('sb-uname')||{}).textContent;if(me&&me!=='（読み込み中）')a.editedBy=me;
+  _taskPersist(a);
+  closeTaskEdit();
+  if(pct>=100&&arr==='A')processAssignCompletion();
+  renderTaskTable();renderAssign();updateAssignBadge();if(typeof renderProgressDash==='function')renderProgressDash();
+  showToast('保存しました');
+}
+
+/* ===== タスクの2段階削除（チャート外タスクのみ） ===== */
+function tmAskDelete(rid){const p=document.getElementById('tmdel-'+rid);if(p)p.style.display='block';}
+function tmCancelDelete(rid){const p=document.getElementById('tmdel-'+rid);if(p)p.style.display='none';}
+async function tmDoDelete(rid,btn){
+  const x=_tmTaskOf(rid);if(!x)return;
+  const a=x.a,list=x.arr==='A'?ASSIGNMENTS:ASSIGN_HISTORY;
+  if(btn){btn.disabled=true;btn.textContent='削除中…';}
+  const API=window.VexumAPI;
+  if(API&&API.ready&&a.id&&API.deleteTask){
+    const res=await API.deleteTask(a.id);
+    if(res&&res.error){alert('削除に失敗しました: '+res.error);if(btn){btn.disabled=false;btn.textContent='削除する';}return;}
+  }
+  list.splice(x.idx,1);
+  if(a.id)try{localStorage.removeItem(_taskKey(a));}catch(e){}
+  renderTaskTable();renderAssign();updateAssignBadge();if(typeof renderProgressDash==='function')renderProgressDash();
+  showToast('削除しました');
+}
+
+/* ===== トースト通知 ===== */
+function showToast(msg){
+  let t=document.getElementById('vx-toast');
+  if(!t){t=document.createElement('div');t.id='vx-toast';t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1A2E2C;color:#fff;padding:10px 22px;border-radius:10px;font-size:13px;font-weight:700;z-index:99999;box-shadow:0 8px 24px rgba(0,0,0,.3);opacity:0;transition:opacity .2s';document.body.appendChild(t);}
+  t.textContent=msg;t.style.opacity='1';
+  clearTimeout(t._timer);t._timer=setTimeout(()=>{t.style.opacity='0';},2000);
 }
 
 /* ===== 進捗ダッシュボード（実データ描画・Supabase接続時のみ） ===== */
@@ -2519,6 +2619,49 @@ function gotoAssignFromDashTask(idx){
     if(card){card.scrollIntoView({behavior:'smooth',block:'center'});card.style.outline='2px solid var(--accent)';setTimeout(()=>{card.style.outline='';},1800);}
   },60);
 }
+/* チャートの編集データ（中心セルKGI等）。kpiEdits優先、なければCHARTSのmemberKpiEdits */
+function _chartEdits(k){return (kpiEdits[k]&&Object.keys(kpiEdits[k]).length)?kpiEdits[k]:((CHARTS[k]&&CHARTS[k].memberKpiEdits)||{});}
+/* チャートのKGI（中心セル）達成率 */
+function _chartKgiPct(k){const ed=_chartEdits(k)['center'];return (ed&&ed.progress!=null)?ed.progress:0;}
+/* チャートのKGIテキスト（編集後を優先） */
+function _chartKgiText(k){const d=CHARTS[k]||{};const ed=_chartEdits(k)['center'];return ((ed&&ed.text!=null)?ed.text:(d.center||'')).replace(/\n/g,' ');}
+/* KGI進捗カードを描画（自分の全チャートのKGI・達成率100%未満のみ） */
+function renderKgiProgress(){
+  const kr=document.getElementById('ep-kpi-rows');if(!kr)return;
+  syncKpiEditsFromCharts();
+  const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
+  const sel=document.getElementById('ep-kgi-filter');
+  let filter='all';
+  if(sel){
+    filter=sel.value||'all';
+    if(filter!=='all'&&keys.indexOf(filter)<0)filter='all';
+    sel.innerHTML='<option value="all">全チャート</option>'+keys.map(k=>`<option value="${k}"${k===filter?' selected':''}>${(CHARTS[k].name||k)}${CHARTS[k].readonly?'（参照のみ）':''}</option>`).join('');
+  }
+  const list=keys.filter(k=>filter==='all'||k===filter).map(k=>{
+    const d=CHARTS[k];
+    return {k,name:d.name||k,period:d.period||d.scopeLabel||'',kgi:_chartKgiText(k),pct:_chartKgiPct(k)};
+  }).filter(x=>x.pct<100);
+  if(!list.length){kr.innerHTML='<div style="text-align:center;color:var(--green);font-size:12px;padding:20px">未達成のKGIはありません 🎉</div>';return;}
+  kr.innerHTML=list.map(x=>{
+    const col=x.pct>=80?'var(--green)':x.pct>=40?'var(--accent)':'var(--amber)';
+    return `<div onclick="gotoChartMgr('${x.k}')" style="cursor:pointer;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;transition:.12s" onmouseover="this.style.boxShadow='var(--shadow)';this.style.borderColor='var(--accent)'" onmouseout="this.style.boxShadow='';this.style.borderColor='var(--border)'">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${x.name}${x.period?' / '+x.period:''}</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px">🎯 ${x.kgi||'（KGI未入力）'}</div>
+      <div class="pw"><div class="pt"><div class="pf" style="width:${x.pct}%;background:${col}"></div></div><div class="pp" style="color:${col}">${x.pct}%</div></div>
+    </div>`;
+  }).join('');
+}
+/* KGIカードクリック → チャート管理タブの該当チャートを選択して編集グリッドへスクロール */
+function gotoChartMgr(chartId){
+  gotoTab('chartmgr');
+  initChartMgr();
+  setTimeout(()=>{
+    const sel=document.getElementById('cm-chart-sel');
+    if(sel&&chartId&&CHARTS[chartId]){sel.value=chartId;onCmChartChange();}
+    const g=document.getElementById('cm-kpi-grid-simple');
+    if(g)g.scrollIntoView({behavior:'smooth',block:'start'});
+  },60);
+}
 function renderProgressDash(){
   let st=window._epStats;
   if(!st){ // デモ（Supabase未接続）: 手元のASSIGNMENTS等から簡易集計
@@ -2537,13 +2680,8 @@ function renderProgressDash(){
   set('ep-d-hours',(st.totalHours!=null?st.totalHours:0)+'h');
   // 本日対応が必要・未完了タスク一覧（ASSIGNMENTS=未完了の割当）
   _epRenderTaskLists();
-  const kpis=window._epKpis||[];
-  const kgiName=(CHARTS.self_q3&&CHARTS.self_q3.center)?CHARTS.self_q3.center.replace(/\n/g,' '):'';
-  if(kgiName)set('ep-kgi-name',kgiName);
-  const kAvg=kpis.length?Math.round(kpis.reduce((a,k)=>a+k.p,0)/kpis.length):st.rate;
-  set('ep-kgi-pct',kAvg+'%');
-  const kr=document.getElementById('ep-kpi-rows');
-  if(kr&&kpis.length)kr.innerHTML=kpis.map(k=>{const col=k.p>=80?'var(--green)':k.p>=60?'var(--accent)':'var(--amber)';return `<div class="team-row"><div class="tname" style="font-size:11px">${k.n}</div><div class="pw"><div class="pt"><div class="pf" style="width:${k.p}%;background:${col}"></div></div><div class="pp" style="color:${col}">${k.p}%</div></div></div>`;}).join('');
+  // KGI進捗カード（全チャートのKGI・達成率100%未満）を描画
+  renderKgiProgress();
   const team=window._epTeam;
   if(team&&team.members&&team.members.length){
     set('ep-team-name',team.name+' メンバー');set('ep-team-pct',(team.rate||0)+'%');
