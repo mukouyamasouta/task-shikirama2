@@ -201,7 +201,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <aside class="sidebar">
   <div class="sb-logo"><div class="sb-brand">VEXUM</div><div class="sb-brand-sub">TASK MANAGEMENT SYSTEM</div></div>
   <div class="sb-role"><span class="sb-role-dot"></span><span class="sb-role-lbl">● 個人 / 従業員</span></div>
-  <div class="sb-user"><div class="sb-uname" id="sb-uname" onclick="openProfileEdit()" style="cursor:pointer;text-decoration:underline" title="クリックでプロフィール編集">（読み込み中）</div><div class="sb-uemail" id="sb-uemail">—</div><button onclick="vexumLogout()" style="margin-top:6px;font-size:10px;color:var(--text3);background:none;border:1px solid var(--sb-border);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit">⎋ ログアウト</button></div>
+  <div class="sb-user"><div class="sb-uname" id="sb-uname" onclick="openProfileEdit()" style="cursor:pointer;text-decoration:underline" title="クリックでプロフィール編集">（読み込み中）</div><div class="sb-uemail" id="sb-uemail">—</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button onclick="vexumLogout()" style="font-size:10px;color:var(--text3);background:none;border:1px solid var(--sb-border);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit">⎋ ログアウト</button><button id="sb-switch-btn" onclick="switchToLeader()" style="display:none;font-size:10px;color:var(--accent);background:var(--accent-l);border:1px solid var(--accent);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit;font-weight:700">⇄ リーダー画面に切り替え</button></div></div>
   <div class="sb-nav">
     <div class="sb-sec">個人メニュー</div>
     <button class="sb-item active" onclick="swTab('progress',this)"><span class="sb-icon">◇</span>進捗ダッシュボード</button>
@@ -2838,14 +2838,12 @@ function vexumLogout(){
   var API=window.VexumAPI; if(!API||!API.ready) return;
   // ロールガード: この画面は member 専用。他ロールは自分の画面へ（1アカウント=1ロール=1画面）
   var DEST={admin:'./admin.html',executive:'./executive.html',leader:'./leader.html',member:'./employee.html'};
-  API.currentProfile().then(function(p){
-    if(!p){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); return; }
-    if(p.role!=='member'){ location.replace(DEST[p.role]||'./index.html'); return; }
-  });
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}
-  API.currentProfile().then(function(p){ if(!p)return; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; }).catch(function(){});
-  API.loadPersonalData().then(function(d){
+  // リーダーから「従業員画面に切り替え」した場合の代理表示用
+  var _linkedEmp=null,_curRole=null;
+  try{_linkedEmp=localStorage.getItem('vexum_linked_employee_id');_curRole=localStorage.getItem('vexum_current_role');}catch(e){}
+  function _applyPersonal(d){
     if(!d) return;
     repl(CHARTS,d.CHARTS); repl(FEEDBACK,d.FEEDBACK);
     replArr(ASSIGNMENTS,d.ASSIGNMENTS); replArr(ASSIGN_HISTORY,d.ASSIGN_HISTORY); replArr(PREPORTS,d.PREPORTS);
@@ -2858,10 +2856,27 @@ function vexumLogout(){
     if(typeof updateAssignBadge==='function') updateAssignBadge();
     if(typeof renderPReportCalendar==='function') renderPReportCalendar();
     if(window.VexumUI)VexumUI.refresh();
-    console.log('[VEXUM] Supabaseデータを反映しました');
-    // 未送信（前回保存失敗）のチャートをサーバーへ再送
+    console.log('[VEXUM] Supabaseデータを反映しました'+(window._actingEmpId?'（従業員として代理表示）':''));
     if(typeof flushPendingCharts==='function'){flushPendingCharts();if(typeof flushPendingTasks==='function')flushPendingTasks();}
-  }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:',e); });
+  }
+  function _bootLoad(actingId){
+    window._actingEmpId=actingId||null;
+    if(actingId&&API.loadProfile){
+      API.loadProfile(actingId).then(function(ep){ if(!ep)return; var un=document.getElementById('sb-uname');if(un)un.textContent=ep.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=ep.email; }).catch(function(){});
+    }else{
+      API.currentProfile().then(function(p){ if(!p)return; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; }).catch(function(){});
+    }
+    API.loadPersonalData(actingId||undefined).then(_applyPersonal).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:',e); });
+  }
+  API.currentProfile().then(function(p){
+    if(!p){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); return; }
+    // リーダー等が紐付け済み従業員として切り替えた場合は member 以外でも許可
+    var acting=(p.role!=='member')&&!!_linkedEmp&&_curRole==='employee';
+    if(p.role!=='member'&&!acting){ location.replace(DEST[p.role]||'./index.html'); return; }
+    window._meAuthProfile=p;
+    if(typeof _updateSwitchBtn==='function')_updateSwitchBtn();
+    _bootLoad(acting?_linkedEmp:null);
+  });
   // オンライン復帰時・定期（60秒）に未送信を再送
   window.addEventListener('online',function(){if(typeof flushPendingCharts==='function'){flushPendingCharts();if(typeof flushPendingTasks==='function')flushPendingTasks();}});
   setInterval(function(){if(navigator.onLine&&typeof flushPendingCharts==='function'){flushPendingCharts();if(typeof flushPendingTasks==='function')flushPendingTasks();}},60000);
@@ -2876,7 +2891,7 @@ function vexumLogout(){
   // リアルタイム反映: リーダーの振り分け・チャート更新を自動で再描画
   if(API.subscribeLive){
     API.subscribeLive(['tasks','chart_sends'],function(){
-      API.loadPersonalData().then(function(d){
+      API.loadPersonalData(window._actingEmpId||undefined).then(function(d){
         if(!d)return;
         repl(CHARTS,d.CHARTS);repl(FEEDBACK,d.FEEDBACK);
         replArr(ASSIGNMENTS,d.ASSIGNMENTS);replArr(ASSIGN_HISTORY,d.ASSIGN_HISTORY);
@@ -2913,9 +2928,17 @@ function vexumLogout(){
       <button class="f-submit" style="flex:1;background:#E5E7EB;color:#374151" onclick="closeProfileEdit()">キャンセル</button>
       <button class="f-submit" id="profile-edit-save" style="flex:1" onclick="saveProfile()">保存する</button>
     </div>
+    <!-- リーダー紐付け済みのとき：リーダー画面へ戻る（CASE C相当） -->
+    <div id="pe-link-section" style="display:none;border-top:1px solid var(--border);margin-top:18px;padding-top:14px">
+      <button class="f-submit" style="width:100%" onclick="switchToLeader()">→ リーダー画面に切り替え</button>
+    </div>
   </div>
 </div>
 <script>
+/* ===== リーダー⇄従業員 紐付け・切り替え ===== */
+function _isLinked(){return !!localStorage.getItem('vexum_linked_employee_id');}
+function switchToLeader(){localStorage.setItem('vexum_current_role','leader');window.location.href='leader.html';}
+function _updateSwitchBtn(){var b=document.getElementById('sb-switch-btn');if(b)b.style.display=_isLinked()?'':'none';}
 /* ===== プロフィール編集（サイドバー氏名クリック・3画面共通） ===== */
 function openProfileEdit(){
   var n=(document.getElementById('sb-uname')||{}).textContent||'';
@@ -2925,6 +2948,7 @@ function openProfileEdit(){
   document.getElementById('profile-edit-email').value=(em==='—')?'':em;
   document.getElementById('profile-edit-pw').value='';
   _profileEditErr('');
+  var sec=document.getElementById('pe-link-section');if(sec)sec.style.display=_isLinked()?'':'none';
   document.getElementById('profile-edit-modal').style.display='flex';
 }
 function closeProfileEdit(){document.getElementById('profile-edit-modal').style.display='none';}
@@ -2957,6 +2981,8 @@ async function saveProfile(){
   closeProfileEdit();
   _profileToast('保存しました');
 }
+// 紐付け済みならサイドバーの「リーダー画面に切り替え」ボタンを表示
+try{_updateSwitchBtn();}catch(e){}
 </script>
 </body>
 

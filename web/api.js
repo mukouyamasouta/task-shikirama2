@@ -910,6 +910,59 @@
     } catch (_) { loginEnabled = false; }
     return { data: ins.data, pid: pid, loginEnabled: loginEnabled, password: loginEnabled ? genPw : null };
   }
+  // ===== リーダー⇄従業員 紐付け =====
+  // ログイン中ユーザーと同じメールの「従業員(role=member)」プロフィールを検索（自分自身は除外）
+  async function findLinkedEmployee(email, selfPid) {
+    if (!sb || !email) return null;
+    var r = await sb.from('profiles').select('id,full_name,email,role').ilike('email', email).eq('role', 'member');
+    if (r.error) { err('findLinkedEmployee', r.error); return null; }
+    var rows = (r.data || []).filter(function (p) { return p.id !== selfPid; });
+    return rows[0] || null;
+  }
+  // 任意のprofile_idでプロフィールを取得（従業員画面の代理表示用）
+  async function loadProfile(pid) {
+    if (!sb || !pid) return null;
+    var r = await sb.from('profiles').select('id,full_name,email,role').eq('id', pid).maybeSingle();
+    return r.data || null;
+  }
+  // チーム一覧（新規従業員の所属チーム選択用）
+  async function listTeams() {
+    if (!sb) return [];
+    var r = await sb.from('teams').select('id,name').order('name', { ascending: true });
+    if (r.error) { err('listTeams', r.error); return []; }
+    return r.data || [];
+  }
+  // 紐付け用の従業員(member)アカウントを作成。
+  //  ・同メールの member が既にあれば、それを紐付け対象として返す（重複作成しない）
+  //  ・profiles.email は一意制約のため、衝突時は派生メール(local+emp@domain)で作成
+  //  ・team_members へ所属を追加（RLS: 自チームのリーダー or 管理者/幹部のみ）
+  //  ・ログイン(auth)は best-effort（vexum_create_login RPC）。失敗してもプロフィールは作成済み
+  async function createLinkedEmployeeAccount(o) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var name = (o.fullName || '従業員').trim();
+    var email = (o.email || '').trim();
+    if (email) {
+      var ex = await sb.from('profiles').select('id,role').ilike('email', email).maybeSingle();
+      if (ex.data && ex.data.role === 'member') return { pid: ex.data.id, linkedExisting: true };
+    }
+    function variant(em) { if (!em) return ''; var i = em.indexOf('@'); return i < 0 ? (em + '+emp') : (em.slice(0, i) + '+emp' + em.slice(i)); }
+    var payload = { full_name: name, email: email || (name + '@local.vexum'), role: 'member', department: o.department || null, color: o.color || '#06B6D4' };
+    var ins = await sb.from('profiles').insert(payload).select().single();
+    if (ins.error && /duplicate|unique|23505|already exists/i.test(ins.error.message || '')) {
+      payload.email = variant(email);
+      ins = await sb.from('profiles').insert(payload).select().single();
+    }
+    if (ins.error) return { error: friendlyErr(ins.error.message) };
+    var pid = ins.data.id;
+    if (o.teamId) {
+      // 失敗（RLS等）してもプロフィール作成は成立しているのでpidは返す
+      try { await sb.from('team_members').insert({ team_id: o.teamId, profile_id: pid, role_in_team: 'member', achievement_rate: 50 }); } catch (e) {}
+    }
+    if (o.password && payload.email) {
+      try { await sb.rpc('vexum_create_login', { p_email: payload.email, p_password: o.password }); } catch (e) {}
+    }
+    return { pid: pid, email: payload.email };
+  }
   // 既存アカウントのパスワードを再発行（RPCで更新）。新PWを返す
   async function resetPassword(email) {
     if (!sb) return { error: 'Supabase未接続' };
@@ -1479,6 +1532,10 @@
     loadPersonalData: loadPersonalData,
     loadTokatsuData: loadTokatsuData,
     createAccount: createAccount,
+    findLinkedEmployee: findLinkedEmployee,
+    createLinkedEmployeeAccount: createLinkedEmployeeAccount,
+    loadProfile: loadProfile,
+    listTeams: listTeams,
     updateAccount: updateAccount,
     deleteAccount: deleteAccount,
     resetPassword: resetPassword,

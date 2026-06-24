@@ -140,7 +140,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <aside class="sidebar">
   <div class="sb-logo"><div class="sb-brand">VEXUM</div><div class="sb-brand-sub">TASK MANAGEMENT SYSTEM</div></div>
   <div class="sb-role"><span class="sb-role-dot"></span><span class="sb-role-lbl">★ LEADER / チーム管理</span></div>
-  <div class="sb-user"><div class="sb-uname" id="sb-uname" onclick="openProfileEdit()" style="cursor:pointer;text-decoration:underline" title="クリックでプロフィール編集">（読み込み中）</div><div class="sb-uemail" id="sb-uemail">—</div><button onclick="vexumLogout()" style="margin-top:6px;font-size:10px;color:var(--text3);background:none;border:1px solid var(--sb-border);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit">⎋ ログアウト</button></div>
+  <div class="sb-user"><div class="sb-uname" id="sb-uname" onclick="openProfileEdit()" style="cursor:pointer;text-decoration:underline" title="クリックでプロフィール編集">（読み込み中）</div><div class="sb-uemail" id="sb-uemail">—</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button onclick="vexumLogout()" style="font-size:10px;color:var(--text3);background:none;border:1px solid var(--sb-border);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit">⎋ ログアウト</button><button id="sb-switch-btn" onclick="switchToEmployee()" style="display:none;font-size:10px;color:var(--accent);background:var(--accent-l);border:1px solid var(--accent);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit;font-weight:700">⇄ 従業員画面に切り替え</button></div></div>
   <div class="sb-team">▣ 営業チームA ／ メンバー 4名</div>
   <div class="sb-nav">
     <div class="sb-sec">チームリーダーメニュー</div>
@@ -1817,7 +1817,7 @@ function vexumLogout(){
   });
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}
-  API.currentProfile().then(function(p){ if(!p)return; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; if(typeof LEADER==='object'){LEADER.name=p.full_name;LEADER.email=p.email;} }).catch(function(){});
+  API.currentProfile().then(function(p){ if(!p)return; window._meProfile=p; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; if(typeof LEADER==='object'){LEADER.name=p.full_name;LEADER.email=p.email;} if(typeof _updateSwitchBtn==='function')_updateSwitchBtn(); }).catch(function(){});
   API.loadLeaderData().then(function(d){
     if(!d) return;
     repl(MEMBERS,d.MEMBERS); repl(MEMBER_TASKS,d.MEMBER_TASKS); repl(REPORTS,d.REPORTS); repl(AVAILABLE,d.AVAILABLE);
@@ -1902,6 +1902,23 @@ function vexumLogout(){
       <button class="f-submit" style="flex:1;background:#E5E7EB;color:#374151" onclick="closeProfileEdit()">キャンセル</button>
       <button class="f-submit" id="profile-edit-save" style="flex:1" onclick="saveProfile()">保存する</button>
     </div>
+    <!-- 従業員紐付け（リーダー⇄従業員 切り替え） -->
+    <div id="pe-link-section" style="display:none;border-top:1px solid var(--border);margin-top:18px;padding-top:14px">
+      <div style="font-size:13px;font-weight:800;margin-bottom:8px">従業員紐付け</div>
+      <div id="pe-link-msg" style="font-size:12px;color:var(--text2);margin-bottom:10px">検索中…</div>
+      <div id="pe-link-actions"></div>
+      <div id="pe-create-form" style="display:none;margin-top:12px;background:var(--accent-l);border-radius:8px;padding:12px">
+        <div style="font-size:12px;font-weight:800;margin-bottom:8px">従業員アカウントを作成</div>
+        <div class="fg"><label class="fl">氏名</label><input class="fi" id="pe-emp-name"></div>
+        <div class="fg"><label class="fl">メール</label><input class="fi" id="pe-emp-email" type="email"></div>
+        <div class="fg"><label class="fl">所属チーム</label><select class="fs" id="pe-emp-team"></select></div>
+        <div class="fg"><label class="fl">パスワード</label><input class="fi" id="pe-emp-pw" type="password" placeholder="6文字以上"></div>
+        <div style="display:flex;gap:8px"><button class="f-submit" style="flex:1;background:#E5E7EB;color:#374151" onclick="peCancelCreate()">キャンセル</button><button class="f-submit" style="flex:1" id="pe-create-btn" onclick="peCreateLinked()">作成して紐付ける</button></div>
+      </div>
+      <div id="pe-switch-wrap" style="display:none">
+        <button class="f-submit" style="width:100%" onclick="switchToEmployee()">→ 従業員画面に切り替え</button>
+      </div>
+    </div>
   </div>
 </div>
 <script>
@@ -1915,6 +1932,67 @@ function openProfileEdit(){
   document.getElementById('profile-edit-pw').value='';
   _profileEditErr('');
   document.getElementById('profile-edit-modal').style.display='flex';
+  if(typeof _refreshLinkSection==='function')_refreshLinkSection();
+}
+/* ===== リーダー⇄従業員 紐付け・切り替え ===== */
+function _isLinked(){return !!localStorage.getItem('vexum_linked_employee_id');}
+function _saveLink(empId){localStorage.setItem('vexum_linked_employee_id',empId||'');var me=window._meProfile||{};localStorage.setItem('vexum_linked_leader_id',(me&&me.id)||'');}
+function switchToEmployee(){localStorage.setItem('vexum_current_role','employee');window.location.href='employee.html';}
+function _updateSwitchBtn(){var b=document.getElementById('sb-switch-btn');if(b)b.style.display=_isLinked()?'':'none';}
+async function _refreshLinkSection(){
+  var sec=document.getElementById('pe-link-section');if(!sec)return;sec.style.display='';
+  var msg=document.getElementById('pe-link-msg'),actions=document.getElementById('pe-link-actions');
+  var createForm=document.getElementById('pe-create-form'),switchWrap=document.getElementById('pe-switch-wrap');
+  createForm.style.display='none';
+  if(_isLinked()){ // CASE C: 紐付け済み
+    msg.textContent='この管理アカウントは従業員アカウントと紐付け済みです。';
+    actions.innerHTML='';switchWrap.style.display='';return;
+  }
+  switchWrap.style.display='none';msg.textContent='検索中…';actions.innerHTML='';
+  var API=window.VexumAPI;
+  var me=window._meProfile||(API&&API.ready?await API.currentProfile():null);if(me)window._meProfile=me;
+  var email=(me&&me.email)||(document.getElementById('profile-edit-email').value||'');
+  var found=null;
+  if(API&&API.ready&&API.findLinkedEmployee&&email){try{found=await API.findLinkedEmployee(email,me&&me.id);}catch(e){found=null;}}
+  if(found){ // CASE A: 同メールの従業員あり
+    msg.innerHTML='同じメールの従業員アカウントが見つかりました：<b>'+(found.full_name||'')+'（従業員）</b>';
+    actions.innerHTML='<button class="f-submit" style="width:100%" onclick="peLinkExisting(\''+found.id+'\')">従業員アカウントと紐付ける</button>';
+  }else{ // CASE B: なし → 新規作成
+    msg.textContent='同じメールの従業員アカウントが見つかりませんでした';
+    actions.innerHTML='<button class="f-submit" style="width:100%;background:var(--green)" onclick="peShowCreateForm()">従業員アカウントを新規作成する</button>';
+  }
+}
+function peLinkExisting(empId){_saveLink(empId);_profileToast('従業員アカウントと紐付けました');_updateSwitchBtn();_refreshLinkSection();}
+async function peShowCreateForm(){
+  document.getElementById('pe-create-form').style.display='';
+  document.getElementById('pe-link-actions').innerHTML='';
+  var me=window._meProfile||{};
+  document.getElementById('pe-emp-name').value=(document.getElementById('profile-edit-name').value||me.full_name||'');
+  document.getElementById('pe-emp-email').value=(document.getElementById('profile-edit-email').value||me.email||'');
+  document.getElementById('pe-emp-pw').value='';
+  var sel=document.getElementById('pe-emp-team');var API=window.VexumAPI;var teams=[];
+  if(API&&API.ready&&API.listTeams){try{teams=await API.listTeams();}catch(e){teams=[];}}
+  var myTeam=(typeof teamMeta!=='undefined'&&teamMeta&&teamMeta.uid)||'';
+  sel.innerHTML=teams.length?teams.map(function(t){return '<option value="'+t.id+'"'+(t.id===myTeam?' selected':'')+'>'+t.name+'</option>';}).join(''):'<option value="">（チームなし）</option>';
+}
+function peCancelCreate(){document.getElementById('pe-create-form').style.display='none';_refreshLinkSection();}
+async function peCreateLinked(){
+  var name=(document.getElementById('pe-emp-name').value||'').trim();
+  var email=(document.getElementById('pe-emp-email').value||'').trim();
+  var teamId=(document.getElementById('pe-emp-team').value||'');
+  var pw=(document.getElementById('pe-emp-pw').value||'');
+  if(!name){alert('氏名を入力してください');return;}
+  if(pw&&pw.length<6){alert('パスワードは6文字以上で入力してください');return;}
+  var btn=document.getElementById('pe-create-btn');if(btn){btn.disabled=true;btn.textContent='作成中…';}
+  var API=window.VexumAPI;
+  if(!(API&&API.ready&&API.createLinkedEmployeeAccount)){alert('サーバーに接続されていません');if(btn){btn.disabled=false;btn.textContent='作成して紐付ける';}return;}
+  try{
+    var res=await API.createLinkedEmployeeAccount({fullName:name,email:email,password:pw,teamId:teamId});
+    if(res&&res.error){alert('作成に失敗しました：'+res.error);if(btn){btn.disabled=false;btn.textContent='作成して紐付ける';}return;}
+    _saveLink(res.pid);
+    if(btn){btn.disabled=false;btn.textContent='作成して紐付ける';}
+    _profileToast('従業員アカウントを作成して紐付けました');_updateSwitchBtn();_refreshLinkSection();
+  }catch(e){alert('作成に失敗しました：'+((e&&e.message)||e));if(btn){btn.disabled=false;btn.textContent='作成して紐付ける';}}
 }
 function closeProfileEdit(){document.getElementById('profile-edit-modal').style.display='none';}
 function _profileEditErr(msg){var e=document.getElementById('profile-edit-err');if(!e)return;if(msg){e.textContent=msg;e.style.display='';}else{e.textContent='';e.style.display='none';}}
@@ -1946,6 +2024,8 @@ async function saveProfile(){
   closeProfileEdit();
   _profileToast('保存しました');
 }
+// 紐付け済みならサイドバーの切り替えボタンを表示（接続有無に関わらず）
+try{_updateSwitchBtn();}catch(e){}
 </script>
 </body>
 
