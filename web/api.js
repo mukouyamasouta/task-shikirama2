@@ -290,6 +290,8 @@
     if (o.plannedHours != null) row.planned_hours = o.plannedHours; // 予定工数
     // 受信チャート由来のタスク: どのチャートのどのセルか（個人画面チップ表示・進捗の逆反映用）
     if (o.sendId) { row.source_send_id = o.sendId; row.source_cell = o.cell || null; row.source_chart = o.chartTitle || null; }
+    // 受信チャート以外でも、個人画面でKGI（チャート）に紐付けて作成した場合の関連付け
+    else if (o.chartTitle) { row.source_chart = o.chartTitle; if (o.cell) row.source_cell = o.cell; }
     var r = await sb.from('tasks').insert(row).select().single();
     if (r.error && /source_send_id|source_cell|source_chart|period|planned_hours/.test(r.error.message)) {
       // 17/18/19 未適用のDB: 拡張列なしで作成（後方互換）

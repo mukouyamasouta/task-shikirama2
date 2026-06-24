@@ -164,6 +164,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- チームダッシュボード -->
 <div id="tc-dashboard" class="tab-content active">
+  <!-- 絞り込みバー（従業員 / チャート） -->
+  <div id="dash-filter-bar" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;margin-bottom:16px;display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;box-shadow:var(--shadow)"></div>
   <div class="g4">
     <div class="stat-card"><div class="s-lbl">チーム達成率</div><div class="s-val" style="color:var(--accent)">76%</div><div class="s-trend up">▲ 4pt 先月比</div></div>
     <div class="stat-card"><div class="s-lbl">メンバー数</div><div class="s-val">4名</div><div class="s-trend" style="color:var(--text3)">営業チームA</div></div>
@@ -543,9 +545,62 @@ function rateColor(p){return p>=80?'var(--green)':p>=60?'var(--amber)':'var(--re
 function starStr(n){const f=Math.round(n);let s='';for(let i=1;i<=5;i++)s+=i<=f?'★':'☆';return s;}
 
 /* ===== チームダッシュボード ===== */
-function renderDashboard(){
-  let h='';
+// チーム内で使われているチャート一覧（各メンバーの主チャート）
+function _teamCharts(){
+  const out=[];const seen={};
   DASH_IDS.forEach(id=>{
+    const m=MEMBERS[id];if(!m)return;
+    const center=((m.center||'').split('\n')[0]||'').trim();
+    const label=center||((m.name||'')+' のチャート');
+    if(seen[label])return;seen[label]=1;
+    out.push({key:(m.chartId||('mem:'+id)),label:label,ownerId:id,subs:m.subs||[],acts:m.acts||[],center:m.center||'',name:label});
+  });
+  return out;
+}
+// メンバーが指定チャートに関係するか（そのチャートの所有者 or そのチャートのタスクを持つ）
+function _memberMatchesChart(id,chart){
+  if(!chart)return true;
+  if(chart.ownerId===id)return true;
+  const labels={};
+  (chart.subs||[]).forEach(x=>{if(x)labels[String(x).trim()]=1;});
+  (chart.acts||[]).forEach(r=>(r||[]).forEach(a=>{if(a)labels[String(a).trim()]=1;}));
+  const center=((chart.center||'').split('\n')[0]||'').trim(),name=(chart.name||'').trim();
+  const tasks=MEMBER_TASKS[id]||[];
+  return tasks.some(t=>{
+    if(t.chart){const c=String(t.chart).trim();if(c===center||c===name)return true;}
+    if(t.kpi&&t.kpi!=='—'&&labels[String(t.kpi).trim()])return true;
+    return false;
+  });
+}
+function _renderDashFilterBar(){
+  const bar=document.getElementById('dash-filter-bar');if(!bar)return;
+  const memF=window._dashMemberFilter||'',chartF=window._dashChartFilter||'';
+  const ids=DASH_IDS.filter(id=>MEMBERS[id]);
+  const memOpts='<option value="">全員</option>'+ids.map(id=>`<option value="${id}"${id===memF?' selected':''}>${MEMBERS[id].name}</option>`).join('');
+  const charts=_teamCharts();
+  const chartOpts='<option value="">全チャート</option>'+charts.map(c=>`<option value="${c.key}"${c.key===chartF?' selected':''}>${c.label}</option>`).join('');
+  const lbl='font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:5px';
+  bar.innerHTML=`
+    <div><div style="${lbl}">従業員</div><select class="fs" id="dash-f-member" style="font-size:12px;padding:7px 10px;font-weight:600;min-width:150px">${memOpts}</select></div>
+    <div><div style="${lbl}">チャート</div><select class="fs" id="dash-f-chart" style="font-size:12px;padding:7px 10px;font-weight:600;min-width:200px">${chartOpts}</select></div>
+    <div style="display:flex;gap:8px"><button class="f-btn active" onclick="applyDashFilter()">絞り込む</button><button class="f-btn" onclick="resetDashFilter()">リセット</button></div>`;
+}
+function applyDashFilter(){
+  window._dashMemberFilter=(document.getElementById('dash-f-member')||{}).value||'';
+  window._dashChartFilter=(document.getElementById('dash-f-chart')||{}).value||'';
+  renderDashboard();
+}
+function resetDashFilter(){window._dashMemberFilter='';window._dashChartFilter='';renderDashboard();}
+function renderDashboard(){
+  _renderDashFilterBar();
+  const memF=window._dashMemberFilter||'',chartF=window._dashChartFilter||'';
+  const charts=_teamCharts();
+  const chart=chartF?charts.find(c=>c.key===chartF):null;
+  let ids=DASH_IDS.filter(id=>MEMBERS[id]);
+  if(memF)ids=ids.filter(id=>id===memF);
+  if(chart)ids=ids.filter(id=>_memberMatchesChart(id,chart));
+  let h='';
+  ids.forEach(id=>{
     const m=MEMBERS[id];const col=rateColor(m.rate);
     h+=`<div class="card"><div class="card-hd" style="border-left:4px solid ${m.color}"><div><div class="card-title">${m.name} <span class="badge ${m.role==='リーダー'?'b-manager':'b-employee'}" style="margin-left:4px">${m.role}</span></div><div class="card-sub">${m.team}</div></div><span style="font-size:20px;font-weight:800;color:${col}">${m.rate}%</span></div><div class="card-body" style="padding:10px 14px">`;
     m.kpis.forEach(kp=>{const c=kp.p>=80?'var(--green)':kp.p>=50?'var(--amber)':'var(--accent)';h+=`<div class="team-row" style="padding:6px 0"><div class="tname" style="font-size:11px">${kp.n}</div><div class="pw" style="max-width:160px"><div class="pt"><div class="pf" style="width:${kp.p}%;background:${c}"></div></div><div class="pp" style="color:${c}">${kp.p}%</div></div></div>`;});
@@ -553,7 +608,8 @@ function renderDashboard(){
     const kpiEditBadge=kpiEditCnt>0?`<span style="font-size:9px;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;padding:2px 7px;border-radius:10px;font-weight:700">✏ KPI編集 ${kpiEditCnt}件</span>`:'';
     h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:10px;color:var(--text3)">完了 ${m.stats.done} ・ 進行 ${m.stats.wip} ・ 遅延 ${m.stats.late}</span>${kpiEditBadge}</div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMemberDash('${id}')">📊 個人DB</button></div></div></div></div>`;
   });
-  document.getElementById('dash-members').innerHTML=h;
+  const con=document.getElementById('dash-members');
+  con.innerHTML=ids.length?h:'<div class="card" style="grid-column:1/-1"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">条件に一致するメンバーがいません</div></div>';
 }
 async function openMemberDash(id){
   const m=MEMBERS[id];

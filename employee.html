@@ -874,8 +874,14 @@ function resetReportForm(){
 <div id="task-modal" class="tm-modal" onclick="if(event.target===this)closeTaskCreate()">
   <div class="tm-box">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
-      <div><div style="font-size:16px;font-weight:800;color:var(--accent)">新規タスク作成</div><div style="font-size:10px;color:var(--text3);margin-top:2px">チャート以外のタスクを登録します</div></div>
+      <div><div style="font-size:16px;font-weight:800;color:var(--accent)">新規タスク作成</div><div style="font-size:10px;color:var(--text3);margin-top:2px">チャート以外のタスクを作成します　<span onclick="toggleTmChartLink()" style="color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline">KGI紐付けはこちら →</span></div></div>
       <button onclick="closeTaskCreate()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div id="tm-chart-link" style="display:none;background:var(--accent-l);border-radius:8px;padding:10px 12px;margin-bottom:14px">
+      <div class="fl" style="margin-bottom:5px">チャート（KGI）を選択してください</div>
+      <select class="fs" id="tm-chart-sel"><option value="">選択しない</option></select>
+      <button class="card-btn" style="margin-top:8px;background:var(--accent);color:#fff;border-color:var(--accent)" onclick="tmOpenChartEditor()">このチャートの編集画面を開く →</button>
+      <div style="font-size:10px;color:var(--text2);margin-top:6px;line-height:1.5">※ チャートを選んだまま「タスクを作成」すると、そのKGIに紐づくチャートタスクとして登録されます。</div>
     </div>
     <div class="fg"><label class="fl">タスク名 *</label>
       <input class="fi" id="tm-name" placeholder="例: 新規顧客 訪問アポ獲得">
@@ -1702,9 +1708,28 @@ function _epPeriodOptions(){
 }
 function openTaskCreate(){
   const ps=document.getElementById('tm-period');if(ps&&!ps.options.length)ps.innerHTML=_epPeriodOptions();
+  const lb=document.getElementById('tm-chart-link');if(lb)lb.style.display='none';  // KGI紐付けは毎回閉じた状態から
   document.getElementById('task-modal').style.display='flex';
 }
 function closeTaskCreate(){document.getElementById('task-modal').style.display='none';}
+/* タスク作成モーダル: 「KGI紐付けはこちら」の展開・チャート選択 */
+function toggleTmChartLink(){
+  const box=document.getElementById('tm-chart-link');if(!box)return;
+  const show=box.style.display==='none';
+  if(show)_fillTmChartSel();
+  box.style.display=show?'block':'none';
+}
+function _fillTmChartSel(){
+  const sel=document.getElementById('tm-chart-sel');if(!sel)return;
+  const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__')&&!CHARTS[k].readonly);
+  sel.innerHTML='<option value="">選択しない</option>'+keys.map(k=>`<option value="${k}">${_chartKgiText(k)||CHARTS[k].name||k}</option>`).join('');
+}
+function tmOpenChartEditor(){
+  const k=(document.getElementById('tm-chart-sel')||{}).value;
+  if(!k){alert('チャートを選択してください');return;}
+  closeTaskCreate();
+  gotoChartMgr(k);
+}
 function fmtDate(v){if(!v)return'-';const p=v.split('-');return p.length===3?`${+p[1]}/${+p[2]}`:v;}
 function submitTask(){
   const name=document.getElementById('tm-name').value.trim();
@@ -1715,11 +1740,16 @@ function submitTask(){
   const due=fmtDate(dueRaw);
   const pri=document.getElementById('tm-pri').value;
   const period=(document.getElementById('tm-period')||{}).value||'';
-  const task={id:null,name,kpi:'—',meta:'チャート以外のタスク'+(period?' ／ 期間: '+period:''),from:'🙋 自分で作成',fromClass:'',
-    start:startRaw?startRaw.replace(/-/g,'/'):'—',end:dueRaw?dueRaw.replace(/-/g,'/'):'—',pct:0,comment:'',status:'todo',pri,self:true,period,chart:null};
+  // KGI紐付け（展開中かつチャート選択時のみ）
+  const linkBox=document.getElementById('tm-chart-link');
+  const chartKey=(linkBox&&linkBox.style.display!=='none')?((document.getElementById('tm-chart-sel')||{}).value||''):'';
+  const chartName=(chartKey&&CHARTS[chartKey])?(CHARTS[chartKey].name||_chartKgiText(chartKey)||''):'';
+  const meta=chartName?('📊 チャート: '+chartName+(period?' ／ 期間: '+period:'')):('チャート以外のタスク'+(period?' ／ 期間: '+period:''));
+  const task={id:null,name,kpi:'—',meta,from:'🙋 自分で作成',fromClass:'',
+    start:startRaw?startRaw.replace(/-/g,'/'):'—',end:dueRaw?dueRaw.replace(/-/g,'/'):'—',pct:0,comment:'',status:'todo',pri,self:true,period,chart:chartName||null};
   const API=window.VexumAPI;
   if(API&&API.ready){
-    API.assignTask({title:name,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self',period:period||null})
+    API.assignTask({title:name,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self',period:period||null,chartTitle:chartName||null})
       .then(res=>{
         if(res&&res.error){alert('タスクの保存に失敗しました: '+res.error);return;}
         if(res&&res.data)task.id=res.data.id;
@@ -1901,7 +1931,7 @@ function renderCmSimpleGrid(k){
       const ed=edits['csf-'+si];const label=(ed&&ed.text!=null?ed.text:(d.subs||[])[si])||'';
       const eb=ed?'box-shadow:inset 0 0 0 2px #F59E0B;background:#FEF3C7;':`background:${d.bg};`;
       const oc=ro?'':`onclick="openCellEdit('${k}','csf',${si})"`;
-      h+=`<div ${oc} style="${ro?'cursor:default;':'cursor:pointer;'}position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:${d.color};border:1.5px solid ${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}"><div style="font-size:8px;color:var(--text3);font-weight:600;margin-bottom:2px">CSF ${si+1}</div>${label}${badge(ed)}</div>`;
+      h+=`<div ${oc} data-csf="${si}" style="${ro?'cursor:default;':'cursor:pointer;'}position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:${d.color};border:1.5px solid ${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}"><div style="font-size:8px;color:var(--text3);font-weight:600;margin-bottom:2px">CSF ${si+1}</div>${label}${badge(ed)}</div>`;
     }
   });
   h+=ro
@@ -2377,11 +2407,12 @@ updateInboxBadge();
 
 /* ===== タスク管理タブ（実データ描画） ===== */
 function _epShortMD(d){if(!d||d==='—')return'-';const p=String(d).split('/');return p.length===3?(+p[1])+'/'+(+p[2]):d;}
-let _tmFilter='all',_tmChartFilter='all';
+let _tmFilter='all',_tmChartFilter='all',_tmCsfFilter='all';
 function tmFilter(st,btn){_tmFilter=st;document.querySelectorAll('#ep-task-filters .f-btn').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');renderTaskTable();}
-function tmFilterChart(v){_tmChartFilter=v;renderTaskTable();}
+function tmFilterChart(v){_tmChartFilter=v;_tmCsfFilter='all';renderTaskTable();}
+function tmFilterCsf(v){_tmCsfFilter=v;renderTaskTable();}
 function tmFilterStatus(v){_tmFilter=v;renderTaskTable();}
-function tmFilterReset(){_tmFilter='all';_tmChartFilter='all';renderTaskTable();}
+function tmFilterReset(){_tmFilter='all';_tmChartFilter='all';_tmCsfFilter='all';renderTaskTable();}
 // タスク管理: チャートごとに「CSF（チャートのタスク）＋割当タスク」、最後に「チャート以外のタスク」
 function renderTaskTable(){
   const con=document.getElementById('task-groups');if(!con)return;
@@ -2390,8 +2421,8 @@ function renderTaskTable(){
   const stOf=t=>t.done||t.pct>=100?'done':t.pct>0?'wip':(t.late?'late':'todo');
   // 割当・自作タスク（参照保持）
   const taskRows=[
-    ...ASSIGNMENTS.map((a,i)=>({kind:'task',ref:a,arr:'A',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,pct:a.pct||0,hours:a.hours!=null?a.hours:0,done:false,late:a.status==='late'})),
-    ...ASSIGN_HISTORY.map((a,i)=>({kind:'task',ref:a,arr:'H',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,pct:100,hours:a.hours!=null?a.hours:0,done:true}))
+    ...ASSIGNMENTS.map((a,i)=>({kind:'task',ref:a,arr:'A',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,pct:a.pct||0,hours:a.hours!=null?a.hours:0,done:false,late:a.status==='late'})),
+    ...ASSIGN_HISTORY.map((a,i)=>({kind:'task',ref:a,arr:'H',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,pct:100,hours:a.hours!=null?a.hours:0,done:true}))
   ];
   // チャート（CSF＝チャートのタスク）: 各チャートのCSF8件を進捗・工数つきで
   // ※ チームチャート(readonly)は除外。進捗はtasks側（割り当て/タスク管理のチャートバッジ付き行）で管理する
@@ -2406,19 +2437,35 @@ function renderTaskTable(){
   });
   const all=[...chartRows,...taskRows];
   const match=t=>_tmFilter==='all'||stOf(t)===_tmFilter;
-  // 絞り込みバー: [全チャート ▼] [全ステータス ▼] [リセット]
+  // 絞り込みバー: [全チャート ▼] [CSF ▼] [全ステータス ▼] [リセット]
   const f=document.getElementById('ep-task-filters');
+  const csfDisabled=(_tmChartFilter==='all'||_tmChartFilter==='__none__');
+  if(csfDisabled)_tmCsfFilter='all';
   if(f){
     const chartKeys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
     if(_tmChartFilter!=='all'&&_tmChartFilter!=='__none__'&&chartKeys.indexOf(_tmChartFilter)<0)_tmChartFilter='all';
     const chartOpts='<option value="all">全チャート</option>'
       +chartKeys.map(k=>{const nm=((CHARTS[k].center||CHARTS[k].name||k)+'').replace(/\n/g,' ');return `<option value="${k}"${k===_tmChartFilter?' selected':''}>${nm}</option>`;}).join('')
       +`<option value="__none__"${_tmChartFilter==='__none__'?' selected':''}>チャートなし</option>`;
+    let csfOpts='<option value="all">全CSF</option>';
+    if(!csfDisabled){
+      const subs=(CHARTS[_tmChartFilter]||{}).subs||[];const edits=_chartEdits(_tmChartFilter);
+      subs.forEach((s,si)=>{const ed=edits['csf-'+si]||{};const txt=((ed.text!=null?ed.text:s)||'').replace(/\n/g,' ');if(txt)csfOpts+=`<option value="${si}"${String(si)===String(_tmCsfFilter)?' selected':''}>CSF${si+1} ${txt}</option>`;});
+    }
     const statusOpts=[['all','全ステータス'],['todo','未着手'],['wip','進行中'],['done','完了'],['late','遅延']]
       .map(([k,l])=>`<option value="${k}"${k===_tmFilter?' selected':''}>${l}</option>`).join('');
     f.innerHTML=`<select class="fs" onchange="tmFilterChart(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto;max-width:240px">${chartOpts}</select>
+      <select class="fs" onchange="tmFilterCsf(this.value)" ${csfDisabled?'disabled':''} title="${csfDisabled?'チャートを選択するとCSFで絞り込めます':'CSFで絞り込む'}" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto;max-width:240px;${csfDisabled?'opacity:.5;cursor:not-allowed':''}">${csfOpts}</select>
       <select class="fs" onchange="tmFilterStatus(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto">${statusOpts}</select>
       <button class="f-btn" onclick="tmFilterReset()">リセット</button>`;
+  }
+  // CSF絞り込み判定: CSF行は si 一致、タスク行は source_cell の si 一致
+  function _csfFilterMatch(r){
+    if(csfDisabled||_tmCsfFilter==='all')return true;
+    const idx=parseInt(_tmCsfFilter,10);if(isNaN(idx))return true;
+    if(r.kind==='csf')return r.chartKey===_tmChartFilter&&r.si===idx;
+    if(r.cell){const si=parseInt(String(r.cell).split('-')[0],10);return si===idx;}
+    return false;
   }
   // チャート絞り込み判定（選択チャートのCSF群＋そのチャート名を持つタスク群を表示）
   function _chartFilterMatch(groupKey){
@@ -2432,8 +2479,8 @@ function renderTaskTable(){
   const groups={};const order=[];
   function push(key,name,row){if(!groups[key]){groups[key]={name,rows:[]};order.push(key);}groups[key].rows.push(row);}
   Object.entries(CHARTS).forEach(([k,d])=>{if(!k.startsWith('__'))push(k,d.name||k,null);}); // チャート順を確保
-  chartRows.filter(match).forEach(r=>push(r.chartKey,r.chartName,r));
-  taskRows.filter(match).forEach(r=>push(r.chart?('name:'+r.chart):'__none__',r.chart||'チャート以外のタスク',r));
+  chartRows.filter(r=>match(r)&&_csfFilterMatch(r)).forEach(r=>push(r.chartKey,r.chartName,r));
+  taskRows.filter(r=>match(r)&&_csfFilterMatch(r)).forEach(r=>push(r.chart?('name:'+r.chart):'__none__',r.chart||'チャート以外のタスク',r));
   // 空グループ除去（行なし）＋チャート絞り込み
   const keys=order.filter(k=>groups[k].rows.filter(Boolean).length&&_chartFilterMatch(k));
   keys.sort((a,b)=>a==='__none__'?1:b==='__none__'?-1:0);
@@ -2625,6 +2672,16 @@ function _chartEdits(k){return (kpiEdits[k]&&Object.keys(kpiEdits[k]).length)?kp
 function _chartKgiPct(k){const ed=_chartEdits(k)['center'];return (ed&&ed.progress!=null)?ed.progress:0;}
 /* チャートのKGIテキスト（編集後を優先） */
 function _chartKgiText(k){const d=CHARTS[k]||{};const ed=_chartEdits(k)['center'];return ((ed&&ed.text!=null)?ed.text:(d.center||'')).replace(/\n/g,' ');}
+/* チャートのCSF一覧（subs[si]＝CSF文言、進捗は edits['csf-si'].progress） */
+function _chartCsf(k){
+  const d=CHARTS[k]||{};const edits=_chartEdits(k);
+  return (d.subs||[]).map((s,si)=>{
+    const ed=edits['csf-'+si]||{};
+    return {si,text:((ed.text!=null?ed.text:s)||'').replace(/\n/g,' '),pct:ed.progress||0};
+  });
+}
+/* CSF達成率→色（0=グレー / 1-49=黄 / 50-99=水色 / 100=緑） */
+function _csfColor(p){return p>=100?'var(--green)':p>=50?'var(--cyan)':p>=1?'var(--amber)':'#9CA3AF';}
 /* KGI進捗カードを描画（自分の全チャートのKGI・達成率100%未満のみ） */
 function renderKgiProgress(){
   const kr=document.getElementById('ep-kpi-rows');if(!kr)return;
@@ -2644,12 +2701,44 @@ function renderKgiProgress(){
   if(!list.length){kr.innerHTML='<div style="text-align:center;color:var(--green);font-size:12px;padding:20px">未達成のKGIはありません 🎉</div>';return;}
   kr.innerHTML=list.map(x=>{
     const col=x.pct>=80?'var(--green)':x.pct>=40?'var(--accent)':'var(--amber)';
+    // このKGI配下のCSF（空文字・100%達成は除外）
+    const csfs=_chartCsf(x.k).filter(c=>c.text&&c.pct<100);
+    let csfHtml='';
+    if(csfs.length){
+      csfHtml=`<div style="margin-top:10px;border-top:1px dashed var(--border);padding-top:6px">`
+        +`<div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.06em;margin-bottom:2px">CSF一覧（このKGIの配下）</div>`
+        +csfs.map(c=>{const cc=_csfColor(c.pct);
+          return `<div onclick="event.stopPropagation();gotoChartCsf('${x.k}',${c.si})" style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;border-radius:6px" onmouseover="this.style.background='#FAFAFA'" onmouseout="this.style.background=''">
+            <span style="font-size:9px;color:var(--accent);font-weight:700;flex-shrink:0;min-width:30px">CSF${c.si+1}</span>
+            <span style="font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.text}">${c.text}</span>
+            <div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${c.pct}%;background:${cc}"></div></div><div class="pp" style="color:${cc}">${c.pct}%</div></div>
+          </div>`;}).join('')
+        +`</div>`;
+    }
     return `<div onclick="gotoChartMgr('${x.k}')" style="cursor:pointer;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;transition:.12s" onmouseover="this.style.boxShadow='var(--shadow)';this.style.borderColor='var(--accent)'" onmouseout="this.style.boxShadow='';this.style.borderColor='var(--border)'">
       <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${x.name}${x.period?' / '+x.period:''}</div>
       <div style="font-size:13px;font-weight:700;margin-bottom:8px">🎯 ${x.kgi||'（KGI未入力）'}</div>
       <div class="pw"><div class="pt"><div class="pf" style="width:${x.pct}%;background:${col}"></div></div><div class="pp" style="color:${col}">${x.pct}%</div></div>
+      ${csfHtml}
     </div>`;
   }).join('');
+}
+/* CSFクリック → チャート管理タブの該当チャートを開き、該当CSFセルへスクロール＋ハイライト */
+function gotoChartCsf(chartId,csfIndex){
+  gotoTab('chartmgr');
+  initChartMgr();
+  setTimeout(()=>{
+    const sel=document.getElementById('cm-chart-sel');
+    if(sel&&chartId&&CHARTS[chartId]){sel.value=chartId;onCmChartChange();}
+    setTimeout(()=>{
+      const cell=document.querySelector(`#cm-kpi-grid-simple [data-csf="${csfIndex}"]`)||document.querySelector(`[data-csf="${csfIndex}"]`);
+      if(cell){
+        cell.scrollIntoView({behavior:'smooth',block:'center'});
+        cell.style.outline='3px solid var(--accent)';cell.style.outlineOffset='2px';
+        setTimeout(()=>{cell.style.outline='';cell.style.outlineOffset='';},1500);
+      }
+    },140);
+  },60);
 }
 /* KGIカードクリック → チャート管理タブの該当チャートを選択して編集グリッドへスクロール */
 function gotoChartMgr(chartId){
