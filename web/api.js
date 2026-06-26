@@ -97,12 +97,13 @@
     var raw = await fetchAll(); if (!raw) return null;
     var prof = byId(raw.profiles);
     var teamById = byId(raw.teams);
-    var letterName = {}; // 'A' -> '営業チームA'
-    Object.keys(teamById).forEach(function (id) { if (TEAM_KEY[id]) letterName[TEAM_KEY[id]] = teamById[id].name; });
+    var letterName = {}; // 'A' -> '営業チームA'（新規チームは UUID をキーに使う）
+    Object.keys(teamById).forEach(function (id) { letterName[TEAM_KEY[id] || id] = teamById[id].name; });
 
     var TEAMS = {};
     raw.teams.forEach(function (t) {
-      var key = TEAM_KEY[t.id]; if (!key) return;
+      // シード3チームは短縮キー、それ以外（新規作成）は UUID をキーに採用して必ず含める
+      var key = TEAM_KEY[t.id] || t.id;
       var mems = raw.team_members.filter(function (m) { return m.team_id === t.id; });
       TEAMS[key] = {
         id: key, uid: t.id, name: t.name, color: t.color, bg: t.bg,
@@ -127,7 +128,7 @@
         email: p.email,
         role: (tm && tm.role_in_team === 'leader') ? 'リーダー' : roleJPFull(p.role),
         roleEnum: p.role,
-        team: tm ? TEAM_KEY[tm.team_id] : '',
+        team: tm ? (TEAM_KEY[tm.team_id] || tm.team_id) : '',
         rate: tm ? (tm.achievement_rate || 0) : 50
       };
     });
@@ -136,7 +137,7 @@
     raw.mandala_charts.forEach(function (c) {
       var base = { color: c.color, bg: c.bg, name: c.name, center: c.center, subs: c.subs, acts: c.acts };
       if (c.owner_type === 'team') {
-        var tk = TEAM_KEY[c.owner_team_id]; if (!tk) return;
+        var tk = TEAM_KEY[c.owner_team_id] || c.owner_team_id; if (!tk) return;
         base.team = c.name; MND[tk] = base;
       } else if (c.id !== 'user_nakamura_q2') {
         var mk = memKey(c.owner_user_id); if (!mk) return;
@@ -249,12 +250,51 @@
   // ===== リーダー操作：チーム所属の追加/削除・タスク割当・評価記録 =====
   async function addTeamMember(teamUuid, pid, role, rate) {
     if (!sb) return { error: 'Supabase未接続' };
-    var r = await sb.from('team_members').insert({
+    // 既存所属があっても失敗しないよう UPSERT（PK: team_id,profile_id）
+    var r = await sb.from('team_members').upsert({
       team_id: teamUuid, profile_id: pid,
-      role_in_team: (role === 'リーダー' ? 'leader' : 'member'),
+      role_in_team: (role === 'リーダー' || role === 'leader' ? 'leader' : 'member'),
       achievement_rate: (rate != null ? rate : 50)
+    }, { onConflict: 'team_id,profile_id' }).select('team_id');
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    return { ok: true };
+  }
+  // 仕様準拠の別名: チーム所属を保存（UPSERT）。role はロール名 or 'leader'/'member'
+  async function saveTeamMember(profileId, teamId, role) {
+    if (!sb) return { error: 'Supabase未接続' };
+    if (!profileId || !teamId) return { error: 'profile/team が不明です' };
+    var r = await sb.from('team_members').upsert({
+      team_id: teamId, profile_id: profileId,
+      role_in_team: (role === 'リーダー' || role === 'leader' ? 'leader' : 'member')
+    }, { onConflict: 'team_id,profile_id' }).select('team_id');
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    return { ok: true };
+  }
+  // 指定チームの編成（team_members JOIN profiles）を返す
+  async function loadTeamComposition(teamId) {
+    if (!sb || !teamId) return [];
+    var tm = await sb.from('team_members').select('profile_id,team_id,role_in_team,achievement_rate').eq('team_id', teamId);
+    if (tm.error || !tm.data) return [];
+    var ids = tm.data.map(function (x) { return x.profile_id; });
+    var pmap = {};
+    if (ids.length) { var pr = await sb.from('profiles').select('id,full_name,email,role').in('id', ids); (pr.data || []).forEach(function (p) { pmap[p.id] = p; }); }
+    return tm.data.map(function (x) {
+      var p = pmap[x.profile_id] || {};
+      return { profile_id: x.profile_id, team_id: x.team_id, role_in_team: x.role_in_team, achievement_rate: x.achievement_rate, full_name: p.full_name, email: p.email, role: p.role };
     });
-    if (r.error) return { error: r.error.message };
+  }
+  // プロフィールのロールを変更（幹部/管理者）。所属チームの role_in_team も同期。
+  async function updateProfileRole(profileId, newRole) {
+    if (!sb) return { error: 'Supabase未接続' };
+    if (!profileId) return { error: 'profile が不明です' };
+    var roleEnumVal = roleToEnum(newRole);
+    var r = await sb.from('profiles').update({ role: roleEnumVal }).eq('id', profileId).select('id');
+    if (r.error) { console.warn('[VexumAPI] updateProfileRole failed:', r.error); return { error: friendlyErr(r.error.message) }; }
+    if (!r.data || !r.data.length) return { error: '更新できませんでした（権限不足の可能性。管理者/幹部でログインしてください）' };
+    try {
+      var rit = (roleEnumVal === 'leader') ? 'leader' : 'member';
+      await sb.from('team_members').update({ role_in_team: rit }).eq('profile_id', profileId);
+    } catch (e) {}
     return { ok: true };
   }
   // チーム情報（名前・カラー・リーダー）を更新
@@ -1562,6 +1602,9 @@
     loadAdminData: loadAdminData,
     loadLeaderData: loadLeaderData,
     addTeamMember: addTeamMember,
+    saveTeamMember: saveTeamMember,
+    loadTeamComposition: loadTeamComposition,
+    updateProfileRole: updateProfileRole,
     removeTeamMember: removeTeamMember,
     updateTeam: updateTeam,
     assignTask: assignTask,

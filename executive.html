@@ -424,7 +424,10 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <div class="fg"><label class="fl">氏名</label><input class="fi" id="accedit-name"></div>
       <div class="fg"><label class="fl">メールアドレス</label><input class="fi" id="accedit-email"></div>
     </div>
-    <div class="fg"><label class="fl">所属チーム</label><select class="fs" id="accedit-team"></select></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="fg"><label class="fl">所属チーム</label><select class="fs" id="accedit-team"></select></div>
+      <div class="fg"><label class="fl">権限（ロール）</label><select class="fs" id="accedit-role"><option value="メンバー">メンバー</option><option value="リーダー">リーダー</option><option value="幹部">幹部</option><option value="管理者">管理者</option></select></div>
+    </div>
     <button class="f-submit" style="width:100%" onclick="submitAccEdit()">変更を保存</button>
   </div>
 </div>
@@ -822,9 +825,11 @@ async function submitAccount(){
   if(dup){showToast('同じロールのアカウントがすでに存在します');return;}
   if(role==='幹部'||role==='管理者')teamId='';  // 管理職はチーム未所属
   const API=window.VexumAPI;
+  // チーム短縮キー/UUID → 実UUIDを解決（新規チーム=UUIDキーにも対応）
+  const teamUuid=(teamId&&TEAMS[teamId]&&TEAMS[teamId].uid)?TEAMS[teamId].uid:null;
   let id,res={};
   if(API&&API.ready){
-    res=await API.createAccount({name,email,role:role||'メンバー',teamLetter:teamId||null,rate:50})||{};
+    res=await API.createAccount({name,email,role:role||'メンバー',teamUuid:teamUuid,teamLetter:teamId||null,rate:50})||{};
     if(res.error){showToast('作成失敗: '+res.error);return;}
     id=res.pid;
   }else{
@@ -868,6 +873,9 @@ function openAccEdit(key){
   // 所属チームのプルダウン
   const sel=document.getElementById('accedit-team');
   if(sel)sel.innerHTML='<option value="">— 未所属 —</option>'+Object.values(TEAMS).map(t=>`<option value="${t.id}" ${t.id===m.team?'selected':''}>${t.name}</option>`).join('');
+  // 権限（ロール）のプルダウン
+  const rsel=document.getElementById('accedit-role');
+  if(rsel)rsel.value=m.role||'メンバー';
   document.getElementById('accedit-modal').style.display='flex';
 }
 function closeAccEdit(){document.getElementById('accedit-modal').style.display='none';}
@@ -877,18 +885,28 @@ async function submitAccEdit(){
   const name=document.getElementById('accedit-name').value.trim();
   const email=document.getElementById('accedit-email').value.trim();
   const newTeam=document.getElementById('accedit-team').value;  // チーム短縮キーまたは''
+  const newRole=(document.getElementById('accedit-role')||{}).value||m.role;  // 権限（ロール）
   if(!name){showToast('氏名を入力してください');return;}
+  const roleChanged=newRole!==(m.role||'');
   const API=window.VexumAPI;
   if(API&&API.ready&&m.pid){
     // 氏名/メール更新
     const upd=await API.updateAccount(m.pid,{name,email});
     if(upd&&upd.error){showToast('更新失敗: '+upd.error);return;}
+    // 権限（ロール）変更 → profiles.role + team_members.role_in_team を更新
+    if(roleChanged&&API.updateProfileRole){
+      const rr=await API.updateProfileRole(m.pid,newRole);
+      if(rr&&rr.error){showToast('権限変更失敗: '+rr.error);return;}
+    }
     // 所属チーム変更（既存チームから外す→新チームに追加）
     if(newTeam!==(m.team||'')){
       const oldTeamUid=m.team&&TEAMS[m.team]?TEAMS[m.team].uid:null;
       const newTeamUid=newTeam&&TEAMS[newTeam]?TEAMS[newTeam].uid:null;
       if(oldTeamUid){const r=await API.removeTeamMember(oldTeamUid,m.pid);if(r&&r.error){showToast('チーム外し失敗: '+r.error);return;}}
-      if(newTeamUid){const r=await API.addTeamMember(newTeamUid,m.pid,m.role,m.rate);if(r&&r.error){showToast('チーム追加失敗: '+r.error);return;}}
+      if(newTeamUid){const r=await API.addTeamMember(newTeamUid,m.pid,newRole,m.rate);if(r&&r.error){showToast('チーム追加失敗: '+r.error);return;}}
+    }else if(roleChanged&&newTeam&&TEAMS[newTeam]){
+      // チームは同じでロールだけ変わった場合も role_in_team を同期
+      const uid=TEAMS[newTeam].uid;if(uid){await API.addTeamMember(uid,m.pid,newRole,m.rate);}
     }
   }
   // ローカル状態更新
@@ -898,6 +916,7 @@ async function submitAccEdit(){
     m.team=newTeam||'';
   }
   m.name=name;m.email=email||'—';
+  if(roleChanged){m.role=newRole;m.roleEnum=roleToEnumJP(newRole);}
   closeAccEdit();renderAccount();
   showToast(`${name} を更新しました ✓`);
 }

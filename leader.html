@@ -1818,7 +1818,17 @@ function vexumLogout(){
   });
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}
-  API.currentProfile().then(function(p){ if(!p)return; window._meProfile=p; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; if(typeof LEADER==='object'){LEADER.name=p.full_name;LEADER.email=p.email;} if(typeof _updateSwitchBtn==='function')_updateSwitchBtn(); }).catch(function(){});
+  // 別ユーザーでログインしたら前ユーザーの localStorage（vexum_*）を一掃（バグ2対策）
+  function clearOtherUserData(currentProfileId){
+    try{
+      var prevId=localStorage.getItem('vexum_last_profile_id');
+      if(prevId&&currentProfileId&&prevId!==currentProfileId){
+        Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id';}).forEach(function(k){localStorage.removeItem(k);});
+      }
+      if(currentProfileId)localStorage.setItem('vexum_last_profile_id',currentProfileId);
+    }catch(e){}
+  }
+  API.currentProfile().then(function(p){ if(!p)return; clearOtherUserData(p.id); window._meProfile=p; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; if(typeof LEADER==='object'){LEADER.name=p.full_name;LEADER.email=p.email;} if(typeof _updateSwitchBtn==='function')_updateSwitchBtn(); }).catch(function(){});
   API.loadLeaderData().then(function(d){
     if(!d) return;
     repl(MEMBERS,d.MEMBERS); repl(MEMBER_TASKS,d.MEMBER_TASKS); repl(REPORTS,d.REPORTS); repl(AVAILABLE,d.AVAILABLE);

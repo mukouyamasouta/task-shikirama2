@@ -2841,6 +2841,17 @@ function vexumLogout(){
   var DEST={admin:'./admin.html',executive:'./executive.html',leader:'./leader.html',member:'./employee.html'};
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}
+  // 別ユーザーでログインしたら前ユーザーの localStorage（vexum_*）を一掃する
+  // → 新規アカウントに前任者のタスク・進捗・未送信キューが残らない（バグ2対策）
+  function clearOtherUserData(currentProfileId){
+    try{
+      var prevId=localStorage.getItem('vexum_last_profile_id');
+      if(prevId&&currentProfileId&&prevId!==currentProfileId){
+        Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id';}).forEach(function(k){localStorage.removeItem(k);});
+      }
+      if(currentProfileId)localStorage.setItem('vexum_last_profile_id',currentProfileId);
+    }catch(e){}
+  }
   // リーダーから「従業員画面に切り替え」した場合の代理表示用
   var _linkedEmp=null,_curRole=null;
   try{_linkedEmp=localStorage.getItem('vexum_linked_employee_id');_curRole=localStorage.getItem('vexum_current_role');}catch(e){}
@@ -2871,6 +2882,9 @@ function vexumLogout(){
   }
   API.currentProfile().then(function(p){
     if(!p){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); return; }
+    clearOtherUserData(p.id);  // 別ユーザーなら前ユーザーのLSを一掃（バグ2）
+    // クリア後に紐付け情報を再読込（別ユーザーログイン時は消えている）
+    try{_linkedEmp=localStorage.getItem('vexum_linked_employee_id');_curRole=localStorage.getItem('vexum_current_role');}catch(e){}
     // リーダー等が紐付け済み従業員として切り替えた場合は member 以外でも許可
     var acting=(p.role!=='member')&&!!_linkedEmp&&_curRole==='employee';
     if(p.role!=='member'&&!acting){ location.replace(DEST[p.role]||'./index.html'); return; }
