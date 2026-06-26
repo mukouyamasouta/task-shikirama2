@@ -67,6 +67,11 @@ button:disabled{opacity:.6}
     if(!API.ready){ msg.className='msg err'; msg.textContent='Supabase未設定のため登録できません'; return; }
     var btn=document.getElementById('btn'); btn.disabled=true;
     try{
+      // 同じ(email, role=member)が既にあれば登録を止める（signupは常に従業員=member）
+      try{
+        var exist=await API.sb.from('profiles').select('id').ilike('email',email).eq('role','member').limit(1);
+        if(exist&&exist.data&&exist.data.length){ msg.className='msg err'; msg.textContent='このメールアドレスはすでに登録されています'; btn.disabled=false; return; }
+      }catch(_){}
       // メール確認不要のセルフ登録RPC（確認済みユーザーを作成）
       var reg=await API.sb.rpc('vexum_self_register', { p_email:email, p_password:pw, p_name:name });
       if(reg.error){ throw reg.error; }

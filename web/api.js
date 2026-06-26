@@ -884,12 +884,35 @@
     if (/permission denied|row-level/i.test(msg)) return '権限がありません。正しい役職のアカウントでログインし直してください（リーダーは自チーム、幹部・管理者は全体）';
     return msg;
   }
+  // 同一メールで既に登録済みの profile から auth_user_id を流用（同一人物=同一ログイン）。
+  // 無ければ null（vexum_create_login RPC 側で新規 auth を発行する）。
+  async function _reuseAuthUserId(email) {
+    if (!sb || !email) return null;
+    var r = await sb.from('profiles').select('auth_user_id').ilike('email', email).not('auth_user_id', 'is', null).limit(1);
+    if (r.error || !r.data || !r.data.length) return null;
+    return r.data[0].auth_user_id || null;
+  }
+  // 同一 (email, role) の profile が既に存在するか
+  async function _existsEmailRole(email, roleEnumVal) {
+    if (!sb || !email) return false;
+    var r = await sb.from('profiles').select('id').ilike('email', email).eq('role', roleEnumVal).limit(1);
+    return !r.error && r.data && r.data.length > 0;
+  }
   async function createAccount(o) {
     if (!sb) return { error: 'Supabase未接続' };
-    var ins = await sb.from('profiles').insert({
-      full_name: o.name, email: o.email, role: roleToEnum(o.role || 'メンバー'),
+    var roleEnumVal = roleToEnum(o.role || 'メンバー');
+    // 1) 同じ (email, role) の重複を禁止
+    if (o.email && await _existsEmailRole(o.email, roleEnumVal)) {
+      return { error: '同じロールのアカウントがすでに存在します' };
+    }
+    // 2) 同一メールの既存 auth_user_id を流用（同一人物の別ロール）
+    var reuseUid = await _reuseAuthUserId(o.email);
+    var row = {
+      full_name: o.name, email: o.email, role: roleEnumVal,
       department: o.department || null, color: o.color || '#0D9488'
-    }).select().single();
+    };
+    if (reuseUid) row.auth_user_id = reuseUid;
+    var ins = await sb.from('profiles').insert(row).select().single();
     if (ins.error) return { error: friendlyErr(ins.error.message) };
     var pid = ins.data.id;
     var teamUuid = o.teamUuid || (o.teamLetter ? teamUuidOf(o.teamLetter) : null);
@@ -946,9 +969,13 @@
       if (ex.data && ex.data.role === 'member') return { pid: ex.data.id, linkedExisting: true };
     }
     function variant(em) { if (!em) return ''; var i = em.indexOf('@'); return i < 0 ? (em + '+emp') : (em.slice(0, i) + '+emp' + em.slice(i)); }
+    // 同一人物の別ロールとして、既存 profile の auth_user_id を流用（あれば）
+    var reuseUid = await _reuseAuthUserId(email);
     var payload = { full_name: name, email: email || (name + '@local.vexum'), role: 'member', department: o.department || null, color: o.color || '#06B6D4' };
+    if (reuseUid) payload.auth_user_id = reuseUid;
     var ins = await sb.from('profiles').insert(payload).select().single();
     if (ins.error && /duplicate|unique|23505|already exists/i.test(ins.error.message || '')) {
+      // 27_fix_team_rls.sql 未適用で email 単独UNIQUEが残る古いDBへのフォールバック（派生メールで作成）
       payload.email = variant(email);
       ins = await sb.from('profiles').insert(payload).select().single();
     }
@@ -1159,27 +1186,57 @@
   }
 
   // 現在ログイン中ユーザーの profile（role 判定・リダイレクト用）
-  async function currentProfile() {
+  // 同一 auth_user_id に複数 profile（複数ロール）が存在し得るため、
+  // 希望ロール（preferRole / window.VEXUM_PAGE_ROLE）を優先して1件選ぶ。
+  function _pickProfile(rows, preferRole) {
+    if (!rows || !rows.length) return null;
+    var want = preferRole
+      || (typeof window !== 'undefined' && window.VEXUM_PAGE_ROLE)
+      || null;
+    if (want) { var m = rows.filter(function (p) { return p.role === want; }); if (m.length) return m[0]; }
+    var order = { admin: 0, executive: 1, leader: 2, member: 3 };
+    rows = rows.slice().sort(function (a, b) {
+      return (order[a.role] == null ? 9 : order[a.role]) - (order[b.role] == null ? 9 : order[b.role]);
+    });
+    return rows[0];
+  }
+  async function currentProfile(preferRole) {
     if (!sb) return null;
     var u = await sb.auth.getUser();
     var user = u && u.data && u.data.user;
     var uid = user && user.id;
     if (!uid) return null;
-    // まず auth_user_id 一致で取得
-    var r = await sb.from('profiles').select('*').eq('auth_user_id', uid).maybeSingle();
-    if (r.data) return r.data;
+    // まず auth_user_id 一致で取得（複数ロール対応で配列取得）
+    var r = await sb.from('profiles').select('*').eq('auth_user_id', uid);
+    if (!r.error && r.data && r.data.length) return _pickProfile(r.data, preferRole);
     // フォールバック: メール一致で取得し、auth_user_id を自動修復
     var email = user.email;
     if (email) {
-      var r2 = await sb.from('profiles').select('*').ilike('email', email).maybeSingle();
-      if (r2.data) {
-        if (!r2.data.auth_user_id || r2.data.auth_user_id !== uid) {
-          try { await sb.from('profiles').update({ auth_user_id: uid }).eq('id', r2.data.id); r2.data.auth_user_id = uid; } catch (e) {}
+      var r2 = await sb.from('profiles').select('*').ilike('email', email);
+      if (!r2.error && r2.data && r2.data.length) {
+        var chosen = _pickProfile(r2.data, preferRole);
+        if (chosen && (!chosen.auth_user_id || chosen.auth_user_id !== uid)) {
+          try { await sb.from('profiles').update({ auth_user_id: uid }).eq('id', chosen.id); chosen.auth_user_id = uid; } catch (e) {}
         }
-        return r2.data;
+        return chosen;
       }
     }
     return null;
+  }
+  // 指定チームのメンバー（profiles を team_members 経由で取得）。
+  // バグ1対策: 必ず team_id で絞り込む（他チームのメンバーを混在させない）。
+  async function loadTeamMembers(teamId) {
+    if (!sb || !teamId) return [];
+    var tm = await sb.from('team_members').select('profile_id,role_in_team,achievement_rate').eq('team_id', teamId);
+    if (tm.error || !tm.data || !tm.data.length) return [];
+    var ids = tm.data.map(function (x) { return x.profile_id; });
+    var pr = await sb.from('profiles').select('id,full_name,email,role').in('id', ids);
+    if (pr.error) return [];
+    var rate = {}; tm.data.forEach(function (x) { rate[x.profile_id] = x; });
+    return (pr.data || []).map(function (p) {
+      var t = rate[p.id] || {};
+      return { id: p.id, full_name: p.full_name, email: p.email, role: p.role, role_in_team: t.role_in_team, achievement_rate: t.achievement_rate };
+    });
   }
 
   // 幹部コメントを評価レコードに保存（評価そのものは編集しない／幹部のみが書く想定）
@@ -1536,6 +1593,7 @@
     createLinkedEmployeeAccount: createLinkedEmployeeAccount,
     loadProfile: loadProfile,
     listTeams: listTeams,
+    loadTeamMembers: loadTeamMembers,
     updateAccount: updateAccount,
     deleteAccount: deleteAccount,
     resetPassword: resetPassword,

@@ -1778,6 +1778,7 @@ updateInboxBadge();
 <script src="./web/api.js"></script>
 <script src="./web/ui.js"></script>
 <script>
+window.VEXUM_PAGE_ROLE='leader';  // 複数ロール時に currentProfile がリーダーprofileを選ぶ
 /* 🔔 リーダーの通知: 受信チャート（要振り分け）・メンバーの日報提出 */
 window.vxNotifSource=function(){
   const out=[];

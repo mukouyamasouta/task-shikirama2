@@ -706,6 +706,30 @@ function memRowHTML(key,m,col){
     ${actions}
   </div>`;
 }
+// 同一メールの複数ロールを1人=1行にまとめ、役職バッジを並べて表示
+function _groupByEmail(keys){
+  const groups={},order=[];
+  keys.forEach(key=>{const m=MEMBERS[key];if(!m)return;const e=(m.email||key).toLowerCase();if(!groups[e]){groups[e]=[];order.push(e);}groups[e].push({key,m});});
+  return order.map(e=>groups[e]);
+}
+function memGroupHTML(entries,col){
+  const m0=entries[0].m;const ini=(m0.name||'?').charAt(0);
+  const seen={};
+  const badges=entries.filter(e=>{const r=e.m.role||'';if(seen[r])return false;seen[r]=1;return true;})
+    .map(e=>{const isL=(e.m.roleEnum==='admin'||e.m.roleEnum==='executive'||e.m.role==='リーダー');return `<span class="badge ${isL?'b-leader':'b-member'}">${e.m.role}</span>`;}).join(' ');
+  const teamNames=[...new Set(entries.map(e=>e.m.team&&TEAMS[e.m.team]?TEAMS[e.m.team].name:'').filter(Boolean))];
+  const teamChip=teamNames.length?`<span style="font-size:9px;color:var(--text3);background:#F3F4F6;border-radius:6px;padding:1px 6px;margin-left:6px">🏷 ${teamNames.join(' / ')}</span>`:'';
+  let actions='';
+  entries.forEach(e=>{
+    const lbl=entries.length>1?('（'+e.m.role+'）'):'';
+    if(_pendingDel===e.key){
+      actions+=`<div style="display:flex;gap:6px;align-items:center;margin-left:8px"><span style="font-size:10px;color:var(--red);font-weight:700">${e.m.role}を削除しますか？</span><button class="card-btn" style="background:var(--red);color:#fff" onclick="confirmDeleteMember('${e.key}')">削除する</button><button class="card-btn" onclick="cancelDeleteMember()">取消</button></div>`;
+    }else{
+      actions+=`<button class="card-btn" style="margin-left:8px" onclick="openAccEdit('${e.key}')">✎ 編集${lbl}</button><button class="card-btn" style="margin-left:6px;background:#FEE2E2;color:var(--red)" onclick="askDeleteMember('${e.key}')">🗑${lbl}</button>`;
+    }
+  });
+  return `<div class="mem-row"><div class="mem-avatar" style="background:${col}">${ini}</div><div style="flex:1;min-width:0"><div class="mem-name">${m0.name} ${badges}${teamChip}</div><div class="mem-meta">${m0.email}</div></div><div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center;justify-content:flex-end">${actions}</div></div>`;
+}
 function renderAccount(){
   const con=document.getElementById('account-container');if(!con)return;
   let h=`<div style="margin-bottom:10px;font-size:11px;color:var(--text3)">チーム数: ${Object.keys(TEAMS).length}　アカウント総数: ${Object.keys(MEMBERS).length}名</div>`;
@@ -725,7 +749,7 @@ function renderAccount(){
         <span style="font-size:10px;color:var(--text3);margin-left:10px">▼</span>
       </div>
       <div class="team-panel-body" id="panel-${t.id}">`;
-    keys.forEach(key=>{ h+=memRowHTML(key,MEMBERS[key],t.color); });
+    _groupByEmail(keys).forEach(entries=>{ h+=memGroupHTML(entries,t.color); });
     h+=`</div></div>`;
   });
   const freeKeys=Object.keys(MEMBERS).filter(k=>!MEMBERS[k].team);
@@ -738,7 +762,7 @@ function renderAccount(){
         <span style="font-size:10px;color:var(--text3);margin-left:10px">▼</span>
       </div>
       <div class="team-panel-body" id="panel-free">`;
-    freeKeys.forEach(key=>{ h+=memRowHTML(key,MEMBERS[key],'#9CA3AF'); });
+    _groupByEmail(freeKeys).forEach(entries=>{ h+=memGroupHTML(entries,'#9CA3AF'); });
     h+=`</div></div>`;
   }
   con.innerHTML=h;
@@ -793,9 +817,9 @@ async function submitAccount(){
   if(!name){showToast('氏名を入力してください');return;}
   if(!email){showToast('メールアドレスを入力してください');return;}
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){showToast('メールアドレスの形式が正しくありません');return;}
-  // 重複メールの事前チェック
-  const dup=Object.values(MEMBERS).some(m=>(m.email||'').toLowerCase()===email.toLowerCase());
-  if(dup){showToast('このメールアドレスは既に登録されています');return;}
+  // 重複チェックは (メール, ロール) の組み合わせで判定（同一人物の別ロールは許可）
+  const dup=Object.values(MEMBERS).some(m=>(m.email||'').toLowerCase()===email.toLowerCase()&&(m.role||'')===(role||'メンバー'));
+  if(dup){showToast('同じロールのアカウントがすでに存在します');return;}
   if(role==='幹部'||role==='管理者')teamId='';  // 管理職はチーム未所属
   const API=window.VexumAPI;
   let id,res={};
@@ -2044,6 +2068,7 @@ initExecDashboard();
 <script src="./web/api.js"></script>
 <script src="./web/ui.js"></script>
 <script>
+window.VEXUM_PAGE_ROLE='executive';  // 複数ロール時に currentProfile が幹部profileを選ぶ
 /* 🔔 幹部の通知: 送信チャートの記入・進捗更新（送信先の反応） */
 window.vxNotifSource=function(){
   if(typeof SENDS==='undefined'||!Array.isArray(SENDS)||!SENDS.length)return [];

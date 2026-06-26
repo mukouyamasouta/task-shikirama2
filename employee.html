@@ -2802,6 +2802,7 @@ renderTaskTable();
 <script src="./web/api.js"></script>
 <script src="./web/ui.js"></script>
 <script>
+window.VEXUM_PAGE_ROLE='member';  // 複数ロール時に currentProfile が従業員profileを選ぶ
 /* 🔔 個人の通知: 受信チャート（記入待ち）・割当タスク・受信した評価 */
 window.vxNotifSource=function(){
   const out=[];
