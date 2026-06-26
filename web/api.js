@@ -291,10 +291,9 @@
     var r = await sb.from('profiles').update({ role: roleEnumVal }).eq('id', profileId).select('id');
     if (r.error) { console.warn('[VexumAPI] updateProfileRole failed:', r.error); return { error: friendlyErr(r.error.message) }; }
     if (!r.data || !r.data.length) return { error: '更新できませんでした（権限不足の可能性。管理者/幹部でログインしてください）' };
-    try {
-      var rit = (roleEnumVal === 'leader') ? 'leader' : 'member';
-      await sb.from('team_members').update({ role_in_team: rit }).eq('profile_id', profileId);
-    } catch (e) {}
+    // 注: team_members.role_in_team は「チーム単位」の属性のため、ここで全チームを
+    // 一括更新すると複数チーム所属者のロールが崩れる。該当チームの同期は呼び出し側
+    // （submitAccEdit → addTeamMember(teamUuid,...,role)）で行う。
     return { ok: true };
   }
   // チーム情報（名前・カラー・リーダー）を更新
@@ -519,13 +518,14 @@
     var me = await currentProfile(); if (!me) return [];
     var teamIds = [];
     try { var t = await sb.from('teams').select('id').eq('leader_id', me.id); teamIds = (t.data || []).map(function (x) { return x.id; }); } catch (e) {}
-    var r = await sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(50);
+    // サーバー側で本人宛て（to_user_id）＋自分が率いるチーム宛て（to_team_id）に絞る。
+    // 以前は全件取得→limit(50)→クライアント絞りで、システム全体の通知が多いと
+    // 本人宛てが50件の枠から漏れてゼロ件になることがあった。
+    var orParts = ['to_user_id.eq.' + me.id];
+    if (teamIds.length) orParts.push('to_team_id.in.(' + teamIds.join(',') + ')');
+    var r = await sb.from('notifications').select('*').or(orParts.join(',')).order('created_at', { ascending: false }).limit(50);
     if (r.error) { err('notifications', r.error); return []; }
-    return (r.data || []).filter(function (n) {
-      if (n.to_user_id === me.id) return true;
-      if (n.to_team_id && teamIds.indexOf(n.to_team_id) >= 0) return true;
-      return false;
-    });
+    return r.data || [];
   }
   async function markNotificationsRead(ids) {
     if (!sb || !ids || !ids.length) return { ok: true };
@@ -1005,8 +1005,9 @@
     var name = (o.fullName || '従業員').trim();
     var email = (o.email || '').trim();
     if (email) {
-      var ex = await sb.from('profiles').select('id,role').ilike('email', email).maybeSingle();
-      if (ex.data && ex.data.role === 'member') return { pid: ex.data.id, linkedExisting: true };
+      // 同一メールに複数ロールの profile があり得るため maybeSingle は使わず member を1件探す
+      var ex = await sb.from('profiles').select('id,role').ilike('email', email).eq('role', 'member').limit(1);
+      if (!ex.error && ex.data && ex.data.length) return { pid: ex.data[0].id, linkedExisting: true };
     }
     function variant(em) { if (!em) return ''; var i = em.indexOf('@'); return i < 0 ? (em + '+emp') : (em.slice(0, i) + '+emp' + em.slice(i)); }
     // 同一人物の別ロールとして、既存 profile の auth_user_id を流用（あれば）
@@ -1099,12 +1100,16 @@
     var u = await sb.auth.getUser();
     var uid = u && u.data && u.data.user && u.data.user.id;
     if (!uid) return { error: '未ログイン' };
-    // profiles（氏名・メール）
+    // profiles（氏名・メール）。複数ロール（同一auth_user_id）でも“今表示中の1件”だけ
+    // 更新するよう active profile に限定（auth_user_id 一括だと他ロール行まで書き換わる）。
     var prof = {};
     if (patch.name != null) prof.full_name = patch.name;
     if (patch.email != null) prof.email = patch.email;
     if (Object.keys(prof).length) {
-      var pr = await sb.from('profiles').update(prof).eq('auth_user_id', uid);
+      var me = await currentProfile();
+      var pr = (me && me.id)
+        ? await sb.from('profiles').update(prof).eq('id', me.id)
+        : await sb.from('profiles').update(prof).eq('auth_user_id', uid);
       if (pr.error) return { error: pr.error.message };
     }
     // auth（メール・パスワード）

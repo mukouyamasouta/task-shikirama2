@@ -941,12 +941,15 @@ function closeAssignChoice(){document.getElementById('assignchoice-modal').style
 async function doCreateTask(){
   const pa=PENDING_ASSIGN;if(!pa)return null;
   const API=window.VexumAPI;
+  let newId=null;
   if(API&&API.ready){
     const res=await API.assignTask({title:pa.name,kpi:pa.kpi,assigneePid:pidOf(pa.id),teamUuid:teamMeta.uid,start:pa.startV,due:pa.dueV,priority:pa.pri,period:pa.period||null,plannedHours:pa.planHours});
     if(res&&res.error){alert('割当失敗: '+res.error);return null;}
+    if(res&&res.data)newId=res.data.id;
   }
   if(!MEMBER_TASKS[pa.id])MEMBER_TASKS[pa.id]=[];
-  MEMBER_TASKS[pa.id].push({name:pa.name,kpi:pa.kpi,start:pa.startD,due:pa.dueD,pri:pa.pri,status:'todo',period:pa.period||'',pct:0,hours:0});
+  // 返ってきた id を保持（リアルタイム再読込時に同一タスクが重複表示されないよう）
+  MEMBER_TASKS[pa.id].push({id:newId,name:pa.name,kpi:pa.kpi,start:pa.startD,due:pa.dueD,pri:pa.pri,status:'todo',period:pa.period||'',pct:0,hours:0});
   renderAssignedTasks();
   return pa.id;  // ※フォームは消さない（割当完了まで内容を保持）
 }
@@ -1850,7 +1853,9 @@ function vexumLogout(){
   API.loadEvalHistory().then(function(rows){
     if(rows&&rows.length){replArr(EVAL_RECORDS,rows);if(typeof renderEvalRec==='function')renderEvalRec();}
   }).catch(function(){});
-  // 受信ボックス（自分・自チーム宛てのチャート送信）
+  // 受信ボックス（自分・自チーム宛てのチャート送信）。接続時はデモseedを先に空にして
+  // 幻の受信チャート（demo-ib-1）が残らないようにする（loadMyInboxがnull/失敗でも空）
+  replArr(INBOX, []); if(typeof renderInbox==='function')renderInbox(); if(typeof updateInboxBadge==='function')updateInboxBadge();
   API.loadMyInbox().then(function(rows){
     if(!rows) return;
     replArr(INBOX, rows);

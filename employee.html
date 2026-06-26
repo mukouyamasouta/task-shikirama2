@@ -205,7 +205,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="sb-nav">
     <div class="sb-sec">個人メニュー</div>
     <button class="sb-item active" onclick="swTab('progress',this)"><span class="sb-icon">◇</span>進捗ダッシュボード</button>
-    <button class="sb-item" onclick="swTab('tasks',this)"><span class="sb-icon">☰</span>タスク管理<span class="sb-badge">2</span></button>
+    <button class="sb-item" onclick="swTab('tasks',this)"><span class="sb-icon">☰</span>タスク管理<span class="sb-badge" id="tasks-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('chartmgr',this);initChartMgr()"><span class="sb-icon">🗂</span>チャート管理</button>
     <button class="sb-item" onclick="swTab('inbox',this);renderInbox()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="inbox-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('assign',this)"><span class="sb-icon">📌</span>割り当て<span class="sb-badge" id="assign-badge">3</span></button>
@@ -684,7 +684,12 @@ function processAssignCompletion(){
   for(let i=ASSIGNMENTS.length-1;i>=0;i--){
     if(ASSIGNMENTS[i].pct>=100){
       const a=ASSIGNMENTS[i];a.completed=iso.replace(/-/g,'/');
-      if(API&&API.ready&&a.id)API.updateTask(a.id,{progress:100,status:'done',completedDate:iso,comment:a.comment||''});
+      // 完了の永続化。失敗時は再送キューへ積み無言の消失を防ぐ
+      if(API&&API.ready&&a.id){
+        API.updateTask(a.id,{progress:100,status:'done',completedDate:iso,comment:a.comment||''})
+          .then(res=>{if(res&&res.error){_pendingTaskAdd(a.id,100,a.hours!=null?a.hours:0);_updateSyncBadge();console.warn('[VEXUM] 完了保存失敗→再送キューへ:',res.error);}})
+          .catch(e=>{_pendingTaskAdd(a.id,100,a.hours!=null?a.hours:0);_updateSyncBadge();console.warn('[VEXUM] 完了保存例外→再送キューへ:',e);});
+      }
       ASSIGN_HISTORY.unshift(a);ASSIGNMENTS.splice(i,1);moved++;
     }
   }
@@ -1342,9 +1347,11 @@ function renderSeStars(){
 }
 function renderSeCsf(){
   const el=document.getElementById('se-csf-container');if(!el)return;
-  // 現在のチャートのCSFラベルを取得
-  const k=(typeof curChartKey!=='undefined')?curChartKey:'self_q3';
-  const c=(typeof CHARTS!=='undefined'&&CHARTS[k])?CHARTS[k]:null;
+  // 選択中の対象チャート（#se-chart の value=dbId）から CSF ラベルを取得（旧: 未定義 curChartKey で常に self_q3 になっていた）
+  const cid=(document.getElementById('se-chart')||{}).value||null;
+  let c=null;
+  Object.keys(CHARTS).forEach(k=>{if(c||k.startsWith('__'))return;const cc=CHARTS[k];const dbId=cc.dbId||(k==='self_q3'?'user_nakamura':k==='self_q2'?'user_nakamura_q2':k);if(cid&&dbId===cid)c=cc;});
+  if(!c)c=CHARTS[evalChartKey]||CHARTS['self_q3']||null;
   const subs=(c&&c.subs)||['CSF1','CSF2','CSF3','CSF4','CSF5','CSF6','CSF7','CSF8'];
   let h='';
   for(let i=0;i<8;i++){
@@ -1380,7 +1387,16 @@ async function submitSelfEval(isSubmit){
 
 let _evalDataCache={};   // chartKey -> {kgi,kgiComment,csf:[{stars,comment}],submitted} | null
 function evalDbId(k,d){return (d&&d.dbId)||(k==='self_q3'?'user_nakamura':k==='self_q2'?'user_nakamura_q2':k);}
+// 評価タブのチャート選択肢を実データ（CHARTS）から再構築（ハードコードのデモ氏名を除去）
+function populateEvalChartSel(){
+  const sel=document.getElementById('eval-chart-sel');if(!sel)return;
+  const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
+  if(!keys.length){sel.innerHTML='<option value="">— チャートなし —</option>';return;}
+  if(keys.indexOf(evalChartKey)<0)evalChartKey=keys[0];
+  sel.innerHTML=keys.map(k=>{const c=CHARTS[k];return `<option value="${k}"${k===evalChartKey?' selected':''}>${(c.name||k)}${c.scopeLabel?' — '+c.scopeLabel:''}${c.period?' ('+c.period+')':''}</option>`;}).join('');
+}
 function renderEval(){
+  populateEvalChartSel();
   const k=evalChartKey;const d=getAllMnd()[k];
   if(!d)return;
   if(!evalStates[k])evalStates[k]={};
@@ -2424,6 +2440,8 @@ function renderTaskTable(){
     ...ASSIGNMENTS.map((a,i)=>({kind:'task',ref:a,arr:'A',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,pct:a.pct||0,hours:a.hours!=null?a.hours:0,done:false,late:a.status==='late'})),
     ...ASSIGN_HISTORY.map((a,i)=>({kind:'task',ref:a,arr:'H',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,pct:100,hours:a.hours!=null?a.hours:0,done:true}))
   ];
+  // サイドバー「タスク管理」バッジ＝未完了タスク件数（ハードコードの"2"を廃止）
+  (function(){const b=document.getElementById('tasks-badge');if(!b)return;const open=ASSIGNMENTS.length;b.textContent=open;b.style.display=open?'':'none';})();
   // チャート（CSF＝チャートのタスク）: 各チャートのCSF8件を進捗・工数つきで
   // ※ チームチャート(readonly)は除外。進捗はtasks側（割り当て/タスク管理のチャートバッジ付き行）で管理する
   const chartRows=[];
@@ -2895,7 +2913,9 @@ function vexumLogout(){
   // オンライン復帰時・定期（60秒）に未送信を再送
   window.addEventListener('online',function(){if(typeof flushPendingCharts==='function'){flushPendingCharts();if(typeof flushPendingTasks==='function')flushPendingTasks();}});
   setInterval(function(){if(navigator.onLine&&typeof flushPendingCharts==='function'){flushPendingCharts();if(typeof flushPendingTasks==='function')flushPendingTasks();}},60000);
-  // 受信ボックス（自分宛てのチャート送信）
+  // 受信ボックス（自分宛てのチャート送信）。接続時はデモseedを先に空にして
+  // 幻の受信チャート・誤バッジが残らないようにする（loadMyInboxがnull/失敗でも空）
+  replArr(INBOX, []); if(typeof renderInbox==='function')renderInbox(); if(typeof updateInboxBadge==='function')updateInboxBadge();
   API.loadMyInbox().then(function(rows){
     if(!rows) return;
     replArr(INBOX, rows);

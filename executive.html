@@ -820,8 +820,9 @@ async function submitAccount(){
   if(!name){showToast('氏名を入力してください');return;}
   if(!email){showToast('メールアドレスを入力してください');return;}
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){showToast('メールアドレスの形式が正しくありません');return;}
-  // 重複チェックは (メール, ロール) の組み合わせで判定（同一人物の別ロールは許可）
-  const dup=Object.values(MEMBERS).some(m=>(m.email||'').toLowerCase()===email.toLowerCase()&&(m.role||'')===(role||'メンバー'));
+  // 重複チェックは (メール, ロールenum) で判定。m.role はチーム長だと'リーダー'表示に
+  // なるため、サーバ(_existsEmailRole)と同じ enum 比較に合わせて誤検出/取りこぼしを防ぐ
+  const dup=Object.values(MEMBERS).some(m=>(m.email||'').toLowerCase()===email.toLowerCase()&&(m.roleEnum||'')===roleToEnumJP(role||'メンバー'));
   if(dup){showToast('同じロールのアカウントがすでに存在します');return;}
   if(role==='幹部'||role==='管理者')teamId='';  // 管理職はチーム未所属
   const API=window.VexumAPI;
@@ -902,7 +903,11 @@ async function submitAccEdit(){
     if(newTeam!==(m.team||'')){
       const oldTeamUid=m.team&&TEAMS[m.team]?TEAMS[m.team].uid:null;
       const newTeamUid=newTeam&&TEAMS[newTeam]?TEAMS[newTeam].uid:null;
-      if(oldTeamUid){const r=await API.removeTeamMember(oldTeamUid,m.pid);if(r&&r.error){showToast('チーム外し失敗: '+r.error);return;}}
+      if(oldTeamUid){
+        // 旧チームのリーダー本人を外す場合は teams.leader_id のダングリング参照を解消
+        if(m.team&&TEAMS[m.team]&&TEAMS[m.team].leader===key&&API.updateTeam){try{await API.updateTeam(oldTeamUid,{leaderPid:null});TEAMS[m.team].leader='';TEAMS[m.team].leaderName='';}catch(e){}}
+        const r=await API.removeTeamMember(oldTeamUid,m.pid);if(r&&r.error){showToast('チーム外し失敗: '+r.error);return;}
+      }
       if(newTeamUid){const r=await API.addTeamMember(newTeamUid,m.pid,newRole,m.rate);if(r&&r.error){showToast('チーム追加失敗: '+r.error);return;}}
     }else if(roleChanged&&newTeam&&TEAMS[newTeam]){
       // チームは同じでロールだけ変わった場合も role_in_team を同期
@@ -1029,6 +1034,8 @@ function applyTemplate(key){
   syncSendInputs();renderSendPreview();
   showToast('テンプレートを反映しました ✓');
 }
+// KGI入力欄の oninput から呼ばれる（未定義でコンソールエラーになっていた）
+function updateSendPreview(){const ci=document.getElementById('send-center');if(ci)SEND.center=ci.value;renderSendPreview();}
 function renderSendPreview(){
   const grid=document.getElementById('send-preview');if(!grid)return;
   let h='';
@@ -1087,6 +1094,11 @@ async function sendChart(){
   if(s){s.style.display='flex';setTimeout(()=>{s.style.display='none';},5000);}
   showToast('チャートを送信しました ✓');
   if(typeof renderSendHistory==='function')renderSendHistory();
+  // 送信フォームをリセット（次回開いたときに前回内容・期間チェックが残らないように）
+  SEND.center='';SEND.subs=Array(8).fill('');SEND.acts=Array.from({length:8},()=>Array(8).fill(''));
+  SEND.startDate='';SEND.endDate='';SEND.csfPeriods={};
+  if(typeof syncSendInputs==='function')syncSendInputs();
+  if(typeof renderSendPreview==='function')renderSendPreview();
 }
 /* ===== テンプレート管理 ===== */
 function openTplManager(){renderTplManager();document.getElementById('tpl-modal').style.display='flex';}
@@ -1840,7 +1852,10 @@ function saveMemberEvalExec(id,name){
   const avg=Math.round(e.csf.reduce((a,c)=>a+c.stars,0)/8*10)/10;
   const API=window.VexumAPI;
   const m=MEMBERS[id];
-  const chartId=window._execChartChoice&&window._execChartChoice[id]||null;
+  // チャート選択がまだ非同期解決前でも、そのメンバーの先頭チャートにフォールバック
+  // （null のまま保存するとチャート絞り込みビューに評価が出ない）
+  let chartId=(window._execChartChoice&&window._execChartChoice[id])||null;
+  if(!chartId){const cc=(window._execChartsCache&&window._execChartsCache[id])||[];if(cc.length)chartId=cc[0].id;}
   if(API&&API.ready&&m&&m.pid){
     API.saveEvaluation({targetPid:m.pid,evaluatorRole:'executive',period:'2025 Q2',kgi:e.kgi.stars,kgiComment:e.kgi.comment||'',csf:e.csf.map(function(c){return {stars:c.stars,comment:c.comment};}),chartId})
       .then(function(res){if(res&&res.error)console.warn('eval deliver:',res.error);if(typeof injectEvalRefs==='function')injectEvalRefs(id,m.pid);});
@@ -1995,8 +2010,15 @@ function onExecChartChange(memberId,chartId){
   if(m&&m.pid)injectEvalRefs(memberId,m.pid);
   if(_execEvalMndOn[memberId])toggleExecEvalMnd(memberId,true);
 }
+// 個人評価タブのチーム絞り込みを実データ（TEAMS）から再構築（新規チームも選べる）
+function populateMemberTeamFilter(){
+  const sel=document.getElementById('member-team-filter');if(!sel)return;
+  const cur=sel.value||'';
+  sel.innerHTML='<option value="">全チーム</option>'+Object.values(TEAMS).map(t=>`<option value="${t.id}"${t.id===cur?' selected':''}>${t.name}</option>`).join('');
+}
 function renderMemberEval(){
   const con=document.getElementById('member-eval-container');if(!con)return;
+  populateMemberTeamFilter();
   const q=(document.getElementById('member-search')||{}).value||'';
   const tf=(document.getElementById('member-team-filter')||{}).value||'';
   const sf=(document.getElementById('member-self-filter')||{}).value||'';
