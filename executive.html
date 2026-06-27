@@ -429,17 +429,31 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <div class="fg"><label class="fl">権限（ロール）</label><select class="fs" id="accedit-role"><option value="メンバー">メンバー</option><option value="リーダー">リーダー</option><option value="幹部">幹部</option><option value="管理者">管理者</option></select></div>
     </div>
     <button class="f-submit" style="width:100%" onclick="submitAccEdit()">変更を保存</button>
-    <!-- 権限を追加（同一メール・同一氏名で別ロールのアカウントを作成＝多ロール化） -->
+    <!-- パスワード管理（再設定。既存PWの表示はセキュリティ上不可） -->
+    <div style="border-top:1px solid var(--border);margin-top:18px;padding-top:14px">
+      <div style="font-size:13px;font-weight:800;margin-bottom:4px">パスワード管理</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:10px">※ 設定済みパスワードは表示できません（セキュリティ上）。新しいパスワードに上書き再設定します。</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="fg" style="margin-bottom:8px"><label class="fl">新しいパスワード（8文字以上）</label><input class="fi" id="accedit-pw" type="password" placeholder="********" autocomplete="new-password"></div>
+        <div class="fg" style="margin-bottom:8px"><label class="fl">確認用（再入力）</label><input class="fi" id="accedit-pw2" type="password" placeholder="********" autocomplete="new-password"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="card-btn" style="background:var(--accent);color:#fff" onclick="submitAccPassword()">このパスワードに再設定する</button>
+        <span style="font-size:11px;color:var(--text3)">または</span>
+        <button class="card-btn" onclick="sendAccResetEmail()">パスワードリセットメールを送信</button>
+      </div>
+    </div>
+    <!-- 権限を追加（複数選択可・同一メール/氏名/authで多ロール化） -->
     <div style="border-top:1px solid var(--border);margin-top:18px;padding-top:14px">
       <div style="font-size:13px;font-weight:800;margin-bottom:6px">権限</div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:10px">現在のロール: <span id="accedit-current-roles">—</span></div>
-      <div style="font-size:12px;font-weight:700;margin-bottom:6px">権限を追加</div>
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px">権限を追加（複数選択可）</div>
+      <div id="accedit-role-checks" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <select class="fs" id="accedit-addrole" style="width:auto;min-width:120px"></select>
         <select class="fs" id="accedit-addteam" style="width:auto;min-width:150px"></select>
-        <button class="card-btn" style="background:var(--accent);color:#fff" onclick="submitAccAddRole()">この権限を追加する</button>
+        <button class="card-btn" style="background:var(--accent);color:#fff" onclick="submitAccAddRoles()">選択した権限を追加する</button>
       </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:6px">※ 同じメール・氏名・ログイン（auth）を共有する別ロールを作成します。新しいログインは発行されません。</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">※ 同じメール・氏名・ログイン（auth）を共有する別ロールを作成します。新しいログインは発行されません。幹部はチーム指定不要です。</div>
     </div>
   </div>
 </div>
@@ -949,7 +963,9 @@ function openAccEdit(key){
   // 権限（ロール）のプルダウン
   const rsel=document.getElementById('accedit-role');
   if(rsel)rsel.value=m.role||'メンバー';
-  // 「権限を追加」セクション（現在ロール表示＋追加可能ロールの構築）
+  // パスワード欄をクリア
+  ['accedit-pw','accedit-pw2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  // 「権限」セクション（現在ロール表示＋複数選択チェックボックスの構築）
   _renderAccEditRoleSection(m);
   document.getElementById('accedit-modal').style.display='flex';
 }
@@ -963,36 +979,77 @@ function _renderAccEditRoleSection(m){
   const held=_rolesByEmail(m.email);
   const badgeEl=document.getElementById('accedit-current-roles');
   if(badgeEl)badgeEl.innerHTML=held.length?held.map(r=>{const isL=(r==='幹部'||r==='管理者'||r==='リーダー');return `<span class="badge ${isL?'b-leader':'b-member'}" style="margin-right:4px">${r}</span>`;}).join(''):'—';
-  // 既に持っているロール（enum一致）は追加候補から除外
+  // 追加候補をチェックボックスで（既に持つロールはグレーアウト＆選択不可）
   const heldEnums=held.map(r=>roleToEnumJP(r));
-  const addable=['メンバー','リーダー','幹部'].filter(r=>heldEnums.indexOf(roleToEnumJP(r))<0);
-  const roleSel=document.getElementById('accedit-addrole');
-  if(roleSel)roleSel.innerHTML=addable.length?addable.map(r=>`<option value="${r}">${r}</option>`).join(''):'<option value="">追加できるロールなし</option>';
+  const roles=[['メンバー','従業員'],['リーダー','リーダー'],['幹部','幹部']];
+  const box=document.getElementById('accedit-role-checks');
+  if(box)box.innerHTML=roles.map(([val,label])=>{
+    const has=heldEnums.indexOf(roleToEnumJP(val))>=0;
+    return `<label style="display:flex;align-items:center;gap:5px;font-size:12px;${has?'opacity:.45;cursor:not-allowed':'cursor:pointer'}"><input type="checkbox" class="accedit-role-chk" value="${val}" ${has?'disabled':''}> ${label}${has?'（保有中）':''}</label>`;
+  }).join('');
   const teamSel=document.getElementById('accedit-addteam');
   if(teamSel)teamSel.innerHTML='<option value="">未所属</option>'+Object.values(TEAMS).map(t=>`<option value="${t.id}" ${t.id===m.team?'selected':''}>${t.name}</option>`).join('');
 }
-// 編集モーダルから権限（ロール）を追加：createOrLinkAccount で多ロール化
-async function submitAccAddRole(){
+// 編集モーダルから複数ロールを一括追加：createOrLinkAccount を Promise.allSettled で並行実行
+async function submitAccAddRoles(){
   const key=document.getElementById('accedit-key').value;
   const m=MEMBERS[key];if(!m){showToast('対象が見つかりません');return;}
-  const role=(document.getElementById('accedit-addrole')||{}).value;
-  if(!role){showToast('追加するロールを選択してください');return;}
-  const enumR=roleToEnumJP(role);
-  if(_rolesByEmail(m.email).some(h=>roleToEnumJP(h)===enumR)){showToast('そのロールは既に持っています');return;}
+  const checks=[...document.querySelectorAll('.accedit-role-chk:checked')].map(c=>c.value);
+  if(!checks.length){showToast('追加する権限を選択してください');return;}
   const teamKey=(document.getElementById('accedit-addteam')||{}).value||'';
   const teamUuid=teamKey&&TEAMS[teamKey]?TEAMS[teamKey].uid:null;
-  const API=window.VexumAPI;let res={};
-  if(API&&API.ready){
-    if(!API.createOrLinkAccount){showToast('サーバーに createOrLinkAccount がありません');return;}
-    // full_name・email は編集中アカウントと完全に同一を使用（auth_user_id 流用＝新規authは作らない）
-    res=await API.createOrLinkAccount({fullName:m.name,email:m.email,role,teamId:teamUuid})||{};
-    if(res.error){showToast('追加失敗: '+res.error);return;}
-  }
-  const nid=res.pid||('m'+Date.now().toString(36));
-  MEMBERS[nid]={pid:nid,name:m.name,email:m.email,role,roleEnum:roleToEnumJP(role),team:teamKey||'',rate:50};
-  if(teamKey&&TEAMS[teamKey]&&!TEAMS[teamKey].members.includes(nid))TEAMS[teamKey].members.push(nid);
+  const API=window.VexumAPI;
+  const results=await Promise.allSettled(checks.map(role=>{
+    const enumR=roleToEnumJP(role);
+    const isMgr=(enumR==='executive'||enumR==='admin');   // 幹部/管理者はチーム不要
+    const tk=isMgr?'':teamKey;const tid=isMgr?null:teamUuid;
+    const p=(API&&API.ready&&API.createOrLinkAccount)
+      ? API.createOrLinkAccount({fullName:m.name,email:m.email,role,teamId:tid})
+      : Promise.resolve({pid:'m'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)});
+    return p.then(r=>({role,r:r||{},teamKey:tk}));
+  }));
+  let ok=0;const fails=[];
+  results.forEach(s=>{
+    if(s.status==='fulfilled'&&s.value.r&&!s.value.r.error){
+      const role=s.value.role,r=s.value.r,tk=s.value.teamKey;
+      const nid=r.pid||('m'+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
+      MEMBERS[nid]={pid:nid,name:m.name,email:m.email,role,roleEnum:roleToEnumJP(role),team:tk||'',rate:50};
+      if(tk&&TEAMS[tk]&&!TEAMS[tk].members.includes(nid))TEAMS[tk].members.push(nid);
+      ok++;
+    }else{
+      const role=(s.status==='fulfilled')?s.value.role:'?';
+      const msg=(s.status==='fulfilled')?((s.value.r&&s.value.r.error)||'不明なエラー'):String(s.reason);
+      fails.push(`${role}: ${msg}`);
+    }
+  });
   closeAccEdit();renderAccount();
-  showToast(`${m.name} に「${role}」権限を追加しました ✓`);
+  if(ok)showToast(`${ok}件の権限を追加しました ✓`);
+  if(fails.length)setTimeout(()=>alert('一部の権限追加に失敗しました:\n'+fails.join('\n')),200);
+}
+// パスワード再設定（指定した新パスワードに上書き）
+async function submitAccPassword(){
+  const key=document.getElementById('accedit-key').value;const m=MEMBERS[key];if(!m)return;
+  const pw=(document.getElementById('accedit-pw')||{}).value||'';
+  const pw2=(document.getElementById('accedit-pw2')||{}).value||'';
+  if(pw.length<8){showToast('パスワードは8文字以上で入力してください');return;}
+  if(pw!==pw2){showToast('確認用パスワードが一致しません');return;}
+  if(!m.email||m.email==='—'){showToast('メールアドレスが未設定です');return;}
+  const API=window.VexumAPI;
+  if(!(API&&API.ready&&API.setAccountPassword)){showToast('サーバーに接続されていません');return;}
+  const res=await API.setAccountPassword(m.email,pw);
+  if(res&&res.error){showToast('再設定失敗: '+res.error);return;}
+  ['accedit-pw','accedit-pw2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  showToast(`${m.name} のパスワードを再設定しました ✓`);
+}
+// パスワードリセットメール送信（SMTP設定が必要・best-effort）
+async function sendAccResetEmail(){
+  const key=document.getElementById('accedit-key').value;const m=MEMBERS[key];if(!m)return;
+  if(!m.email||m.email==='—'){showToast('メールアドレスが未設定です');return;}
+  const API=window.VexumAPI;
+  if(!(API&&API.ready&&API.sendResetEmail)){showToast('サーバーに接続されていません');return;}
+  const res=await API.sendResetEmail(m.email);
+  if(res&&res.error){showToast('送信失敗: '+res.error);return;}
+  showToast('パスワードリセットメールを送信しました');
 }
 function closeAccEdit(){document.getElementById('accedit-modal').style.display='none';}
 async function submitAccEdit(){

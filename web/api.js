@@ -1081,6 +1081,29 @@
       return { password: pw };
     } catch (e) { return { error: String(e) }; }
   }
+  // 管理者・幹部が「指定した新パスワード」に再設定（vexum_create_login RPC=SECURITY DEFINER）。
+  // ※ Supabase Auth はPWをハッシュ保存するため既存PWの平文表示は不可。これは「上書き再設定」。
+  async function setAccountPassword(email, password) {
+    if (!sb) return { error: 'Supabase未接続' };
+    if (!email) return { error: 'メールアドレスが不明です' };
+    if (!password || password.length < 8) return { error: 'パスワードは8文字以上で入力してください' };
+    try {
+      var rpc = await sb.rpc('vexum_create_login', { p_email: email, p_password: password });
+      if (rpc.error) return { error: friendlyErr(rpc.error.message) };
+      return { ok: true };
+    } catch (e) { return { error: String(e) }; }
+  }
+  // 本人にパスワードリセットメールを送る（SMTP/メールテンプレ設定が必要・best-effort）。
+  async function sendResetEmail(email) {
+    if (!sb) return { error: 'Supabase未接続' };
+    if (!email) return { error: 'メールアドレスが不明です' };
+    try {
+      var redirect = (typeof location !== 'undefined') ? (location.origin + '/index.html') : undefined;
+      var r = await sb.auth.resetPasswordForEmail(email, redirect ? { redirectTo: redirect } : undefined);
+      if (r.error) return { error: friendlyErr(r.error.message) };
+      return { ok: true };
+    } catch (e) { return { error: String(e) }; }
+  }
   function randomPassword(len) {
     len = len || 12;
     var c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
@@ -1693,6 +1716,8 @@
     updateAccount: updateAccount,
     deleteAccount: deleteAccount,
     resetPassword: resetPassword,
+    setAccountPassword: setAccountPassword,
+    sendResetEmail: sendResetEmail,
     createTeamRemote: createTeamRemote,
     updateSelf: updateSelf,
     loadTemplates: loadTemplates,
