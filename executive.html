@@ -439,8 +439,6 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="card-btn" style="background:var(--accent);color:#fff" onclick="submitAccPassword()">このパスワードに再設定する</button>
-        <span style="font-size:11px;color:var(--text3)">または</span>
-        <button class="card-btn" onclick="sendAccResetEmail()">パスワードリセットメールを送信</button>
       </div>
     </div>
     <!-- 権限を追加（複数選択可・同一メール/氏名/authで多ロール化） -->
@@ -1040,16 +1038,6 @@ async function submitAccPassword(){
   if(res&&res.error){showToast('再設定失敗: '+res.error);return;}
   ['accedit-pw','accedit-pw2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   showToast(`${m.name} のパスワードを再設定しました ✓`);
-}
-// パスワードリセットメール送信（SMTP設定が必要・best-effort）
-async function sendAccResetEmail(){
-  const key=document.getElementById('accedit-key').value;const m=MEMBERS[key];if(!m)return;
-  if(!m.email||m.email==='—'){showToast('メールアドレスが未設定です');return;}
-  const API=window.VexumAPI;
-  if(!(API&&API.ready&&API.sendResetEmail)){showToast('サーバーに接続されていません');return;}
-  const res=await API.sendResetEmail(m.email);
-  if(res&&res.error){showToast('送信失敗: '+res.error);return;}
-  showToast('パスワードリセットメールを送信しました');
 }
 function closeAccEdit(){document.getElementById('accedit-modal').style.display='none';}
 async function submitAccEdit(){
