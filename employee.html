@@ -207,6 +207,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="sb-item active" onclick="swTab('progress',this)"><span class="sb-icon">◇</span>進捗ダッシュボード</button>
     <button class="sb-item" onclick="swTab('tasks',this)"><span class="sb-icon">☰</span>タスク管理<span class="sb-badge" id="tasks-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('chartmgr',this);initChartMgr()"><span class="sb-icon">🗂</span>チャート管理</button>
+    <button class="sb-item" onclick="swTab('gantt',this);renderGantt()"><span class="sb-icon">📅</span>ガントチャート</button>
     <button class="sb-item" onclick="swTab('inbox',this);renderInbox()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="inbox-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('assign',this)"><span class="sb-icon">📌</span>割り当て<span class="sb-badge" id="assign-badge">3</span></button>
     <button class="sb-item" onclick="swTab('reviews',this);renderEval();refreshSelfEvalStatusCard()"><span class="sb-icon">★</span>評価管理</button>
@@ -491,6 +492,16 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
 </div>
 
+<!-- ガントチャート -->
+<div id="tc-gantt" class="tab-content">
+  <div class="sec-title">ガントチャート <span style="font-size:11px;font-weight:400;color:var(--text3)">チャートに紐づくタスクを期限順・CSF色分けで表示。日付を編集できます</span></div>
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;box-shadow:var(--shadow)">
+    <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em">チャート選択</div>
+    <select class="fs" id="gantt-chart-sel" onchange="onGanttChartChange()" style="font-size:12px;padding:7px 10px;font-weight:600;width:auto;min-width:220px"></select>
+  </div>
+  <div id="gantt-body"></div>
+</div>
+
 <!-- 受信ボックス -->
 <div id="tc-inbox" class="tab-content">
   <div class="sec-title">受信ボックス <span style="font-size:11px;font-weight:400;color:var(--text3)">幹部・統括から送信された曼荼羅チャート</span></div>
@@ -572,7 +583,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <script>
 /* ===== タブ切替 ===== */
-const TITLES={progress:['進捗ダッシュボード','個人メニュー / 進捗'],tasks:['タスク管理','個人メニュー / タスク'],assign:['割り当て','個人メニュー / 割り当て'],reviews:['評価管理','個人メニュー / 評価'],report:['日報','個人メニュー / 日報'],chartmgr:['チャート管理','個人メニュー / チャート管理'],inbox:['受信ボックス','個人メニュー / 受信ボックス']};
+const TITLES={progress:['進捗ダッシュボード','個人メニュー / 進捗'],tasks:['タスク管理','個人メニュー / タスク'],assign:['割り当て','個人メニュー / 割り当て'],reviews:['評価管理','個人メニュー / 評価'],report:['日報','個人メニュー / 日報'],chartmgr:['チャート管理','個人メニュー / チャート管理'],gantt:['ガントチャート','個人メニュー / ガントチャート'],inbox:['受信ボックス','個人メニュー / 受信ボックス']};
 /* 右上「新規作成」ボタンのタブ別制御（progress・assignでは非表示） */
 const TB_NEW={tasks:{label:'＋ タスク作成',fn:'openTaskCreate'},report:{label:'＋ 新規日報',fn:'newReport'}};
 function updateTbNewBtn(id){
@@ -879,14 +890,19 @@ function resetReportForm(){
 <div id="task-modal" class="tm-modal" onclick="if(event.target===this)closeTaskCreate()">
   <div class="tm-box">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
-      <div><div style="font-size:16px;font-weight:800;color:var(--accent)">新規タスク作成</div><div style="font-size:10px;color:var(--text3);margin-top:2px">チャート以外のタスクを作成します　<span onclick="toggleTmChartLink()" style="color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline">KGI紐付けはこちら →</span></div></div>
+      <div><div style="font-size:16px;font-weight:800;color:var(--accent)">新規タスク作成</div><div style="font-size:10px;color:var(--text3);margin-top:2px"><span id="tm-modal-sub-text">KGI紐付けでタスクを作成します　</span><span id="tm-link-toggle" onclick="toggleTmChartLink()" style="color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline">チャート以外のタスクはこちら →</span></div></div>
       <button onclick="closeTaskCreate()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
     </div>
-    <div id="tm-chart-link" style="display:none;background:var(--accent-l);border-radius:8px;padding:10px 12px;margin-bottom:14px">
-      <div class="fl" style="margin-bottom:5px">チャート（KGI）を選択してください</div>
-      <select class="fs" id="tm-chart-sel"><option value="">選択しない</option></select>
-      <button class="card-btn" style="margin-top:8px;background:var(--accent);color:#fff;border-color:var(--accent)" onclick="tmOpenChartEditor()">このチャートの編集画面を開く →</button>
-      <div style="font-size:10px;color:var(--text2);margin-top:6px;line-height:1.5">※ チャートを選んだまま「タスクを作成」すると、そのKGIに紐づくチャートタスクとして登録されます。</div>
+    <div id="tm-chart-link" style="background:var(--accent-l);border-radius:8px;padding:10px 12px;margin-bottom:14px">
+      <div class="fg" style="margin-bottom:8px"><label class="fl">① チャート（KGI）を選択</label>
+        <select class="fs" id="tm-chart-sel" onchange="onTmChartSel()"><option value="">チャートを選択</option></select></div>
+      <div class="fg" style="margin-bottom:8px"><label class="fl">② 紐付けるCSFを選択</label>
+        <select class="fs" id="tm-csf-sel" onchange="onTmCsfSel()"><option value="">（先にチャートを選択）</option></select>
+        <div id="tm-csf-warn" style="display:none;font-size:10px;color:var(--red);font-weight:700;margin-top:4px"></div></div>
+      <div class="fg" style="margin-bottom:8px"><label class="fl">③ 紐付けるKPI（任意）</label>
+        <select class="fs" id="tm-kpi-sel"><option value="">KPIなし（CSFのみに紐付け）</option></select></div>
+      <button class="card-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="tmOpenChartEditor()">→ このチャートを編集する</button>
+      <div style="font-size:10px;color:var(--text2);margin-top:6px;line-height:1.5">※ 選択したKGI/CSF/KPIに紐づくチャートタスクとして登録されます。</div>
     </div>
     <div class="fg"><label class="fl">タスク名 *</label>
       <input class="fi" id="tm-name" placeholder="例: 新規顧客 訪問アポ獲得">
@@ -901,7 +917,7 @@ function resetReportForm(){
     </div>
     <div style="display:flex;gap:8px;margin-top:6px">
       <button class="f-submit" style="flex:1;background:#9CA3AF" onclick="closeTaskCreate()">キャンセル</button>
-      <button class="f-submit" style="flex:1" onclick="submitTask()">タスクを作成</button>
+      <button class="f-submit" style="flex:1" id="tm-create-btn" onclick="submitTask()">タスクを作成</button>
     </div>
   </div>
 </div>
@@ -926,6 +942,12 @@ function resetReportForm(){
     <div style="background:#ECFEFF;border:1px solid #67E8F9;border-radius:6px;padding:8px 10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
       <span style="font-size:11px;font-weight:700;color:#0E7490">⏱ 合計作業時間（累計）</span>
       <span style="font-size:15px;font-weight:800;color:#0E7490"><span id="kpi-edit-hours-total">0</span>h</span>
+    </div>
+    <!-- CSF専用: 作業時間の直接入力（KPI合計を上書き） -->
+    <div class="fg" id="kpi-edit-csfhours-wrap" style="display:none;background:#FFFBEB;border:1px solid #FCD34D;border-radius:6px;padding:8px 10px;margin-bottom:12px">
+      <label class="fl">このCSFの作業時間を直接入力（h・KPI合計を上書き）</label>
+      <input class="fi" id="kpi-edit-csfhours" type="number" min="0" step="0.5" placeholder="空欄ならKPI合計を自動表示">
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">現在のKPI合計: <span id="kpi-edit-csfhours-auto">0</span>h（空欄に戻すとこの値に戻ります）</div>
     </div>
     <div class="fg"><label class="fl">メモ（リーダーへのコメント・状況など）</label>
       <textarea class="fi" id="kpi-edit-note" rows="3" placeholder="進捗状況・メモ・リーダーへの報告…" style="resize:vertical;font-size:12px"></textarea></div>
@@ -1722,29 +1744,86 @@ function _epPeriodOptions(){
   for(let mo=1;mo<=12;mo++){const v=`${y}-${String(mo).padStart(2,'0')}`;o+=`<option value="${v}">${y}年${mo}月</option>`;}
   o+=`<option value="${y}年度">${y}年度（通年）</option>`;return o;
 }
+let _tmKgiMode=true;  // タスク作成モーダル: KGI紐付けモード（デフォルトON）
 function openTaskCreate(){
   const ps=document.getElementById('tm-period');if(ps&&!ps.options.length)ps.innerHTML=_epPeriodOptions();
-  const lb=document.getElementById('tm-chart-link');if(lb)lb.style.display='none';  // KGI紐付けは毎回閉じた状態から
+  _tmKgiMode=true;  // 既定はKGI紐付けUIを展開
+  const lb=document.getElementById('tm-chart-link');if(lb)lb.style.display='block';
+  const nm=document.getElementById('tm-name');if(nm)nm.value='';
+  _fillTmChartSel();onTmChartSel();_updateTmLinkLabel();_updateTmCreateBtn();
   document.getElementById('task-modal').style.display='flex';
 }
 function closeTaskCreate(){document.getElementById('task-modal').style.display='none';}
-/* タスク作成モーダル: 「KGI紐付けはこちら」の展開・チャート選択 */
+function _updateTmLinkLabel(){
+  const el=document.getElementById('tm-link-toggle');const t=document.getElementById('tm-modal-sub-text');
+  if(el)el.textContent=_tmKgiMode?'チャート以外のタスクはこちら →':'KGI紐付けはこちら →';
+  if(t)t.textContent=_tmKgiMode?'KGI紐付けでタスクを作成します　':'チャート以外のタスクを作成します　';
+}
+/* KGI紐付けモード ⇄ チャート以外モード を切替 */
 function toggleTmChartLink(){
-  const box=document.getElementById('tm-chart-link');if(!box)return;
-  const show=box.style.display==='none';
-  if(show)_fillTmChartSel();
-  box.style.display=show?'block':'none';
+  _tmKgiMode=!_tmKgiMode;
+  const box=document.getElementById('tm-chart-link');if(box)box.style.display=_tmKgiMode?'block':'none';
+  if(_tmKgiMode){_fillTmChartSel();onTmChartSel();}
+  _updateTmLinkLabel();_updateTmCreateBtn();
 }
 function _fillTmChartSel(){
   const sel=document.getElementById('tm-chart-sel');if(!sel)return;
   const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__')&&!CHARTS[k].readonly);
-  sel.innerHTML='<option value="">選択しない</option>'+keys.map(k=>`<option value="${k}">${_chartKgiText(k)||CHARTS[k].name||k}</option>`).join('');
+  const cur=sel.value;
+  sel.innerHTML='<option value="">チャートを選択</option>'+keys.map(k=>`<option value="${k}">${_chartKgiText(k)||CHARTS[k].name||k}</option>`).join('');
+  if(cur&&CHARTS[cur])sel.value=cur;
+}
+/* チャート選択 → そのチャートの「定義済みCSF」をCSFセレクタに反映 */
+function onTmChartSel(){
+  const k=(document.getElementById('tm-chart-sel')||{}).value||'';
+  const csfSel=document.getElementById('tm-csf-sel');const warn=document.getElementById('tm-csf-warn');
+  if(!k){ if(csfSel)csfSel.innerHTML='<option value="">（先にチャートを選択）</option>'; if(warn)warn.style.display='none'; onTmCsfSel();_updateTmCreateBtn(); return; }
+  const d=CHARTS[k]||{};const edits=_chartEdits(k);
+  // 選択可能なCSF = 定義済み（名前あり）かつ 配下KPI（acts）に空きセルがある（＝紐付け余地あり）
+  const opts=[];(d.subs||[]).forEach((s,si)=>{
+    const txt=((edits['csf-'+si]||{}).text!=null?edits['csf-'+si].text:s)||'';
+    if(!txt||!String(txt).trim())return;                  // 名前なしCSFは除外
+    const acts=(d.acts||[])[si]||[];
+    let hasEmpty=false;for(let ai=0;ai<8;ai++){if(!(acts[ai]&&String(acts[ai]).trim())){hasEmpty=true;break;}}
+    if(hasEmpty)opts.push({si,txt:String(txt).trim()});   // KPIに空きがあるCSFのみ
+  });
+  if(!opts.length){
+    if(csfSel)csfSel.innerHTML='<option value="">空いているCSFがありません</option>';
+    if(warn){warn.style.display='block';warn.textContent='空いているCSFがありません（全CSFのKPIが埋まっている、またはCSF未作成）。チャート管理でCSF/KPIを調整してください。';}
+  }else{
+    if(csfSel)csfSel.innerHTML='<option value="">CSFを選択</option>'+opts.map(o=>`<option value="${o.si}">CSF${o.si+1} ${o.txt}</option>`).join('');
+    if(warn)warn.style.display='none';
+  }
+  onTmCsfSel();_updateTmCreateBtn();
+}
+/* CSF選択 → そのCSF配下の「定義済みKPI」をKPIセレクタに反映 */
+function onTmCsfSel(){
+  const k=(document.getElementById('tm-chart-sel')||{}).value||'';
+  const siV=(document.getElementById('tm-csf-sel')||{}).value;
+  const kpiSel=document.getElementById('tm-kpi-sel');if(!kpiSel)return;
+  if(!k||siV===''||siV==null){ kpiSel.innerHTML='<option value="">KPIなし（CSFのみに紐付け）</option>'; return; }
+  const acts=((CHARTS[k]||{}).acts||[])[+siV]||[];
+  // 8スロットを表示。定義済みは名前、未定義は「（空き）」。「KPIなし」も可。
+  let opts='<option value="">KPIなし（CSFのみに紐付け）</option>';
+  for(let ai=0;ai<8;ai++){const kp=acts[ai];const txt=(kp&&String(kp).trim())?String(kp).trim():'';opts+=`<option value="${ai}">KPI${(+siV)+1}-${ai+1}${txt?' '+txt:'（空き）'}</option>`;}
+  kpiSel.innerHTML=opts;
+}
+/* 作成ボタンの活性制御: チャート選択時に空きCSFが無ければdisabled */
+function _updateTmCreateBtn(){
+  const btn=document.getElementById('tm-create-btn');if(!btn)return;
+  let dis=false;
+  if(_tmKgiMode){
+    const k=(document.getElementById('tm-chart-sel')||{}).value||'';
+    if(k){const csfSel=document.getElementById('tm-csf-sel');const hasCsf=csfSel&&[...csfSel.options].some(o=>o.value!=='');dis=!hasCsf;}
+  }
+  btn.disabled=dis;btn.style.opacity=dis?'0.5':'';btn.style.cursor=dis?'not-allowed':'';
 }
 function tmOpenChartEditor(){
   const k=(document.getElementById('tm-chart-sel')||{}).value;
   if(!k){alert('チャートを選択してください');return;}
+  const siV=(document.getElementById('tm-csf-sel')||{}).value;
   closeTaskCreate();
-  gotoChartMgr(k);
+  if(siV!==''&&siV!=null&&typeof gotoChartCsf==='function')gotoChartCsf(k,+siV); else gotoChartMgr(k);
 }
 function fmtDate(v){if(!v)return'-';const p=v.split('-');return p.length===3?`${+p[1]}/${+p[2]}`:v;}
 function submitTask(){
@@ -1756,16 +1835,30 @@ function submitTask(){
   const due=fmtDate(dueRaw);
   const pri=document.getElementById('tm-pri').value;
   const period=(document.getElementById('tm-period')||{}).value||'';
-  // KGI紐付け（展開中かつチャート選択時のみ）
-  const linkBox=document.getElementById('tm-chart-link');
-  const chartKey=(linkBox&&linkBox.style.display!=='none')?((document.getElementById('tm-chart-sel')||{}).value||''):'';
-  const chartName=(chartKey&&CHARTS[chartKey])?(CHARTS[chartKey].name||_chartKgiText(chartKey)||''):'';
-  const meta=chartName?('📊 チャート: '+chartName+(period?' ／ 期間: '+period:'')):('チャート以外のタスク'+(period?' ／ 期間: '+period:''));
-  const task={id:null,name,kpi:'—',meta,from:'🙋 自分で作成',fromClass:'',
-    start:startRaw?startRaw.replace(/-/g,'/'):'—',end:dueRaw?dueRaw.replace(/-/g,'/'):'—',pct:0,comment:'',status:'todo',pri,self:true,period,chart:chartName||null};
+  // KGI紐付け（KGIモードかつチャート選択時）: チャート→CSF→KPI を紐付ける
+  let chartKey='',chartName='',csfIdx=null,kpiIdx=null,csfText='';
+  if(_tmKgiMode){
+    chartKey=(document.getElementById('tm-chart-sel')||{}).value||'';
+    if(chartKey&&CHARTS[chartKey]){
+      const d=CHARTS[chartKey];const edits=_chartEdits(chartKey);
+      chartName=d.name||_chartKgiText(chartKey)||'';
+      const siV=(document.getElementById('tm-csf-sel')||{}).value;
+      if(siV===''||siV==null){alert('紐付けるCSFを選択してください');return;}
+      csfIdx=+siV;
+      csfText=((edits['csf-'+csfIdx]||{}).text!=null?edits['csf-'+csfIdx].text:(d.subs||[])[csfIdx])||('CSF'+(csfIdx+1));
+      const kpiV=(document.getElementById('tm-kpi-sel')||{}).value;
+      kpiIdx=(kpiV===''||kpiV==null)?null:+kpiV;
+    }
+  }
+  const cellStr=(csfIdx!=null)?String(csfIdx):null;
+  const meta=chartName
+    ? ('📊 '+chartName+' ／ CSF'+((csfIdx||0)+1)+': '+csfText+(kpiIdx!=null?' ／ KPI'+(csfIdx+1)+'-'+(kpiIdx+1):'')+(period?' ／ 期間: '+period:''))
+    : ('チャート以外のタスク'+(period?' ／ 期間: '+period:''));
+  const task={id:null,name,kpi:chartName?csfText:'—',meta,from:'🙋 自分で作成',fromClass:'',
+    start:startRaw?startRaw.replace(/-/g,'/'):'—',end:dueRaw?dueRaw.replace(/-/g,'/'):'—',dueRaw:dueRaw||null,startRaw:startRaw||null,pct:0,comment:'',status:'todo',pri,self:true,period,chart:chartName||null,cell:cellStr,csfIdx,kpiIdx};
   const API=window.VexumAPI;
   if(API&&API.ready){
-    API.assignTask({title:name,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self',period:period||null,chartTitle:chartName||null})
+    API.assignTask({title:name,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self',period:period||null,chartTitle:chartName||null,cell:cellStr,kpi:chartName?csfText:null,sourceKpi:kpiIdx})
       .then(res=>{
         if(res&&res.error){alert('タスクの保存に失敗しました: '+res.error);return;}
         if(res&&res.data)task.id=res.data.id;
@@ -1931,6 +2024,20 @@ function updateCmEditCount(k){
 
 // チャート管理の簡素表示（中心KGI + CSF8 の3x3）
 let _cmKpiOn=false;
+// CSF配下KPIの累計作業時間の合計（kpiEdits['si-ai'].hoursTotal）
+function _csfKpiHours(k,si){
+  const edits=_chartEdits(k);let sum=0;
+  for(let ai=0;ai<8;ai++){const ed=edits[si+'-'+ai];if(ed&&ed.hoursTotal)sum+=+ed.hoursTotal||0;}
+  return Math.round(sum*10)/10;
+}
+// CSFの作業時間: 上書き値（csf_hours_override[si]）があれば優先、なければKPI合計
+function _csfHours(k,si){
+  const ov=(_chartEdits(k).csf_hours_override||{});
+  if(ov[si]!=null&&ov[si]!=='')return Math.round((+ov[si])*10)/10;
+  return _csfKpiHours(k,si);
+}
+// KGIの作業時間 = 全CSFの作業時間（上書き優先）の総和
+function _kgiHours(k){let s=0;for(let si=0;si<8;si++)s+=_csfHours(k,si);return Math.round(s*10)/10;}
 function renderCmSimpleGrid(k){
   const d=CHARTS[k];if(!d)return;
   const edits=kpiEdits[k]||{};
@@ -1942,12 +2049,15 @@ function renderCmSimpleGrid(k){
     if(si===-1){
       const ed=edits['center'];const eb=ed?'box-shadow:inset 0 0 0 2px #F59E0B;':'';
       const oc=ro?'':`onclick="openCellEdit('${k}','center')"`;
-      h+=`<div ${oc} style="${ro?'cursor:default;':'cursor:pointer;'}position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:13px;font-weight:800;color:#fff;background:${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}">${((ed&&ed.text!=null?ed.text:d.center)||'').replace(/\n/g,'<br>')}${badge(ed)}</div>`;
+      const kgiH=_kgiHours(k);const kgiHov=kgiH>0?`<span style="position:absolute;bottom:3px;right:6px;font-size:8px;font-weight:700;color:rgba(255,255,255,.9)">⏱${kgiH}h</span>`:'';
+      h+=`<div ${oc} style="${ro?'cursor:default;':'cursor:pointer;'}position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:13px;font-weight:800;color:#fff;background:${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}">${((ed&&ed.text!=null?ed.text:d.center)||'').replace(/\n/g,'<br>')}${badge(ed)}${kgiHov}</div>`;
     }else{
       const ed=edits['csf-'+si];const label=(ed&&ed.text!=null?ed.text:(d.subs||[])[si])||'';
       const eb=ed?'box-shadow:inset 0 0 0 2px #F59E0B;background:#FEF3C7;':`background:${d.bg};`;
       const oc=ro?'':`onclick="openCellEdit('${k}','csf',${si})"`;
-      h+=`<div ${oc} data-csf="${si}" style="${ro?'cursor:default;':'cursor:pointer;'}position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:${d.color};border:1.5px solid ${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}"><div style="font-size:8px;color:var(--text3);font-weight:600;margin-bottom:2px">CSF ${si+1}</div>${label}${badge(ed)}</div>`;
+      const csfH=_csfHours(k,si);const ovSet=((_chartEdits(k).csf_hours_override||{})[si]!=null);
+      const csfHov=csfH>0?`<span title="${ovSet?'直接入力（KPI合計を上書き）':'KPI合計'}" style="position:absolute;bottom:3px;right:6px;font-size:8px;font-weight:700;color:${ovSet?'#B45309':'var(--text3)'}">⏱${csfH}h${ovSet?'*':''}</span>`:'';
+      h+=`<div ${oc} data-csf="${si}" style="${ro?'cursor:default;':'cursor:pointer;'}position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:${d.color};border:1.5px solid ${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}"><div style="font-size:8px;color:var(--text3);font-weight:600;margin-bottom:2px">CSF ${si+1}</div>${label}${badge(ed)}${csfHov}</div>`;
     }
   });
   h+=ro
@@ -2029,6 +2139,14 @@ function openCellEdit(k,kind,si,ai){
   document.getElementById('kpi-edit-hours').value='';
   document.getElementById('kpi-edit-hours-total').textContent=ed?(ed.hoursTotal||0):0;  // 累計時間
   document.getElementById('kpi-edit-note').value=ed?(ed.note||''):'';
+  // CSFのみ: 作業時間の直接入力欄（KPI合計を上書き）
+  const csfhWrap=document.getElementById('kpi-edit-csfhours-wrap');
+  if(kind==='csf'){
+    if(csfhWrap)csfhWrap.style.display='';
+    const ov=(_chartEdits(k).csf_hours_override||{});
+    const ci=document.getElementById('kpi-edit-csfhours');if(ci)ci.value=(ov[si]!=null&&ov[si]!=='')?ov[si]:'';
+    const ca=document.getElementById('kpi-edit-csfhours-auto');if(ca)ca.textContent=_csfKpiHours(k,si);
+  }else if(csfhWrap){csfhWrap.style.display='none';}
   document.getElementById('kpi-edit-modal').style.display='flex';
 }
 // 互換: 既存の KPI クリック呼び出し
@@ -2053,6 +2171,13 @@ function saveKpiEdit(){
   const prev=kpiEdits[k][key]||{};
   const by=(document.getElementById('sb-uname')||{}).textContent;
   kpiEdits[k][key]={text:newText,note,progress:pg,kind,hoursTotal:(prev.hoursTotal||0)+hours,hoursToday:hours,by:(by&&by!=='（読み込み中）')?by:(prev.by||'')};
+  // CSFの作業時間 直接入力（KPI合計を上書き）。空欄ならKPI合計に戻す
+  if(kind==='csf'){
+    if(!kpiEdits[k].csf_hours_override)kpiEdits[k].csf_hours_override={};
+    const cv=(document.getElementById('kpi-edit-csfhours')||{}).value;
+    if(cv===''||cv==null)delete kpiEdits[k].csf_hours_override[si];
+    else kpiEdits[k].csf_hours_override[si]=Math.max(0,parseFloat(cv)||0);
+  }
   // チャート本体（center/subs/acts）に即反映
   const d=CHARTS[k];
   if(kind==='center')d.center=newText;
@@ -2768,6 +2893,84 @@ function gotoChartMgr(chartId){
     const g=document.getElementById('cm-kpi-grid-simple');
     if(g)g.scrollIntoView({behavior:'smooth',block:'start'});
   },60);
+}
+/* ===== ガントチャート ===== */
+const GANTT_COLORS=['#0D9488','#6366F1','#EC4899','#F59E0B','#10B981','#06B6D4','#8B5CF6','#EF4444'];
+let _ganttChartKey='';
+function _ganttDate(s){ if(!s)return null; const p=String(s).split(/[-/]/); if(p.length<3)return null; const d=new Date(+p[0],+p[1]-1,+p[2]); return isNaN(d.getTime())?null:d; }
+function onGanttChartChange(){ _ganttChartKey=(document.getElementById('gantt-chart-sel')||{}).value||''; renderGantt(); }
+function renderGantt(){
+  const sel=document.getElementById('gantt-chart-sel');
+  const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
+  if(sel){
+    if(!_ganttChartKey||keys.indexOf(_ganttChartKey)<0)_ganttChartKey=keys[0]||'';
+    sel.innerHTML=keys.length?keys.map(k=>`<option value="${k}"${k===_ganttChartKey?' selected':''}>${(_chartKgiText(k)||CHARTS[k].name||k)}</option>`).join(''):'<option value="">チャートなし</option>';
+  }
+  const con=document.getElementById('gantt-body');if(!con)return;
+  const k=_ganttChartKey;
+  if(!k||!CHARTS[k]){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">チャートがありません。先にチャートを作成してください。</div></div>';return;}
+  const d=CHARTS[k];const cn1=d.name||'',cn2=_chartKgiText(k)||'';
+  const kgiText=cn2||cn1||'(KGI未設定)';
+  // このチャートに紐づくタスク（source_chart はチャート名 or KGI文言で保存され得るため両方照合）
+  const all=[...ASSIGNMENTS,...ASSIGN_HISTORY].filter(t=>t.chart&&((cn1&&String(t.chart)===String(cn1))||(cn2&&String(t.chart)===String(cn2))));
+  let head=`<div class="card" style="margin-bottom:14px"><div class="card-body" style="padding:12px 16px"><div style="font-size:10px;color:var(--text3);font-weight:700">KGI</div><div style="font-size:15px;font-weight:800;color:var(--accent)">🎯 ${kgiText}</div></div></div>`;
+  if(!all.length){con.innerHTML=head+'<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">このチャートに紐づくタスクがありません。<br>タスク作成で「KGI紐付け」からこのチャートに紐付けてください。</div></div>';return;}
+  // 日付範囲算出（start無→due、due無→start、両方無→今日）
+  const today=new Date();today.setHours(0,0,0,0);
+  function span(t){ let s=_ganttDate(t.startRaw)||_ganttDate(t.dueRaw)||today; let e=_ganttDate(t.dueRaw)||_ganttDate(t.startRaw)||today; if(e<s){const tmp=s;s=e;e=tmp;} return {s,e}; }
+  let minD=null,maxD=null;
+  all.forEach(t=>{const{s,e}=span(t);if(!minD||s<minD)minD=s;if(!maxD||e>maxD)maxD=e;});
+  if(!minD)minD=today; if(!maxD||maxD<=minD)maxD=new Date(minD.getTime()+7*864e5);
+  const totalDays=Math.max(1,Math.round((maxD-minD)/864e5));
+  // CSFごとにグルーピング
+  const groups={};all.forEach(t=>{const ci=(t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1;(groups[ci]=groups[ci]||[]).push(t);});
+  // 期限が近い順（dueなしは末尾）
+  const byDue=(a,b)=>{const da=_ganttDate(a.dueRaw),db=_ganttDate(b.dueRaw);if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;return da-db;};
+  const fmtMd=dt=>dt?(dt.getMonth()+1)+'/'+dt.getDate():'—';
+  let h=head;
+  h+=`<div class="card"><div class="card-body" style="padding:12px 16px">`;
+  h+=`<div style="font-size:10px;color:var(--text3);margin-bottom:8px">期間 ${fmtMd(minD)} 〜 ${fmtMd(maxD)}（${totalDays}日）／ バー＝開始〜期限。日付欄で編集できます。</div>`;
+  Object.keys(groups).map(Number).sort((a,b)=>a-b).forEach(ci=>{
+    const color=ci>=0?GANTT_COLORS[ci%GANTT_COLORS.length]:'#9CA3AF';
+    const csfText=ci>=0?(((_chartEdits(k)['csf-'+ci]||{}).text!=null?_chartEdits(k)['csf-'+ci].text:(d.subs||[])[ci])||('CSF'+(ci+1))):'CSF未指定';
+    h+=`<div style="display:flex;align-items:center;gap:6px;margin:12px 0 6px"><span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block"></span><span style="font-size:12px;font-weight:800;color:${color}">${ci>=0?'CSF'+(ci+1)+'：':''}${csfText}</span></div>`;
+    groups[ci].slice().sort(byDue).forEach(t=>{
+      const {s,e}=span(t);
+      const left=Math.min(99,Math.max(0,(s-minD)/864e5/totalDays*100));
+      const width=Math.min(100-left,Math.max(2,((e-s)/864e5+1)/totalDays*100));
+      const kpiTag=(t.kpiIdx!=null&&!isNaN(t.kpiIdx))?`<span style="font-size:8px;background:${color}22;color:${color};border-radius:4px;padding:0 4px;margin-left:4px;font-weight:700">KPI${(ci+1)}-${t.kpiIdx+1}</span>`:'';
+      const pct=t.pct||0;
+      const idAttr=t.id?`data-tid="${t.id}"`:'';
+      const editable=!!t.id;
+      const dateCell=editable
+        ? `<input type="date" value="${t.startRaw||''}" onchange="ganttSaveDate('${t.id}','start',this.value)" style="font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;width:120px"><span style="color:var(--text3);font-size:10px">〜</span><input type="date" value="${t.dueRaw||''}" onchange="ganttSaveDate('${t.id}','due',this.value)" style="font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;width:120px">`
+        : `<span style="font-size:10px;color:var(--text3)">${fmtMd(s)}〜${fmtMd(e)}</span>`;
+      h+=`<div ${idAttr} style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #F3F4F6;flex-wrap:wrap">
+        <div style="min-width:160px;flex:0 0 160px;font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.name}${kpiTag}</div>
+        <div style="flex:1;min-width:160px;position:relative;height:18px;background:#F3F4F6;border-radius:9px">
+          <div style="position:absolute;left:${left}%;width:${width}%;top:0;height:18px;background:${color};border-radius:9px;opacity:.85"></div>
+          <div style="position:absolute;left:${left}%;width:${width}%;top:0;height:18px;border-radius:9px;background:rgba(255,255,255,.35);clip-path:inset(0 ${100-pct}% 0 0)"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex:0 0 auto">${dateCell}<span style="font-size:10px;font-weight:700;color:${color};width:34px;text-align:right">${pct}%</span></div>
+      </div>`;
+    });
+  });
+  h+=`</div></div>`;
+  con.innerHTML=h;
+}
+async function ganttSaveDate(taskId,field,value){
+  const t=[...ASSIGNMENTS,...ASSIGN_HISTORY].find(x=>String(x.id)===String(taskId));
+  if(!t){return;}
+  if(field==='start'){t.startRaw=value||null;t.start=value?value.replace(/-/g,'/'):'—';}
+  else{t.dueRaw=value||null;t.end=value?value.replace(/-/g,'/'):'—';}
+  const API=window.VexumAPI;
+  if(API&&API.ready&&t.id&&API.updateTask){
+    const patch={};if(field==='start')patch.start=value||null;else patch.due=value||null;
+    try{const res=await API.updateTask(t.id,patch);if(res&&res.error){alert('日付の保存に失敗しました: '+res.error);}}catch(e){alert('日付の保存に失敗しました');}
+  }
+  renderGantt();
+  if(typeof renderTaskTable==='function')renderTaskTable();
+  if(typeof renderProgressDash==='function')renderProgressDash();
 }
 function renderProgressDash(){
   let st=window._epStats;

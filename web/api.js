@@ -423,10 +423,11 @@
     if (o.sendId) { row.source_send_id = o.sendId; row.source_cell = o.cell || null; row.source_chart = o.chartTitle || null; }
     // 受信チャート以外でも、個人画面でKGI（チャート）に紐付けて作成した場合の関連付け
     else if (o.chartTitle) { row.source_chart = o.chartTitle; if (o.cell) row.source_cell = o.cell; }
+    if (o.sourceKpi != null) row.source_kpi = o.sourceKpi;   // 紐付けたKPIインデックス（任意・36_task_kpi_link.sql）
     var r = await sb.from('tasks').insert(row).select().single();
-    if (r.error && /source_send_id|source_cell|source_chart|period|planned_hours/.test(r.error.message)) {
-      // 17/18/19 未適用のDB: 拡張列なしで作成（後方互換）
-      delete row.source_send_id; delete row.source_cell; delete row.source_chart; delete row.period; delete row.planned_hours;
+    if (r.error && /source_send_id|source_cell|source_chart|source_kpi|period|planned_hours/.test(r.error.message)) {
+      // 拡張列が未適用のDB: 拡張列なしで作成（後方互換）
+      delete row.source_send_id; delete row.source_cell; delete row.source_chart; delete row.source_kpi; delete row.period; delete row.planned_hours;
       r = await sb.from('tasks').insert(row).select().single();
     }
     if (r.error) return { error: friendlyErr(r.error.message) };
@@ -942,9 +943,9 @@
         : '関連KGI: ' + (t.related_kgi || '—') + ' ／ カテゴリ: ' + (t.category || '—');
       var from = self ? '🙋 自分で作成' : ('📌 ' + (exec ? '役員' : '上長') + ' · ' + (assigner.full_name || ''));
       if (t.status === 'done' || (t.progress || 0) >= 100) {
-        ASSIGN_HISTORY.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '', pri: t.priority || 'md', self: self, chart: chart, hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
+        ASSIGN_HISTORY.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), startRaw: t.start_date || null, dueRaw: t.due_date || null, comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '', pri: t.priority || 'md', self: self, chart: chart, cell: t.source_cell || null, csfIdx: (t.source_cell != null && /^\d+$/.test(String(t.source_cell))) ? +t.source_cell : null, kpiIdx: (t.source_kpi != null ? +t.source_kpi : null), hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
       } else {
-        ASSIGNMENTS.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), dueRaw: t.due_date || null, pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: self, chart: chart, sendId: t.source_send_id || null, cell: t.source_cell || null, hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
+        ASSIGNMENTS.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), startRaw: t.start_date || null, dueRaw: t.due_date || null, pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: self, chart: chart, sendId: t.source_send_id || null, cell: t.source_cell || null, csfIdx: (t.source_cell != null && /^\d+$/.test(String(t.source_cell))) ? +t.source_cell : null, kpiIdx: (t.source_kpi != null ? +t.source_kpi : null), hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
       }
     });
 
