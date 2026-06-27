@@ -470,6 +470,24 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
 </div>
 
+<!-- チーム編集モーダル -->
+<div id="teamedit-modal" onclick="if(event.target===this)closeTeamEdit()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:520px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div style="font-size:16px;font-weight:800">チームを編集</div>
+      <button onclick="closeTeamEdit()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div class="fg"><label class="fl">チーム名</label><input class="fi" id="teamedit-name"></div>
+    <div class="fg"><label class="fl">メンバー（クリックで追加/除外）</label>
+      <div id="teamedit-members-list" style="max-height:200px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:4px"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="f-submit" style="flex:1;background:#E5E7EB;color:#374151" onclick="closeTeamEdit()">キャンセル</button>
+      <button class="f-submit" style="flex:1" onclick="submitTeamEdit()">保存する</button>
+    </div>
+  </div>
+</div>
+
 <!-- テンプレート管理モーダル -->
 <div id="tpl-modal" onclick="if(event.target===this)closeTplManager()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:560px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
@@ -773,6 +791,12 @@ function renderAccount(){
   let h=`<div style="margin-bottom:10px;font-size:11px;color:var(--text3)">チーム数: ${Object.keys(TEAMS).length}　アカウント総数: ${Object.keys(MEMBERS).length}名</div>`;
   Object.values(TEAMS).forEach(t=>{
     const keys=t.members.filter(k=>MEMBERS[k]);
+    const teamActions=(_pendingTeamDel===t.id)
+      ? `<div onclick="event.stopPropagation()" style="display:flex;flex-direction:column;gap:4px;margin-left:10px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:8px;max-width:280px">
+           <div style="font-size:10px;color:#991B1B;font-weight:700">「${t.name}」を削除しますか？所属メンバー${keys.length}名は未所属になります。${(window._teamDelWarn&&window._teamDelWarn[t.id])||''}</div>
+           <div style="display:flex;gap:6px;justify-content:flex-end"><button class="card-btn" onclick="cancelDeleteTeam()">取消</button><button class="card-btn" style="background:var(--red);color:#fff" onclick="confirmDeleteTeam('${t.id}')">削除する</button></div>
+         </div>`
+      : `<button class="card-btn" style="margin-left:10px" onclick="event.stopPropagation();openTeamEdit('${t.id}')">✎ 編集</button><button class="card-btn" style="margin-left:4px;background:#FEE2E2;color:var(--red)" onclick="event.stopPropagation();askDeleteTeam('${t.id}')">🗑 削除</button>`;
     h+=`<div class="team-panel">
       <div class="team-panel-hd" onclick="togglePanel('panel-${t.id}')">
         <div style="width:12px;height:12px;border-radius:50%;background:${t.color};flex-shrink:0"></div>
@@ -780,10 +804,11 @@ function renderAccount(){
           <div style="font-size:13px;font-weight:700">${t.name}</div>
           <div style="font-size:10px;color:var(--text3);margin-top:1px">リーダー: ${t.leaderName} ／ ${keys.length}名</div>
         </div>
-        <div class="pw" style="min-width:140px">
+        <div class="pw" style="min-width:120px">
           <div class="pt"><div class="pf" style="width:${t.rate}%;background:${t.color}"></div></div>
           <div class="pp" style="color:${t.color}">${t.rate}%</div>
         </div>
+        ${teamActions}
         <span style="font-size:10px;color:var(--text3);margin-left:10px">▼</span>
       </div>
       <div class="team-panel-body" id="panel-${t.id}">`;
@@ -1012,6 +1037,69 @@ async function submitTeam(){
   closeTeamModal();
   renderAccount();
   showToast(`${name} を ${memberIds.length}名 で作成しました ✓`);
+}
+/* ===== チーム編集 ===== */
+let _teamEditId=null,_teamEditSel=[];
+function openTeamEdit(tid){
+  const t=TEAMS[tid];if(!t)return;
+  _teamEditId=tid;
+  _teamEditSel=(t.members||[]).filter(k=>MEMBERS[k]);
+  document.getElementById('teamedit-name').value=t.name||'';
+  _renderTeamEditPicker();
+  document.getElementById('teamedit-modal').style.display='flex';
+}
+function _renderTeamEditPicker(){
+  const box=document.getElementById('teamedit-members-list');if(!box)return;
+  const ents=Object.entries(MEMBERS).filter(([id,m])=>m.roleEnum!=='admin'&&m.roleEnum!=='executive');
+  box.innerHTML=ents.length?ents.map(([id,m])=>{
+    const chk=_teamEditSel.includes(id);
+    return `<div onclick="toggleTeamEditAccount('${id}')" style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer;${chk?'background:var(--accent-l)':''}">
+      <span style="font-size:15px;color:${chk?'var(--accent)':'#9CA3AF'}">${chk?'☑':'☐'}</span>
+      <span style="font-size:12px;flex:1">${m.name} <span style="font-size:10px;color:var(--text3)">（${m.role}${m.team&&m.team!==_teamEditId&&TEAMS[m.team]?' / 現:'+TEAMS[m.team].name:''}）</span></span>
+    </div>`;
+  }).join(''):'<div style="font-size:11px;color:var(--text3);padding:8px">対象アカウントがありません</div>';
+}
+function toggleTeamEditAccount(id){const i=_teamEditSel.indexOf(id);if(i>=0)_teamEditSel.splice(i,1);else _teamEditSel.push(id);_renderTeamEditPicker();}
+function closeTeamEdit(){document.getElementById('teamedit-modal').style.display='none';_teamEditId=null;}
+async function submitTeamEdit(){
+  const t=TEAMS[_teamEditId];if(!t){closeTeamEdit();return;}
+  const name=(document.getElementById('teamedit-name').value||'').trim();
+  if(!name){showToast('チーム名を入力してください');return;}
+  const sel=_teamEditSel.slice();
+  const API=window.VexumAPI;
+  if(API&&API.ready&&t.uid){
+    if(name!==t.name){const r=await API.updateTeam(t.uid,{name});if(r&&r.error){showToast('名称更新失敗: '+r.error);return;}}
+    const pids=sel.map(k=>MEMBERS[k]?MEMBERS[k].pid:k);
+    const r2=await API.syncTeamMembers(t.uid,pids);if(r2&&r2.error){showToast('メンバー更新失敗: '+r2.error);return;}
+  }
+  // ローカル状態反映（外れた人は未所属、入った人は当チーム）
+  const newSet=new Set(sel);
+  (t.members||[]).forEach(k=>{if(!newSet.has(k)&&MEMBERS[k]&&MEMBERS[k].team===_teamEditId)MEMBERS[k].team='';});
+  sel.forEach(k=>{if(MEMBERS[k])MEMBERS[k].team=_teamEditId;});
+  t.name=name;t.members=sel;
+  closeTeamEdit();renderAccount();
+  showToast('チームを更新しました ✓');
+}
+/* ===== チーム削除（2段階） ===== */
+let _pendingTeamDel='';
+window._teamDelWarn={};
+async function askDeleteTeam(tid){
+  const t=TEAMS[tid];if(!t)return;
+  _pendingTeamDel=tid;window._teamDelWarn[tid]='';renderAccount();
+  // 紐づくチャート・タスク件数を非同期取得して警告に反映
+  const API=window.VexumAPI;
+  if(API&&API.ready&&API.teamRefCounts&&t.uid){
+    try{const c=await API.teamRefCounts(t.uid);if(c.charts||c.tasks){window._teamDelWarn[tid]=`<br>⚠ 紐づくチャート${c.charts}件・タスク${c.tasks}件があります。`;if(_pendingTeamDel===tid)renderAccount();}}catch(e){}
+  }
+}
+function cancelDeleteTeam(){_pendingTeamDel='';renderAccount();}
+async function confirmDeleteTeam(tid){
+  const t=TEAMS[tid];if(!t){_pendingTeamDel='';renderAccount();return;}
+  const API=window.VexumAPI;
+  if(API&&API.ready&&t.uid){const r=await API.deleteTeam(t.uid);if(r&&r.error){showToast('削除失敗: '+r.error);return;}}
+  (t.members||[]).forEach(k=>{if(MEMBERS[k]&&MEMBERS[k].team===tid)MEMBERS[k].team='';});
+  delete TEAMS[tid];_pendingTeamDel='';renderAccount();
+  showToast(`「${t.name}」を削除しました ✓`);
 }
 
 /* ========== チャート送信 ========== */

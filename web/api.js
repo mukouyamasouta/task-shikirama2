@@ -317,6 +317,44 @@
     if (r.error) return { error: r.error.message };
     return { ok: true };
   }
+  // チーム編成の差分同期: 現在の team_members と newMemberIds(profile_id配列) を比較し
+  // 追加分は UPSERT・除外分は DELETE する。
+  async function syncTeamMembers(teamId, newMemberIds) {
+    if (!sb || !teamId) return { error: 'チームが不明です' };
+    var cur = await sb.from('team_members').select('profile_id').eq('team_id', teamId);
+    if (cur.error) return { error: friendlyErr(cur.error.message) };
+    var existing = (cur.data || []).map(function (x) { return x.profile_id; });
+    var want = (newMemberIds || []).filter(Boolean);
+    var toAdd = want.filter(function (id) { return existing.indexOf(id) < 0; });
+    var toDel = existing.filter(function (id) { return want.indexOf(id) < 0; });
+    if (toAdd.length) {
+      var rows = toAdd.map(function (id) { return { team_id: teamId, profile_id: id, role_in_team: 'member', achievement_rate: 50 }; });
+      var a = await sb.from('team_members').upsert(rows, { onConflict: 'team_id,profile_id' });
+      if (a.error) return { error: friendlyErr(a.error.message) };
+    }
+    if (toDel.length) {
+      var d = await sb.from('team_members').delete().eq('team_id', teamId).in('profile_id', toDel);
+      if (d.error) return { error: friendlyErr(d.error.message) };
+    }
+    return { ok: true, added: toAdd.length, removed: toDel.length };
+  }
+  // チーム削除（team_members を外してから teams を削除）。削除行数を検証。
+  async function deleteTeam(teamId) {
+    if (!sb || !teamId) return { error: 'チームが不明です' };
+    try { await sb.from('team_members').delete().eq('team_id', teamId); } catch (e) {}
+    var del = await sb.from('teams').delete().eq('id', teamId).select('id');
+    if (del.error) return { error: friendlyErr(del.error.message) };
+    if (!del.data || del.data.length === 0) return { error: '削除できませんでした（権限不足の可能性。32_fix_yamamoto.sql の teams RLS を適用してください）' };
+    return { ok: true };
+  }
+  // 削除前の警告用: チームに紐づくチャート・タスク件数
+  async function teamRefCounts(teamId) {
+    if (!sb || !teamId) return { charts: 0, tasks: 0 };
+    var charts = 0, tasks = 0;
+    try { var c = await sb.from('mandala_charts').select('id', { count: 'exact', head: true }).eq('owner_team_id', teamId); charts = c.count || 0; } catch (e) {}
+    try { var t = await sb.from('tasks').select('id', { count: 'exact', head: true }).eq('team_id', teamId); tasks = t.count || 0; } catch (e) {}
+    return { charts: charts, tasks: tasks };
+  }
   async function assignTask(o) {
     if (!sb) return { error: 'Supabase未接続' };
     var me = await currentProfile();
@@ -1614,6 +1652,9 @@
     loadLeaderData: loadLeaderData,
     addTeamMember: addTeamMember,
     saveTeamMember: saveTeamMember,
+    syncTeamMembers: syncTeamMembers,
+    deleteTeam: deleteTeam,
+    teamRefCounts: teamRefCounts,
     loadTeamComposition: loadTeamComposition,
     updateProfileRole: updateProfileRole,
     removeTeamMember: removeTeamMember,
