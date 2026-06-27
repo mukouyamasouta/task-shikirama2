@@ -762,8 +762,9 @@ function _groupByEmail(keys){
 function memGroupHTML(entries,col){
   const m0=entries[0].m;const ini=(m0.name||'?').charAt(0);
   const seen={};
+  // 各ロールバッジに✕（権限削除）を付与（同一人物の他ロール・ログインは残る）
   const badges=entries.filter(e=>{const r=e.m.role||'';if(seen[r])return false;seen[r]=1;return true;})
-    .map(e=>{const isL=(e.m.roleEnum==='admin'||e.m.roleEnum==='executive'||e.m.role==='リーダー');return `<span class="badge ${isL?'b-leader':'b-member'}">${e.m.role}</span>`;}).join(' ');
+    .map(e=>{const isL=(e.m.roleEnum==='admin'||e.m.roleEnum==='executive'||e.m.role==='リーダー');return `<span class="badge ${isL?'b-leader':'b-member'}">${e.m.role} <span onclick="askRemoveRole('${e.key}')" title="この権限を削除" style="cursor:pointer;font-weight:800;margin-left:1px;opacity:.7">✕</span></span>`;}).join(' ');
   const teamNames=[...new Set(entries.map(e=>e.m.team&&TEAMS[e.m.team]?TEAMS[e.m.team].name:'').filter(Boolean))];
   const teamChip=teamNames.length?`<span style="font-size:9px;color:var(--text3);background:#F3F4F6;border-radius:6px;padding:1px 6px;margin-left:6px">🏷 ${teamNames.join(' / ')}</span>`:'';
   let actions='';
@@ -790,7 +791,37 @@ function memGroupHTML(entries,col){
       <button class="card-btn" onclick="toggleAddRole('${key0}')">取消</button>
     </div>
   </div>`;
-  return `<div class="mem-row"><div class="mem-avatar" style="background:${col}">${ini}</div><div style="flex:1;min-width:0"><div class="mem-name">${m0.name} ${badges}${teamChip}</div><div class="mem-meta">${m0.email}</div></div><div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center;justify-content:flex-end">${actions}</div></div>${panel}`;
+  // 権限削除の2段階確認パネル（バッジの✕クリックで表示）
+  let rolePanel='';
+  const delEntry=entries.find(e=>e.key===_pendingRoleDel);
+  if(delEntry){
+    const isLast=entries.length<=1;
+    const msg=isLast
+      ? `最後の権限を削除すると、このアカウント（${m0.name}）は完全に削除されます。よろしいですか？`
+      : `${m0.name} から「${delEntry.m.role}」権限を削除しますか？`;
+    rolePanel=`<div style="padding:10px 14px;background:#FEF2F2;border-top:1px dashed #FCA5A5">
+      <div style="font-size:11px;color:#991B1B;font-weight:700;margin-bottom:8px">${msg}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end"><button class="card-btn" onclick="cancelRemoveRole()">取消</button><button class="card-btn" style="background:var(--red);color:#fff" onclick="confirmRemoveRole('${delEntry.key}')">削除する</button></div>
+    </div>`;
+  }
+  return `<div class="mem-row"><div class="mem-avatar" style="background:${col}">${ini}</div><div style="flex:1;min-width:0"><div class="mem-name">${m0.name} ${badges}${teamChip}</div><div class="mem-meta">${m0.email}</div></div><div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center;justify-content:flex-end">${actions}</div></div>${rolePanel}${panel}`;
+}
+let _pendingRoleDel='';
+function askRemoveRole(key){_pendingRoleDel=key;_pendingDel='';renderAccount();}
+function cancelRemoveRole(){_pendingRoleDel='';renderAccount();}
+async function confirmRemoveRole(key){
+  const m=MEMBERS[key];if(!m){_pendingRoleDel='';renderAccount();return;}
+  const nm=m.name,rl=m.role;
+  const API=window.VexumAPI;
+  if(API&&API.ready&&m.pid&&API.removeRole){
+    const res=await API.removeRole(m.pid);
+    if(res&&res.error){showToast('削除失敗: '+res.error);return;}
+  }
+  // ローカル状態から該当role-profileを除去（チーム所属からも外す）
+  Object.values(TEAMS).forEach(t=>{const i=t.members.indexOf(key);if(i>=0)t.members.splice(i,1);});
+  delete MEMBERS[key];
+  _pendingRoleDel='';renderAccount();
+  showToast(`${nm} の「${rl}」権限を削除しました ✓`);
 }
 function toggleAddRole(key){const p=document.getElementById('addrole-'+key);if(p)p.style.display=p.style.display==='none'?'block':'none';}
 async function submitAddRole(key){
@@ -2378,9 +2409,14 @@ function vexumLogout(){
   if(!API || !API.ready) return; // 未設定: 内蔵デモのまま
   // ロールガード: この画面は executive 専用。他ロールは自分の画面へ（1アカウント=1ロール=1画面）
   var DEST={admin:'./admin.html',executive:'./executive.html',leader:'./leader.html',member:'./employee.html'};
-  API.currentProfile().then(function(p){
-    if(!p){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); return; }
-    if(p.role!=='executive'){ location.replace(DEST[p.role]||'./index.html'); return; }
+  // アクセス再検証: DB上で 'executive' ロールを実際に保有しているか毎回確認（権限削除を即反映）
+  API.checkRoleAccess('executive').then(function(a){
+    if(!a){ return; }
+    if(!a.ok){
+      if(!a.roles||!a.roles.length){ try{API.sb.auth.signOut();}catch(e){} }
+      location.replace(a.dest||'./index.html'); return;
+    }
+    try{ localStorage.setItem('vexum_last_role','executive'); }catch(e){}
   });
   function repl(target, src){ Object.keys(target).forEach(function(k){ delete target[k]; }); Object.assign(target, src); }
   API.loadAdminData().then(function(d){

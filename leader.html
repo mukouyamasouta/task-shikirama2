@@ -1831,9 +1831,14 @@ function vexumLogout(){
   var API=window.VexumAPI; if(!API||!API.ready) return;
   // ロールガード: この画面は leader 専用。他ロールは自分の画面へ（1アカウント=1ロール=1画面）
   var DEST={admin:'./admin.html',executive:'./executive.html',leader:'./leader.html',member:'./employee.html'};
-  API.currentProfile().then(function(p){
-    if(!p){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); return; }
-    if(p.role!=='leader'){ location.replace(DEST[p.role]||'./index.html'); return; }
+  // アクセス再検証: DB上で 'leader' ロールを実際に保有しているか毎回確認（権限削除を即反映）
+  API.checkRoleAccess('leader').then(function(a){
+    if(!a){ return; }
+    if(!a.ok){
+      if(!a.roles||!a.roles.length){ try{API.sb.auth.signOut();}catch(e){} }
+      location.replace(a.dest||'./index.html'); return;
+    }
+    try{ localStorage.setItem('vexum_last_role','leader'); }catch(e){}
   });
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}

@@ -1390,6 +1390,40 @@
     }
     return null;
   }
+  // ログイン中ユーザーが「現在DB上で実際に持っている」ロール一覧（is_active=false除外）。
+  // キャッシュを使わず毎回DBを引くため、権限削除が即時反映される。
+  async function myRoles() {
+    if (!sb) return [];
+    var u = await sb.auth.getUser();
+    var user = u && u.data && u.data.user; var uid = user && user.id;
+    if (!uid) return [];
+    var rows = null;
+    var r = await sb.from('profiles').select('role,is_active').eq('auth_user_id', uid);
+    if (!r.error && r.data && r.data.length) rows = r.data;
+    if (!rows && user.email) { var r2 = await sb.from('profiles').select('role,is_active').ilike('email', user.email); if (!r2.error) rows = r2.data || []; }
+    return (rows || []).filter(function (p) { return p.is_active !== false; }).map(function (p) { return p.role; });
+  }
+  // 各画面の入口で呼ぶアクセス再検証。requiredRole を実際に保有しているかDBで確認。
+  // 返り値: { ok, roles, dest }（ok=false のとき dest=他ロールの画面 or index）
+  async function checkRoleAccess(requiredRole) {
+    var roles = await myRoles();
+    var DEST = { admin: './admin.html', executive: './executive.html', leader: './leader.html', member: './employee.html' };
+    if (roles.indexOf(requiredRole) >= 0) return { ok: true, roles: roles };
+    var order = ['admin', 'executive', 'leader', 'member'];
+    var alt = order.filter(function (r) { return roles.indexOf(r) >= 0; })[0];
+    return { ok: false, roles: roles, dest: alt ? DEST[alt] : './index.html' };
+  }
+  // ロール（権限）を1つ削除＝その profile_id の profiles 行と所属を削除。
+  // ※ 同一メールの他ロール profile・auth.users（ログイン）は残す（他ロールでログイン可能なまま）。
+  async function removeRole(profileId) {
+    if (!sb) return { error: 'Supabase未接続' };
+    if (!profileId) return { error: 'profile が不明です' };
+    try { await sb.from('team_members').delete().eq('profile_id', profileId); } catch (e) {}
+    var del = await sb.from('profiles').delete().eq('id', profileId).select('id');
+    if (del.error) return { error: friendlyErr(del.error.message) };
+    if (!del.data || del.data.length === 0) return { error: '削除できませんでした（権限不足の可能性。管理者/幹部でログインしてください）' };
+    return { ok: true };
+  }
   // 指定チームのメンバー（profiles を team_members 経由で取得）。
   // バグ1対策: 必ず team_id で絞り込む（他チームのメンバーを混在させない）。
   async function loadTeamMembers(teamId) {
@@ -1775,6 +1809,9 @@
     findLinkedEmployee: findLinkedEmployee,
     createLinkedEmployeeAccount: createLinkedEmployeeAccount,
     loadProfile: loadProfile,
+    myRoles: myRoles,
+    checkRoleAccess: checkRoleAccess,
+    removeRole: removeRole,
     listTeams: listTeams,
     loadTeamMembers: loadTeamMembers,
     updateAccount: updateAccount,
