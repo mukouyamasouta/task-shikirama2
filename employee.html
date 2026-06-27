@@ -2777,11 +2777,19 @@ function renderProgressDash(){
     const late=ASSIGNMENTS.filter(a=>{const d=di(a);return d&&d<today&&a.pct<100;}).length;
     const due=ASSIGNMENTS.filter(a=>{const d=di(a);return d&&d<=today&&a.pct<100;}).length;
     const hrs=[...ASSIGNMENTS,...ASSIGN_HISTORY].reduce((s,a)=>s+(a.hours||0),0);
-    st={rate:72,done:ASSIGN_HISTORY.length,wip:ASSIGNMENTS.filter(a=>a.pct>0).length,late,dueToday:due,todayRate:72,totalHours:Math.round(hrs*10)/10};
+    const taskTotal=ASSIGNMENTS.length+ASSIGN_HISTORY.length;
+    st={rate:72,done:ASSIGN_HISTORY.length,wip:ASSIGNMENTS.filter(a=>a.pct>0).length,late,dueToday:due,todayRate:taskTotal?72:null,taskCount:taskTotal,totalHours:Math.round(hrs*10)/10};
   }
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
-  // 今日基準のサマリ
-  set('ep-d-todayrate',(st.todayRate!=null?st.todayRate:st.rate)+'%');
+  // 今日基準のサマリ（0除算で誤った100%を出さない。タスク0件は「—」表示）
+  if(st.todayRate!=null){
+    set('ep-d-todayrate',st.todayRate+'%');
+    set('ep-d-todayrate-sub','期限到来分の完了割合');
+  }else{
+    set('ep-d-todayrate','—');
+    const hasAny=(st.taskCount!=null)?st.taskCount>0:(ASSIGNMENTS.length+ASSIGN_HISTORY.length>0);
+    set('ep-d-todayrate-sub',hasAny?'期限到来タスクがまだありません':'タスクがまだありません');
+  }
   set('ep-d-due',st.dueToday!=null?st.dueToday:'0');
   set('ep-d-late',st.late!=null?st.late:'0');
   set('ep-d-hours',(st.totalHours!=null?st.totalHours:0)+'h');

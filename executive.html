@@ -1774,7 +1774,7 @@ function renderExecDashboard(){
   if(_dashStats&&!asgId){
     avgRate=_dashStats.avgRate;doneC=_dashStats.doneCount;lateC=_dashStats.lateCount;cnt=_dashStats.memberCount;
   }else{
-    avgRate=Math.round(fm.reduce((a,[id,m])=>a+(m.rate||0),0)/fm.length);
+    avgRate=fm.length?Math.round(fm.reduce((a,[id,m])=>a+(m.rate||0),0)/fm.length):0;  // 0除算でNaN%にしない
     doneC=0;lateC=0;cnt=fm.length;
     fm.forEach(([id,m])=>{const st=m.stats||{};doneC+=st.done||0;lateC+=st.late||0;});
   }

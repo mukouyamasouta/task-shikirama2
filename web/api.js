@@ -175,9 +175,10 @@
         }
       }
     }
-    if (!teamUuid) teamUuid = Object.keys(TEAM_KEY).filter(function (id) { return TEAM_KEY[id] === 'A'; })[0]; // デモ用フォールバック
-    teamLetter = TEAM_KEY[teamUuid] || teamUuid;
-    var team = raw.teams.filter(function (t) { return t.id === teamUuid; })[0] || { name: '' };
+    // チームが特定できない場合は team_A にフォールバックしない（他チームのメンバー混入を防ぐ）。
+    // teamUuid=null のまま進めば members は空になり、未所属リーダーには何も表示されない。
+    teamLetter = teamUuid ? (TEAM_KEY[teamUuid] || teamUuid) : '';
+    var team = raw.teams.filter(function (t) { return teamUuid && t.id === teamUuid; })[0] || { name: '' };
     var chartByUser = {};
     raw.mandala_charts.forEach(function (c) { if (c.owner_type === 'user' && c.id.indexOf('_q2') < 0) chartByUser[c.owner_user_id] = c; });
 
@@ -837,8 +838,10 @@
     if (!uid) uid = 'a0000000-0000-4000-8000-000000000004'; // デモ用フォールバック(中村)
     var memberKey = MEMBER_KEY[uid] || uid;  // 既存=短縮キー / 新規=UUID（チャートidと一致）
     var tm = raw.team_members.filter(function (m) { return m.profile_id === uid; })[0];
-    var teamLetter = tm ? TEAM_KEY[tm.team_id] : 'A';
-    var teamRow = raw.teams.filter(function (t) { return tm && t.id === tm.team_id; })[0];
+    // 自分の所属チームID。未所属(新規従業員)は null（'A'にフォールバックしない＝他チームのチャート混入を防ぐ）
+    var myTeamId = tm ? tm.team_id : null;
+    var teamLetter = myTeamId ? (TEAM_KEY[myTeamId] || myTeamId) : null;
+    var teamRow = raw.teams.filter(function (t) { return myTeamId && t.id === myTeamId; })[0];
     function chartObj(c) {
       return { dbId: c.id, name: c.name, scopeLabel: c.scope_label, period: c.period, startDate: c.start_date ? fmtYMD(c.start_date) : '',
         team: teamRow ? teamRow.name : '', color: c.color, bg: c.bg, center: c.center, subs: c.subs, acts: c.acts,
@@ -848,8 +851,8 @@
     raw.mandala_charts.forEach(function (c) {
       if (c.id === 'user_' + memberKey) CHARTS['self_q3'] = chartObj(c);
       else if (c.id === 'user_' + memberKey + '_q2') CHARTS['self_q2'] = chartObj(c);
-      else if (c.owner_type === 'team' && TEAM_KEY[c.owner_team_id] === teamLetter) {
-        // チームチャートは「上から与えられたタスク」だけを扱う読み取り専用の目標定義。
+      else if (c.owner_type === 'team' && myTeamId && c.owner_team_id === myTeamId) {
+        // 自分の所属チームのチャートのみ（team_id で厳密一致）。読み取り専用の目標定義。
         // 内容(KGI/CSF/KPI文言)はリーダー・幹部が管理し、メンバーは編集不可
         // （進捗・工数は tasks 側＝割り当て/タスク管理から記入する）。
         CHARTS['team_' + teamLetter] = Object.assign(chartObj(c), { readonly: true });
@@ -931,13 +934,15 @@
       late: lateTasks.length,
       open: openTasks.length,
       dueToday: dueByToday.length,
-      // 本日までの達成率 = 期限到来分のうち完了済みの割合
+      // 本日までの達成率 = 期限到来分のうち完了済みの割合。
+      // 期限到来タスクが0件なら「データなし」= null（旧: 0/0 を 100% と誤表示していた）
       todayRate: (function () {
         var dueAll = myTasks.filter(function (t) { return t.due_date && t.due_date <= todayStr; });
-        if (!dueAll.length) return 100;
+        if (!dueAll.length) return null;
         var d = dueAll.filter(function (t) { return t.status === 'done' || (t.progress || 0) >= 100; }).length;
         return Math.round(d / dueAll.length * 100);
       })(),
+      taskCount: myTasks.length,
       totalHours: Math.round(totalHours * 10) / 10
     };
 
