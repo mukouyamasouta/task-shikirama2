@@ -826,11 +826,11 @@ function renderAccount(){
         <div style="width:12px;height:12px;border-radius:50%;background:${t.color};flex-shrink:0"></div>
         <div style="flex:1">
           <div style="font-size:13px;font-weight:700">${t.name}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:1px">リーダー: ${t.leaderName} ／ ${keys.length}名</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px">リーダー: ${t.leaderName} ／ ${(t.memberCount!=null?t.memberCount:_groupByEmail(keys).length)}名</div>
         </div>
         <div class="pw" style="min-width:120px">
-          <div class="pt"><div class="pf" style="width:${t.rate}%;background:${t.color}"></div></div>
-          <div class="pp" style="color:${t.color}">${t.rate}%</div>
+          <div class="pt"><div class="pf" style="width:${t.progress!=null?t.progress:0}%;background:${t.color}"></div></div>
+          <div class="pp" style="color:${t.color}">${t.progress!=null?t.progress+'%':'—'}</div>
         </div>
         ${teamActions}
         <span style="font-size:10px;color:var(--text3);margin-left:10px">▼</span>
@@ -1770,16 +1770,18 @@ function renderExecDashboard(){
   }
   // ===== KPIサマリ4枚（リーダーと同じ stat-card デザイン・全社集計） =====
   // チーム＋期間はサーバ集計(_dashStats)を優先、担当者選択時はそのメンバーで再計算
-  let avgRate,doneC,lateC,cnt;
+  let progText,doneC,lateC,cnt;
   if(_dashStats&&!asgId){
-    avgRate=_dashStats.avgRate;doneC=_dashStats.doneCount;lateC=_dashStats.lateCount;cnt=_dashStats.memberCount;
+    // チャート基準の進捗（リーダー画面と同一ロジック）。0件なら '—'。人数は人物単位
+    progText=(_dashStats.progress!=null)?_dashStats.progress+'%':'—';
+    doneC=_dashStats.doneCount;lateC=_dashStats.lateCount;cnt=_dashStats.memberCount;
   }else{
-    avgRate=fm.length?Math.round(fm.reduce((a,[id,m])=>a+(m.rate||0),0)/fm.length):0;  // 0除算でNaN%にしない
-    doneC=0;lateC=0;cnt=fm.length;
+    // 担当者選択時：チーム進捗（チャート基準）は出さず '—'。完了/遅延は本人分を集計
+    progText='—';doneC=0;lateC=0;cnt=fm.length;
     fm.forEach(([id,m])=>{const st=m.stats||{};doneC+=st.done||0;lateC+=st.late||0;});
   }
   const statCard=(lbl,val,color,trend)=>`<div class="stat-card"><div class="s-lbl">${lbl}</div><div class="s-val"${color?` style="color:${color}"`:''}>${val}</div><div class="s-trend" style="color:var(--text3)">${trend||''}</div></div>`;
-  stat.innerHTML=statCard(scopePrefix+'平均達成率',avgRate+'%','var(--accent)',scopePrefix==='全社'?'全チーム横断':teamName||'')
+  stat.innerHTML=statCard(scopePrefix+'進捗（KGI）',progText,'var(--accent)',scopePrefix==='全社'?'全チーム横断':teamName||'')
     +statCard('対象人数',cnt+'名','',scopePrefix==='全社'?'全従業員':(scopePrefix==='チーム'?teamName:''))
     +statCard('完了タスク',doneC,'var(--green)','')
     +statCard('遅延タスク',lateC,'var(--red)','');
@@ -2006,11 +2008,11 @@ function renderTeamEval(){
         <div class="eval-avatar" style="background:${t.color}">${t.name.charAt(0)}</div>
         <div style="flex:1">
           <div style="font-size:14px;font-weight:700">${t.name}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">リーダー: ${t.leaderName} ／ ${t.members.length}名</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">リーダー: ${t.leaderName} ／ ${(t.memberCount!=null?t.memberCount:t.members.length)}名</div>
         </div>
         <div class="pw" style="min-width:160px">
-          <div class="pt"><div class="pf" style="width:${t.rate}%;background:${t.color}"></div></div>
-          <div class="pp" style="color:${t.color}">${t.rate}%</div>
+          <div class="pt"><div class="pf" style="width:${t.progress!=null?t.progress:0}%;background:${t.color}"></div></div>
+          <div class="pp" style="color:${t.color}">${t.progress!=null?t.progress+'%':'—'}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">

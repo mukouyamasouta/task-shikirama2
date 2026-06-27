@@ -95,6 +95,42 @@
   function memKey(id) { return MEMBER_KEY[id] || id; }
   function roleJPFull(r) { return r === 'admin' ? '管理者' : r === 'executive' ? '幹部' : r === 'leader' ? 'リーダー' : 'メンバー'; }
 
+  // ===== チーム集計の共通ユーティリティ（人物単位・チャート基準で全画面統一） =====
+  // 同一人物(email)単位でチームメンバーを集約。1人=1要素（複数ロールでも1人）。
+  // 返り値: [{ email, name, color, pids:[全profile_id], roles:[JP], rate, primaryPid, isLeader }]
+  function personsOfTeam(teamMembers, profById) {
+    var byEmail = {};
+    (teamMembers || []).forEach(function (m) {
+      var p = profById[m.profile_id]; if (!p) return;
+      var e = (p.email || m.profile_id).toLowerCase();
+      if (!byEmail[e]) byEmail[e] = { email: e, name: p.full_name, color: p.color, pids: [], roles: [], rate: 0, primaryPid: m.profile_id, isLeader: false };
+      var g = byEmail[e];
+      if (g.pids.indexOf(m.profile_id) < 0) g.pids.push(m.profile_id);
+      var jp = (m.role_in_team === 'leader') ? 'リーダー' : '従業員';
+      if (g.roles.indexOf(jp) < 0) g.roles.push(jp);
+      if (m.role_in_team === 'leader') { g.isLeader = true; g.primaryPid = m.profile_id; }
+      g.rate = Math.max(g.rate, m.achievement_rate || 0);
+    });
+    return Object.keys(byEmail).map(function (e) { return byEmail[e]; });
+  }
+  // チームの進捗% = チーム曼荼羅＋所属メンバー個人チャートのKGI(中心)達成率の平均。
+  // 対象チャートが0件なら null を返す（UI側で '—' = データなし 表示。0除算で誤った%を出さない）。
+  // ★全画面（リーダー/幹部）でこの1関数を使い、画面間の数値ズレを排除する。
+  function calcTeamProgress(charts, teamId, memberPids) {
+    var ids = memberPids || [];
+    var rel = (charts || []).filter(function (c) {
+      return (teamId && c.owner_team_id === teamId) || (c.owner_user_id && ids.indexOf(c.owner_user_id) >= 0);
+    });
+    if (!rel.length) return null;
+    var sum = 0;
+    rel.forEach(function (c) {
+      var ed = (c.member_kpi_edits || {})['center'];
+      var p = (ed && ed.progress != null) ? +ed.progress : 0;
+      sum += Math.max(0, Math.min(100, p || 0));
+    });
+    return Math.round(sum / rel.length);
+  }
+
   // ===== 幹部(管理)画面 用アダプタ → {TEAMS, MEMBERS, MND, EMP} =====
   async function loadAdminData() {
     var raw = await fetchAll(); if (!raw) return null;
@@ -108,11 +144,15 @@
       // シード3チームは短縮キー、それ以外（新規作成）は UUID をキーに採用して必ず含める
       var key = TEAM_KEY[t.id] || t.id;
       var mems = raw.team_members.filter(function (m) { return m.team_id === t.id; });
+      var persons = personsOfTeam(mems, prof);                    // 人物単位（emailで集約）
+      var teamProg = calcTeamProgress(raw.mandala_charts, t.id, mems.map(function (m) { return m.profile_id; }));
       TEAMS[key] = {
         id: key, uid: t.id, name: t.name, color: t.color, bg: t.bg,
         leader: memKey(t.leader_id), leaderName: (prof[t.leader_id] || {}).full_name || '',
         members: mems.map(function (m) { return memKey(m.profile_id); }).filter(Boolean),
-        rate: Math.round(mems.reduce(function (a, m) { return a + (m.achievement_rate || 0); }, 0) / (mems.length || 1))
+        memberCount: persons.length,                              // 人物単位の人数（重複ロールを1人に）
+        progress: teamProg,                                       // チャート基準（0件なら null='—'）
+        rate: teamProg != null ? teamProg : 0                     // 進捗（後方互換: rateにも反映）
       };
     });
 
@@ -183,38 +223,46 @@
     raw.mandala_charts.forEach(function (c) { if (c.owner_type === 'user' && c.id.indexOf('_q2') < 0) chartByUser[c.owner_user_id] = c; });
 
     var members = raw.team_members.filter(function (m) { return m.team_id === teamUuid; });
-    members.sort(function (a, b) { return (a.role_in_team === 'leader' ? 0 : 1) - (b.role_in_team === 'leader' ? 0 : 1); });
+    // 同一人物(email)が複数ロールで複数行ある場合は1人に集約（メンバー数の二重計上を防ぐ）
+    var persons = personsOfTeam(members, prof);
+    persons.sort(function (a, b) { return (a.isLeader ? 0 : 1) - (b.isLeader ? 0 : 1); });
 
     var MEMBERS = {}, DASH_IDS = [], EVAL_IDS = [];
-    members.forEach(function (m) {
-      var key = memKey(m.profile_id), p = prof[m.profile_id]; if (!key || !p) return;
-      var c = chartByUser[m.profile_id] || { subs: [], acts: [], center: '' };
-      var tk = raw.tasks.filter(function (t) { return t.assignee_id === m.profile_id; });
+    var pidToKey = {};   // profile_id → 集約後の代表キー（タスク/日報を人物単位で合算するため）
+    persons.forEach(function (person) {
+      var p = prof[person.primaryPid]; if (!p) return;
+      var key = memKey(person.primaryPid);
+      person.pids.forEach(function (pid) { pidToKey[pid] = key; });
+      // この人物のいずれかの profile が持つ個人チャート
+      var c = null;
+      for (var i = 0; i < person.pids.length; i++) { if (chartByUser[person.pids[i]]) { c = chartByUser[person.pids[i]]; break; } }
+      c = c || { subs: [], acts: [], center: '' };
+      // この人物の全タスク（複数ロール分を合算）
+      var tk = raw.tasks.filter(function (t) { return person.pids.indexOf(t.assignee_id) >= 0; });
       var stats = { done: tk.filter(function (t) { return t.status === 'done'; }).length,
                     wip: tk.filter(function (t) { return t.status === 'wip'; }).length,
                     late: tk.filter(function (t) { return t.status === 'late'; }).length };
-      // KPI進捗 = そのCSFに紐づくタスクの平均進捗（タスクが無いCSFは達成率で代替）
       var kpis = (c.subs || []).slice(0, 4).map(function (s) {
         var rel = tk.filter(function (t) { return t.related_kgi === s; });
-        var p = rel.length
+        var pp = rel.length
           ? Math.round(rel.reduce(function (a, t) { return a + (t.progress || 0); }, 0) / rel.length)
-          : (m.achievement_rate || 0);
-        return { n: s, p: Math.max(0, Math.min(100, p)) };
+          : (person.rate || 0);
+        return { n: s, p: Math.max(0, Math.min(100, pp)) };
       });
       MEMBERS[key] = {
         pid: p.id, chartId: c.id || null,
-        name: p.full_name, role: m.role_in_team === 'leader' ? 'リーダー' : '従業員', team: team.name,
-        color: p.color, bg: '#F3F4F6', rate: m.achievement_rate, kpis: kpis, stats: stats,
+        name: p.full_name, role: person.isLeader ? 'リーダー' : '従業員', roles: person.roles, team: team.name,
+        color: p.color, bg: '#F3F4F6', rate: person.rate, kpis: kpis, stats: stats,
         center: c.center || (p.full_name + '\n個人目標'), subs: c.subs || [], acts: c.acts || [],
         memberKpiEdits: c.member_kpi_edits || {}
       };
       DASH_IDS.push(key);
-      if (m.role_in_team !== 'leader') EVAL_IDS.push(key);
+      if (person.roles.indexOf('従業員') >= 0) EVAL_IDS.push(key);   // 従業員ロールを持つ人物は評価対象
     });
 
     var MEMBER_TASKS = {};
     raw.tasks.forEach(function (t) {
-      var key = memKey(t.assignee_id); if (!key || !MEMBERS[key]) return;
+      var key = pidToKey[t.assignee_id]; if (!key || !MEMBERS[key]) return;
       (MEMBER_TASKS[key] = MEMBER_TASKS[key] || []).push({
         id: t.id, name: t.title, kpi: t.related_kgi || '—', start: fmtMD(t.start_date), due: fmtMD(t.due_date), pri: t.priority, status: t.status,
         pct: t.progress || 0, hours: (t.total_hours != null ? +t.total_hours : 0), period: t.period || '', chart: t.source_chart || null, sendId: t.source_send_id || null, cell: t.source_cell || null
@@ -223,7 +271,7 @@
 
     var REPORTS = {};
     raw.daily_reports.forEach(function (r) {
-      var key = memKey(r.author_id); if (!key || !MEMBERS[key]) return;
+      var key = pidToKey[r.author_id]; if (!key || !MEMBERS[key]) return;
       (REPORTS[key] = REPORTS[key] || []).push({ date: r.report_date, hours: r.hours, done: r.done, plan: r.plan, issue: r.issue, cond: r.condition });
     });
 
@@ -248,7 +296,9 @@
     // メンバーキー→profile_id（リーダー操作の永続化用）
     var memberPid = {};
     raw.profiles.forEach(function (p) { memberPid[memKey(p.id)] = p.id; });
-    return { MEMBERS: MEMBERS, MEMBER_TASKS: MEMBER_TASKS, REPORTS: REPORTS, EVAL_RECORDS: EVAL_RECORDS, DASH_IDS: DASH_IDS, EVAL_IDS: EVAL_IDS, AVAILABLE: AVAILABLE, teamName: team.name, teamUuid: teamUuid, memberPid: memberPid };
+    // チーム集計（人物単位の人数・チャート基準の進捗％。幹部画面と同一ロジックで一致させる）
+    var teamProgress = calcTeamProgress(raw.mandala_charts, teamUuid, members.map(function (m) { return m.profile_id; }));
+    return { MEMBERS: MEMBERS, MEMBER_TASKS: MEMBER_TASKS, REPORTS: REPORTS, EVAL_RECORDS: EVAL_RECORDS, DASH_IDS: DASH_IDS, EVAL_IDS: EVAL_IDS, AVAILABLE: AVAILABLE, teamName: team.name, teamUuid: teamUuid, memberPid: memberPid, teamProgress: teamProgress, memberCount: persons.length };
   }
 
   // ===== リーダー操作：チーム所属の追加/削除・タスク割当・評価記録 =====
@@ -1444,6 +1494,7 @@
   // ===== 幹部画面：ダッシュボード集計（teamUuid/期間指定時は絞り込み＋チーム別比較） =====
   async function loadDashboardStats(teamUuid, fromDate, toDate) {
     var raw = await fetchAll(); if (!raw) return null;
+    var profMap = byId(raw.profiles);
     var tmByProfile = {}; raw.team_members.forEach(function (m) { tmByProfile[m.profile_id] = m; });
     var inRange = function (d) { if (!d) return false; if (fromDate && d < fromDate) return false; if (toDate && d > toDate) return false; return true; };
     var tmsAll = teamUuid ? raw.team_members.filter(function (m) { return m.team_id === teamUuid; }) : raw.team_members;
@@ -1467,17 +1518,25 @@
       var tms = raw.team_members.filter(function (m) { return m.team_id === t.id; });
       var tks = raw.tasks.filter(function (x) { return x.team_id === t.id && (!fromDate && !toDate || inRange(x.completed_date || x.due_date || x.start_date)); });
       var reps = raw.daily_reports.filter(function (r) { var tm = tmByProfile[r.author_id]; return tm && tm.team_id === t.id && inRange(r.report_date); });
+      var persons = personsOfTeam(tms, profMap);                 // 人物単位（emailで集約）
+      var pids = tms.map(function (m) { return m.profile_id; });
       byTeam[t.id] = {
         name: t.name,
         avgRate: tms.length ? Math.round(tms.reduce(function (a, m) { return a + (m.achievement_rate || 0); }, 0) / tms.length) : 0,
+        progress: calcTeamProgress(raw.mandala_charts, t.id, pids), // チャート基準（0件なら null='—'）
         lateCount: tks.filter(function (x) { return x.status === 'late'; }).length,
         doneCount: tks.filter(function (x) { return x.status === 'done'; }).length,
         taskCount: tks.length,
         reportSubmitDays: new Set(reps.map(function (r) { return r.author_id + '|' + r.report_date; })).size,
-        memberCount: tms.length
+        memberCount: persons.length                                // 人物単位（重複ロールを1人に）
       };
     });
-    return { avgRate: avgRate, doneCount: done, lateCount: late, taskCount: tasksAll.length, memberCount: tmsAll.length, reportCount: reportsAll.length, byTeam: byTeam };
+    // 全体の進捗: 単一チーム指定ならそのチーム、全社なら各チーム進捗の平均（null除外）
+    var overallProgress;
+    if (teamUuid) { overallProgress = calcTeamProgress(raw.mandala_charts, teamUuid, tmsAll.map(function (m) { return m.profile_id; })); }
+    else { var ps = Object.keys(byTeam).map(function (k) { return byTeam[k].progress; }).filter(function (v) { return v != null; }); overallProgress = ps.length ? Math.round(ps.reduce(function (a, b) { return a + b; }, 0) / ps.length) : null; }
+    var personCount = personsOfTeam(tmsAll, profMap).length;
+    return { avgRate: avgRate, progress: overallProgress, doneCount: done, lateCount: late, taskCount: tasksAll.length, memberCount: personCount, reportCount: reportsAll.length, byTeam: byTeam };
   }
 
   // ===== 評価管理タブ共通: 曼荼羅形式で進捗%を表示・CSFクリックでKPI展開 =====

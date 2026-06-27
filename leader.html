@@ -167,10 +167,10 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <!-- 絞り込みバー（従業員 / チャート） -->
   <div id="dash-filter-bar" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;margin-bottom:16px;display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;box-shadow:var(--shadow)"></div>
   <div class="g4">
-    <div class="stat-card"><div class="s-lbl">チーム達成率</div><div class="s-val" style="color:var(--accent)">76%</div><div class="s-trend up">▲ 4pt 先月比</div></div>
-    <div class="stat-card"><div class="s-lbl">メンバー数</div><div class="s-val">4名</div><div class="s-trend" style="color:var(--text3)">営業チームA</div></div>
-    <div class="stat-card"><div class="s-lbl">今週完了タスク</div><div class="s-val" style="color:var(--green)">22</div><div class="s-trend up">▲ 5 先週比</div></div>
-    <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)">2</div><div class="s-trend down">▲ 1 先週比</div></div>
+    <div class="stat-card"><div class="s-lbl">チーム進捗（KGI）</div><div class="s-val" style="color:var(--accent)" id="ld-progress">—</div><div class="s-trend" style="color:var(--text3)" id="ld-progress-sub">チャートのKGI達成率</div></div>
+    <div class="stat-card"><div class="s-lbl">メンバー数</div><div class="s-val" id="ld-member-count">—</div><div class="s-trend" style="color:var(--text3)" id="ld-team-name">—</div></div>
+    <div class="stat-card"><div class="s-lbl">完了タスク</div><div class="s-val" style="color:var(--green)" id="ld-done">0</div><div class="s-trend" style="color:var(--text3)">チーム累計</div></div>
+    <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)" id="ld-late">0</div><div class="s-trend" style="color:var(--text3)">期限超過・未完了</div></div>
   </div>
   <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
     <span style="font-size:14px">💡</span><span>各メンバーの「📊 個人DB」で、担当タスク・進捗・曼荼羅チャート（開閉可）を確認できます。</span>
@@ -593,6 +593,19 @@ function applyDashFilter(){
 function resetDashFilter(){window._dashMemberFilter='';window._dashChartFilter='';renderDashboard();}
 function renderDashboard(){
   _renderDashFilterBar();
+  // 統計カード（人物単位の人数・チャート基準の進捗。0件は「—」＝0除算で誤った%を出さない）
+  (function(){
+    const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+    const allIds=DASH_IDS.filter(id=>MEMBERS[id]);
+    const tp=window._ldTeamProgress;
+    set('ld-progress', tp!=null?tp+'%':'—');
+    set('ld-progress-sub', tp!=null?'チャートのKGI達成率':'チャート未作成');
+    const mc=(window._ldMemberCount!=null)?window._ldMemberCount:allIds.length;
+    set('ld-member-count', mc+'名');
+    set('ld-team-name', (typeof teamMeta!=='undefined'&&teamMeta.name)||'');
+    set('ld-done', allIds.reduce((s,id)=>s+((MEMBERS[id].stats||{}).done||0),0));
+    set('ld-late', allIds.reduce((s,id)=>s+((MEMBERS[id].stats||{}).late||0),0));
+  })();
   const memF=window._dashMemberFilter||'',chartF=window._dashChartFilter||'';
   const charts=_teamCharts();
   const chart=chartF?charts.find(c=>c.key===chartF):null;
@@ -602,7 +615,10 @@ function renderDashboard(){
   let h='';
   ids.forEach(id=>{
     const m=MEMBERS[id];const col=rateColor(m.rate);
-    h+=`<div class="card"><div class="card-hd" style="border-left:4px solid ${m.color}"><div><div class="card-title">${m.name} <span class="badge ${m.role==='リーダー'?'b-manager':'b-employee'}" style="margin-left:4px">${m.role}</span></div><div class="card-sub">${m.team}</div></div><span style="font-size:20px;font-weight:800;color:${col}">${m.rate}%</span></div><div class="card-body" style="padding:10px 14px">`;
+    // 複数ロールはバッジを並べて表示（同一人物の二重カウント防止の集約結果）
+    const rolesArr=(m.roles&&m.roles.length)?m.roles:[m.role];
+    const badges=rolesArr.map(r=>`<span class="badge ${r==='リーダー'?'b-manager':'b-employee'}" style="margin-left:4px">${r}</span>`).join('');
+    h+=`<div class="card"><div class="card-hd" style="border-left:4px solid ${m.color}"><div><div class="card-title">${m.name} ${badges}</div><div class="card-sub">${m.team}</div></div><span style="font-size:20px;font-weight:800;color:${col}">${m.rate}%</span></div><div class="card-body" style="padding:10px 14px">`;
     m.kpis.forEach(kp=>{const c=kp.p>=80?'var(--green)':kp.p>=50?'var(--amber)':'var(--accent)';h+=`<div class="team-row" style="padding:6px 0"><div class="tname" style="font-size:11px">${kp.n}</div><div class="pw" style="max-width:160px"><div class="pt"><div class="pf" style="width:${kp.p}%;background:${c}"></div></div><div class="pp" style="color:${c}">${kp.p}%</div></div></div>`;});
     const kpiEditCnt=m.memberKpiEdits?Object.keys(m.memberKpiEdits).length:0;
     const kpiEditBadge=kpiEditCnt>0?`<span style="font-size:9px;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;padding:2px 7px;border-radius:10px;font-weight:700">✏ KPI編集 ${kpiEditCnt}件</span>`:'';
@@ -1839,6 +1855,8 @@ function vexumLogout(){
     if(d.teamName){ teamMeta.name=d.teamName; }
     if(d.teamUuid){ teamMeta.uid=d.teamUuid; }
     window._memberPid=d.memberPid||{};
+    window._ldTeamProgress=(d.teamProgress!=null)?d.teamProgress:null;  // チャート基準（幹部と同一ロジック）
+    window._ldMemberCount=(d.memberCount!=null)?d.memberCount:null;     // 人物単位の人数
     if(typeof populateSelects==='function') populateSelects();
     if(typeof renderDashboard==='function') renderDashboard();
     if(typeof renderAssignedTasks==='function') renderAssignedTasks();
@@ -1893,6 +1911,8 @@ function vexumLogout(){
         if(!d)return;
         repl(MEMBERS,d.MEMBERS);repl(MEMBER_TASKS,d.MEMBER_TASKS);repl(REPORTS,d.REPORTS);
         replArr(EVAL_RECORDS,d.EVAL_RECORDS);replArr(DASH_IDS,d.DASH_IDS);replArr(EVAL_IDS,d.EVAL_IDS);
+        window._ldTeamProgress=(d.teamProgress!=null)?d.teamProgress:null;
+        window._ldMemberCount=(d.memberCount!=null)?d.memberCount:null;
         if(typeof renderDashboard==='function')renderDashboard();
         if(typeof renderAssignedTasks==='function')renderAssignedTasks();
         if(window.VexumUI)VexumUI.refresh();
