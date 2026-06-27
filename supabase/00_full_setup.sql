@@ -282,6 +282,17 @@ create or replace function my_team_member_ids() returns setof uuid
   select tm.profile_id from team_members tm
    where tm.team_id in (select id from teams where leader_id = current_profile_id())
 $$;
+-- ↓ RLSの「自チーム」判定をポリシー内で team_members を直接参照すると
+--   team_members のRLSが自己再帰し 42P17(infinite recursion) になる。
+--   SECURITY DEFINER 関数に逃がすと関数内クエリはRLSを発火せず再帰しない。
+create or replace function my_team_ids() returns setof uuid
+  language sql stable security definer set search_path = public as $$
+  select team_id from team_members where profile_id = current_profile_id()
+$$;
+create or replace function my_team_peer_ids() returns setof uuid
+  language sql stable security definer set search_path = public as $$
+  select profile_id from team_members where team_id in (select team_id from team_members where profile_id = current_profile_id())
+$$;
 
 -- ========== RPC / トリガー（ログイン発行・セルフ登録・自動プロフィール） ==========
 create or replace function vexum_create_login(p_email text, p_password text default 'vexum2025')
@@ -355,13 +366,14 @@ alter table notifications   enable row level security;
 
 -- profiles: 自分＋自チーム＋管理者/幹部のみ閲覧（旧 p_read=全件 は撤去）
 drop policy if exists "p_read" on profiles;
+-- 自分自身は常に読める（auth.uid直結・最も堅牢。ログイン直後の自己解決を保証）
+drop policy if exists "profiles_select_self" on profiles;
+create policy "profiles_select_self" on profiles for select to authenticated
+  using (auth_user_id = auth.uid());
+-- 同チーム閲覧は SECURITY DEFINER 関数経由（team_members 直参照は再帰するため不可）
 drop policy if exists "profiles_select_same_team" on profiles;
 create policy "profiles_select_same_team" on profiles for select to authenticated
-  using (
-    is_admin_or_exec() or id = current_profile_id()
-    or id in (select tm.profile_id from team_members tm
-              where tm.team_id in (select team_id from team_members where profile_id = current_profile_id()))
-  );
+  using (is_admin_or_exec() or id = current_profile_id() or id in (select my_team_peer_ids()));
 drop policy if exists "p_admin" on profiles;
 create policy "p_admin" on profiles for all to authenticated
   using (is_admin_or_exec()) with check (is_admin_or_exec());
@@ -370,8 +382,7 @@ create policy "p_self" on profiles for update to authenticated
   using (id = current_profile_id()) with check (id = current_profile_id());
 drop policy if exists "profiles_exec_update" on profiles;
 create policy "profiles_exec_update" on profiles for update to authenticated
-  using (exists (select 1 from profiles p2 where p2.id=current_profile_id() and p2.role in ('executive','admin')))
-  with check (exists (select 1 from profiles p2 where p2.id=current_profile_id() and p2.role in ('executive','admin')));
+  using (is_admin_or_exec()) with check (is_admin_or_exec());
 drop policy if exists "p_leader_create_member" on profiles;
 create policy "p_leader_create_member" on profiles for insert to authenticated
   with check (role = 'member' and current_profile_id() in (select leader_id from teams));
@@ -385,22 +396,20 @@ create policy "t_manage" on teams for all to authenticated
   with check (is_admin_or_exec() or leader_id = current_profile_id());
 drop policy if exists "teams_exec_write" on teams;
 create policy "teams_exec_write" on teams for all to authenticated
-  using (exists (select 1 from profiles where id=current_profile_id() and role in ('executive','admin')))
-  with check (exists (select 1 from profiles where id=current_profile_id() and role in ('executive','admin')));
+  using (is_admin_or_exec()) with check (is_admin_or_exec());
 
 -- team_members: 自チーム＋管理者/幹部のみ閲覧（旧 tm_read=全件 は撤去）/ 編集は幹部・自チームリーダー
 drop policy if exists "tm_read" on team_members;
 drop policy if exists "tm_select_same_team" on team_members;
 create policy "tm_select_same_team" on team_members for select to authenticated
-  using (is_admin_or_exec() or team_id in (select team_id from team_members where profile_id = current_profile_id()));
+  using (is_admin_or_exec() or team_id in (select my_team_ids()));
 drop policy if exists "tm_manage" on team_members;
 create policy "tm_manage" on team_members for all to authenticated
   using (is_admin_or_exec() or team_id in (select my_led_team_ids()))
   with check (is_admin_or_exec() or team_id in (select my_led_team_ids()));
 drop policy if exists "tm_exec_write" on team_members;
 create policy "tm_exec_write" on team_members for all to authenticated
-  using (exists (select 1 from profiles where id=current_profile_id() and role in ('executive','admin')))
-  with check (exists (select 1 from profiles where id=current_profile_id() and role in ('executive','admin')));
+  using (is_admin_or_exec()) with check (is_admin_or_exec());
 
 -- mandala_charts: 参照は全認証 / 編集は管理者・幹部・本人・自チームのリーダー/メンバー
 drop policy if exists "mc_read" on mandala_charts;
@@ -418,7 +427,7 @@ create policy "tk_read" on tasks for select to authenticated using (true);
 drop policy if exists "tasks_select_own" on tasks;
 create policy "tasks_select_own" on tasks for select to authenticated
   using (is_admin_or_exec() or assignee_id = current_profile_id()
-         or team_id in (select team_id from team_members where profile_id = current_profile_id()));
+         or team_id in (select my_team_ids()));
 drop policy if exists "tk_write" on tasks;
 create policy "tk_write" on tasks for all to authenticated
   using (is_admin_or_exec() or assigner_id = current_profile_id()
@@ -477,7 +486,7 @@ create policy "ttl_read" on task_time_logs for select to authenticated using (tr
 drop policy if exists "ttl_select_own" on task_time_logs;
 create policy "ttl_select_own" on task_time_logs for select to authenticated
   using (is_admin_or_exec() or user_id = current_profile_id()
-         or task_id in (select id from tasks where team_id in (select team_id from team_members where profile_id = current_profile_id())));
+         or task_id in (select id from tasks where team_id in (select my_team_ids())));
 drop policy if exists "ttl_write" on task_time_logs;
 create policy "ttl_write" on task_time_logs for all to authenticated using (true) with check (true);
 
@@ -487,7 +496,7 @@ create policy "ntf_read" on notifications for select to authenticated using (tru
 drop policy if exists "ntf_select_own" on notifications;
 create policy "ntf_select_own" on notifications for select to authenticated
   using (is_admin_or_exec() or to_user_id = current_profile_id()
-         or to_team_id in (select team_id from team_members where profile_id = current_profile_id()));
+         or to_team_id in (select my_team_ids()));
 drop policy if exists "ntf_write" on notifications;
 create policy "ntf_write" on notifications for all to authenticated using (true) with check (true);
 
