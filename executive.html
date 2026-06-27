@@ -462,9 +462,11 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <div class="fg"><label class="fl">チーム名</label><input class="fi" id="team-name" placeholder="営業チーム D"></div>
       <div class="fg"><label class="fl">カラー</label><input class="fi" id="team-color" type="color" value="#6366F1" style="height:42px;padding:4px"></div>
     </div>
-    <div class="fg"><label class="fl">チームリーダー（未所属メンバーから選択）</label><select class="fs" id="team-leader"></select></div>
-    <div class="fg"><label class="fl">メンバー追加（複数選択可・任意）</label><select class="fs" id="team-members" multiple style="height:120px"></select></div>
-    <button class="f-submit" style="width:100%" onclick="submitTeam()">チームを作成</button>
+    <div class="fg"><label class="fl">チームリーダー（メンバーから選択）</label><select class="fs" id="team-leader"></select></div>
+    <div class="fg"><label class="fl">メンバー追加（クリックで複数選択）</label>
+      <div id="team-members-list" style="max-height:170px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:4px"></div>
+    </div>
+    <button class="f-submit" style="width:100%" id="team-submit-btn" onclick="submitTeam()">チームを作成</button>
   </div>
 </div>
 
@@ -731,7 +733,40 @@ function memGroupHTML(entries,col){
       actions+=`<button class="card-btn" style="margin-left:8px" onclick="openAccEdit('${e.key}')">✎ 編集${lbl}</button><button class="card-btn" style="margin-left:6px;background:#FEE2E2;color:var(--red)" onclick="askDeleteMember('${e.key}')">🗑${lbl}</button>`;
     }
   });
-  return `<div class="mem-row"><div class="mem-avatar" style="background:${col}">${ini}</div><div style="flex:1;min-width:0"><div class="mem-name">${m0.name} ${badges}${teamChip}</div><div class="mem-meta">${m0.email}</div></div><div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center;justify-content:flex-end">${actions}</div></div>`;
+  // 「権限を追加」: 同一メールに別ロールのアカウントを追加発行
+  const key0=entries[0].key;
+  const held={};entries.forEach(e=>{held[e.m.role]=1;});
+  const roleOpts=['従業員','リーダー','幹部'].filter(r=>!held[r]).map(r=>`<option value="${r}">${r}</option>`).join('');
+  const teamOpts='<option value="">未所属</option>'+Object.values(TEAMS).map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  actions+=`<button class="card-btn" style="margin-left:6px;background:var(--accent-l);color:var(--accent);font-weight:700" onclick="toggleAddRole('${key0}')">＋ 権限を追加</button>`;
+  const panel=`<div id="addrole-${key0}" style="display:none;padding:10px 14px;background:#F0FDFA;border-top:1px dashed var(--border)">
+    <div style="font-size:11px;font-weight:700;margin-bottom:6px">権限（ロール）を追加発行（同じメール・氏名で別ロールを作成）</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select class="fs" id="addrole-role-${key0}" style="width:auto;min-width:110px">${roleOpts||'<option value="">追加できるロールなし</option>'}</select>
+      <select class="fs" id="addrole-team-${key0}" style="width:auto;min-width:150px">${teamOpts}</select>
+      <button class="card-btn" style="background:var(--accent);color:#fff" onclick="submitAddRole('${key0}')">追加する</button>
+      <button class="card-btn" onclick="toggleAddRole('${key0}')">取消</button>
+    </div>
+  </div>`;
+  return `<div class="mem-row"><div class="mem-avatar" style="background:${col}">${ini}</div><div style="flex:1;min-width:0"><div class="mem-name">${m0.name} ${badges}${teamChip}</div><div class="mem-meta">${m0.email}</div></div><div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center;justify-content:flex-end">${actions}</div></div>${panel}`;
+}
+function toggleAddRole(key){const p=document.getElementById('addrole-'+key);if(p)p.style.display=p.style.display==='none'?'block':'none';}
+async function submitAddRole(key){
+  const m=MEMBERS[key];if(!m){showToast('対象が見つかりません');return;}
+  const role=(document.getElementById('addrole-role-'+key)||{}).value;
+  const teamKey=(document.getElementById('addrole-team-'+key)||{}).value||'';
+  if(!role){showToast('追加するロールを選択してください');return;}
+  const teamUuid=teamKey&&TEAMS[teamKey]?TEAMS[teamKey].uid:null;
+  const API=window.VexumAPI;let res={};
+  if(API&&API.ready){
+    res=await API.createOrLinkAccount({fullName:m.name,email:m.email,role,teamId:teamUuid})||{};
+    if(res.error){showToast('追加失敗: '+res.error);return;}
+  }
+  const nid=res.pid||('m'+Date.now().toString(36));
+  MEMBERS[nid]={pid:nid,name:m.name,email:m.email,role,roleEnum:roleToEnumJP(role),team:teamKey||'',rate:50};
+  if(teamKey&&TEAMS[teamKey]&&!TEAMS[teamKey].members.includes(nid))TEAMS[teamKey].members.push(nid);
+  renderAccount();
+  showToast(`${m.name} に「${role}」権限を追加しました ✓`);
 }
 function renderAccount(){
   const con=document.getElementById('account-container');if(!con)return;
@@ -926,15 +961,30 @@ async function submitAccEdit(){
   showToast(`${name} を更新しました ✓`);
 }
 /* ========== チーム編成 ========== */
+let selectedTeamAccountIds=[];   // チーム作成で選択中のアカウント
+function _teamPickCandidates(){return Object.entries(MEMBERS).filter(([id,m])=>m.roleEnum!=='admin'&&m.roleEnum!=='executive');}
+function _renderTeamMemberPicker(){
+  const box=document.getElementById('team-members-list');if(!box)return;
+  const ents=_teamPickCandidates();
+  box.innerHTML=ents.length?ents.map(([id,m])=>{
+    const chk=selectedTeamAccountIds.includes(id);
+    return `<div onclick="toggleTeamAccount('${id}')" style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer;${chk?'background:var(--accent-l)':''}">
+      <span style="font-size:15px;color:${chk?'var(--accent)':'#9CA3AF'}">${chk?'☑':'☐'}</span>
+      <span style="font-size:12px;flex:1">${m.name} <span style="font-size:10px;color:var(--text3)">（${m.role}${m.team&&TEAMS[m.team]?' / '+TEAMS[m.team].name:' / 未所属'}）</span></span>
+    </div>`;
+  }).join(''):'<div style="font-size:11px;color:var(--text3);padding:8px">対象アカウントがありません</div>';
+  const btn=document.getElementById('team-submit-btn');
+  if(btn)btn.textContent=selectedTeamAccountIds.length?`選択した${selectedTeamAccountIds.length}名でチームを作成`:'チームを作成';
+}
+function toggleTeamAccount(id){const i=selectedTeamAccountIds.indexOf(id);if(i>=0)selectedTeamAccountIds.splice(i,1);else selectedTeamAccountIds.push(id);_renderTeamMemberPicker();}
 function openTeamModal(){
-  const free=Object.entries(MEMBERS).filter(([id,m])=>!m.team);
+  selectedTeamAccountIds=[];
   const lead=document.getElementById('team-leader');
-  const mems=document.getElementById('team-members');
-  const opts=Object.entries(MEMBERS).filter(([id,m])=>m.roleEnum!=='admin'&&m.roleEnum!=='executive').map(([id,m])=>`<option value="${id}">${m.name}（${m.team?TEAMS[m.team]?.name||m.team:'未所属'}）</option>`).join('');
+  const opts=_teamPickCandidates().map(([id,m])=>`<option value="${id}">${m.name}（${m.team?TEAMS[m.team]?.name||m.team:'未所属'}）</option>`).join('');
   if(lead)lead.innerHTML='<option value="">—（後で設定）</option>'+opts;
-  if(mems)mems.innerHTML=opts;
   document.getElementById('team-name').value='';
   document.getElementById('team-color').value='#6366F1';
+  _renderTeamMemberPicker();
   document.getElementById('team-modal').style.display='flex';
 }
 function closeTeamModal(){document.getElementById('team-modal').style.display='none';}
@@ -942,8 +992,7 @@ async function submitTeam(){
   const name=(document.getElementById('team-name')||{}).value.trim();
   const color=(document.getElementById('team-color')||{}).value||'#6366F1';
   const leaderId=(document.getElementById('team-leader')||{}).value;
-  const memSel=document.getElementById('team-members');
-  const picked=memSel?Array.from(memSel.selectedOptions).map(o=>o.value):[];
+  const picked=selectedTeamAccountIds.slice();
   if(!name){showToast('チーム名を入力してください');return;}
   const memberIds=[...new Set([leaderId,...picked].filter(Boolean))];
   let tid='T'+Date.now().toString(36).toUpperCase();
@@ -955,13 +1004,14 @@ async function submitTeam(){
     if(res&&res.error){showToast('作成失敗: '+res.error);return;}
     if(res&&res.uid)tid=res.uid;
   }
-  memberIds.forEach(id=>{if(MEMBERS[id]){MEMBERS[id].team=tid;MEMBERS[id].role=(id===leaderId)?'リーダー':MEMBERS[id].role;}});
+  memberIds.forEach(id=>{if(MEMBERS[id]){MEMBERS[id].team=tid;if(id===leaderId){MEMBERS[id].role='リーダー';}}});
   const rates=memberIds.map(id=>MEMBERS[id]?.rate||0);
   const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):0;
   TEAMS[tid]={id:tid,uid:tid,name,color,bg:'#F3F4F6',leader:leaderId||memberIds[0]||'',leaderName:leaderId&&MEMBERS[leaderId]?MEMBERS[leaderId].name:(memberIds[0]?MEMBERS[memberIds[0]].name:'—'),members:memberIds,rate:avg};
+  selectedTeamAccountIds=[];
   closeTeamModal();
   renderAccount();
-  showToast(`${name} を作成しました ✓`);
+  showToast(`${name} を ${memberIds.length}名 で作成しました ✓`);
 }
 
 /* ========== チャート送信 ========== */

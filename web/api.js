@@ -83,6 +83,9 @@
       if (t[i].error) { err(keys[i], t[i].error); return null; }
       out[keys[i]] = t[i].data || [];
     }
+    // 論理削除（is_active=false）のアカウントは全画面から除外。
+    // is_active 列が無い(30未適用)DBでは undefined のため除外されない（後方互換）。
+    out.profiles = out.profiles.filter(function (p) { return p.is_active !== false; });
     return out;
   }
 
@@ -938,40 +941,51 @@
     var r = await sb.from('profiles').select('id').ilike('email', email).eq('role', roleEnumVal).limit(1);
     return !r.error && r.data && r.data.length > 0;
   }
-  async function createAccount(o) {
+  // 同一メール複数ロール対応の統一アカウント作成関数。
+  //  1. (email, role) が既にあればエラー
+  //  2. 同一メールの既存 auth_user_id を流用（同一人物の別ロール＝同じログイン共有）
+  //  3. profiles を新ロールでINSERT
+  //  4. team_members へ UPSERT
+  //  5. ログイン: 既存authがあれば流用（PWは返さない）／無ければ vexum_create_login で発行
+  async function createOrLinkAccount(o) {
     if (!sb) return { error: 'Supabase未接続' };
+    var name = (o.fullName || o.name || '').trim();
+    var email = (o.email || '').trim();
     var roleEnumVal = roleToEnum(o.role || 'メンバー');
-    // 1) 同じ (email, role) の重複を禁止
-    if (o.email && await _existsEmailRole(o.email, roleEnumVal)) {
-      return { error: '同じロールのアカウントがすでに存在します' };
-    }
-    // 2) 同一メールの既存 auth_user_id を流用（同一人物の別ロール）
-    var reuseUid = await _reuseAuthUserId(o.email);
-    var row = {
-      full_name: o.name, email: o.email, role: roleEnumVal,
-      department: o.department || null, color: o.color || '#0D9488'
-    };
+    if (!name) return { error: '氏名を入力してください' };
+    if (!email) return { error: 'メールアドレスを入力してください' };
+    if (await _existsEmailRole(email, roleEnumVal)) return { error: 'このメール・ロールの組み合わせは既に存在します' };
+    var reuseUid = await _reuseAuthUserId(email);
+    var row = { full_name: name, email: email, role: roleEnumVal, department: o.department || null, color: o.color || '#0D9488' };
     if (reuseUid) row.auth_user_id = reuseUid;
     var ins = await sb.from('profiles').insert(row).select().single();
     if (ins.error) return { error: friendlyErr(ins.error.message) };
     var pid = ins.data.id;
-    var teamUuid = o.teamUuid || (o.teamLetter ? teamUuidOf(o.teamLetter) : null);
+    var teamUuid = o.teamId || o.teamUuid || (o.teamLetter ? teamUuidOf(o.teamLetter) : null);
     if (teamUuid) {
-      var tmIns = await sb.from('team_members').insert({
-        team_id: teamUuid, profile_id: pid,
-        role_in_team: (o.role === 'リーダー') ? 'leader' : 'member',
-        achievement_rate: (o.rate != null ? o.rate : 50)
-      });
-      if (tmIns.error) return { error: friendlyErr(tmIns.error.message) };
+      try {
+        await sb.from('team_members').upsert({
+          team_id: teamUuid, profile_id: pid,
+          role_in_team: (roleEnumVal === 'leader') ? 'leader' : 'member',
+          achievement_rate: (o.rate != null ? o.rate : 50)
+        }, { onConflict: 'team_id,profile_id' });
+      } catch (e) {}
     }
-    // 発行: ランダムPWを生成し、確認済みユーザーを作成（RPC）。PWは画面表示用に返す
-    var genPw = randomPassword();
-    var loginEnabled = false;
-    try {
-      var rpc = await sb.rpc('vexum_create_login', { p_email: o.email, p_password: genPw });
-      loginEnabled = !rpc.error;
-    } catch (_) { loginEnabled = false; }
-    return { data: ins.data, pid: pid, loginEnabled: loginEnabled, password: loginEnabled ? genPw : null };
+    var loginEnabled = !!reuseUid, pw = null;
+    if (!reuseUid) {
+      var genPw = o.password || randomPassword();
+      try { var rpc = await sb.rpc('vexum_create_login', { p_email: email, p_password: genPw }); loginEnabled = !rpc.error; } catch (e) { loginEnabled = false; }
+      if (loginEnabled && !o.password) pw = genPw;
+    }
+    return { data: ins.data, pid: pid, loginEnabled: loginEnabled, password: pw, reused: !!reuseUid };
+  }
+  // 旧API互換: 幹部画面のアカウント発行（createOrLinkAccount に統一）
+  async function createAccount(o) {
+    return await createOrLinkAccount({
+      fullName: o.name, email: o.email, role: o.role,
+      teamId: o.teamUuid || (o.teamLetter ? teamUuidOf(o.teamLetter) : null),
+      rate: o.rate, department: o.department, color: o.color, password: o.password
+    });
   }
   // ===== リーダー⇄従業員 紐付け =====
   // ログイン中ユーザーと同じメールの「従業員(role=member)」プロフィールを検索（自分自身は除外）
@@ -1004,32 +1018,20 @@
     if (!sb) return { error: 'Supabase未接続' };
     var name = (o.fullName || '従業員').trim();
     var email = (o.email || '').trim();
+    // 既存の member プロフィールがあればそれを紐付け対象に（重複作成しない）
     if (email) {
-      // 同一メールに複数ロールの profile があり得るため maybeSingle は使わず member を1件探す
       var ex = await sb.from('profiles').select('id,role').ilike('email', email).eq('role', 'member').limit(1);
       if (!ex.error && ex.data && ex.data.length) return { pid: ex.data[0].id, linkedExisting: true };
     }
-    function variant(em) { if (!em) return ''; var i = em.indexOf('@'); return i < 0 ? (em + '+emp') : (em.slice(0, i) + '+emp' + em.slice(i)); }
-    // 同一人物の別ロールとして、既存 profile の auth_user_id を流用（あれば）
-    var reuseUid = await _reuseAuthUserId(email);
-    var payload = { full_name: name, email: email || (name + '@local.vexum'), role: 'member', department: o.department || null, color: o.color || '#06B6D4' };
-    if (reuseUid) payload.auth_user_id = reuseUid;
-    var ins = await sb.from('profiles').insert(payload).select().single();
-    if (ins.error && /duplicate|unique|23505|already exists/i.test(ins.error.message || '')) {
-      // 27_fix_team_rls.sql 未適用で email 単独UNIQUEが残る古いDBへのフォールバック（派生メールで作成）
-      payload.email = variant(email);
-      ins = await sb.from('profiles').insert(payload).select().single();
+    // 統一関数で member ロールを作成
+    var res = await createOrLinkAccount({ fullName: name, email: email, role: 'メンバー', teamId: o.teamId, password: o.password, color: o.color || '#06B6D4' });
+    if (res && res.error && /duplicate|unique|23505|already|組み合わせは既に/i.test(res.error)) {
+      // 30_multi_role.sql 未適用で email 単独UNIQUEが残る古いDBへのフォールバック（派生メールで作成）
+      var i = email.indexOf('@'); var variantEmail = i < 0 ? (email + '+emp') : (email.slice(0, i) + '+emp' + email.slice(i));
+      res = await createOrLinkAccount({ fullName: name, email: variantEmail, role: 'メンバー', teamId: o.teamId, password: o.password, color: o.color || '#06B6D4' });
     }
-    if (ins.error) return { error: friendlyErr(ins.error.message) };
-    var pid = ins.data.id;
-    if (o.teamId) {
-      // 失敗（RLS等）してもプロフィール作成は成立しているのでpidは返す
-      try { await sb.from('team_members').insert({ team_id: o.teamId, profile_id: pid, role_in_team: 'member', achievement_rate: 50 }); } catch (e) {}
-    }
-    if (o.password && payload.email) {
-      try { await sb.rpc('vexum_create_login', { p_email: payload.email, p_password: o.password }); } catch (e) {}
-    }
-    return { pid: pid, email: payload.email };
+    if (res && res.error) return { error: res.error };
+    return { pid: res.pid, email: res.data ? res.data.email : email };
   }
   // 既存アカウントのパスワードを再発行（RPCで更新）。新PWを返す
   async function resetPassword(email) {
@@ -1052,16 +1054,20 @@
   async function deleteAccount(pid) {
     if (!sb) return { error: 'Supabase未接続' };
     if (!pid) return { error: '対象アカウントIDが不明です' };
-    // FK(NO ACTION) の依存行を先に削除（assigner/assignee/evaluator）
-    await sb.from('tasks').delete().eq('assignee_id', pid);
-    await sb.from('tasks').delete().eq('assigner_id', pid);
-    await sb.from('evaluations').delete().eq('evaluator_id', pid);
-    // .select() で実際に削除された行を確認（RLSで弾かれると0件・エラー無しになるため）
-    var del = await sb.from('profiles').delete().eq('id', pid).select('id');
-    if (del.error) return { error: friendlyErr(del.error.message) };
-    if (!del.data || del.data.length === 0) {
-      return { error: '削除できませんでした（権限不足の可能性。管理者/幹部アカウントでログインしてください）' };
+    // チーム所属は解除（論理削除でも一覧/編成から外す）
+    try { await sb.from('team_members').delete().eq('profile_id', pid); } catch (e) {}
+    // まず論理削除（is_active=false）を試行。カラム未追加(30未適用)なら物理削除へフォールバック
+    var up = await sb.from('profiles').update({ is_active: false }).eq('id', pid).select('id');
+    if (up.error && /is_active|column|does not exist|42703/i.test(up.error.message || '')) {
+      // FK(NO ACTION) の依存行を先に始末してから物理削除（assignee は cascade だが念のため）
+      await sb.from('tasks').delete().eq('assignee_id', pid);
+      var del = await sb.from('profiles').delete().eq('id', pid).select('id');
+      if (del.error) return { error: friendlyErr(del.error.message) };
+      if (!del.data || del.data.length === 0) return { error: '削除できませんでした（権限不足の可能性。管理者/幹部でログインしてください）' };
+      return { ok: true, physical: true };
     }
+    if (up.error) return { error: friendlyErr(up.error.message) };
+    if (!up.data || up.data.length === 0) return { error: '削除できませんでした（権限不足の可能性。管理者/幹部でログインしてください）' };
     return { ok: true };
   }
   async function createTeamRemote(o) {
@@ -1075,7 +1081,7 @@
     var rows = (o.members || []).map(function (mm) {
       return { team_id: tid, profile_id: mm.pid, role_in_team: (mm.pid === o.leaderPid ? 'leader' : 'member'), achievement_rate: (mm.rate != null ? mm.rate : 50) };
     });
-    if (rows.length) { var r = await sb.from('team_members').insert(rows); if (r.error) return { error: r.error.message }; }
+    if (rows.length) { var r = await sb.from('team_members').upsert(rows, { onConflict: 'team_id,profile_id' }); if (r.error) return { error: r.error.message }; }
     return { data: t.data, uid: tid };
   }
 
@@ -1637,6 +1643,7 @@
     loadPersonalData: loadPersonalData,
     loadTokatsuData: loadTokatsuData,
     createAccount: createAccount,
+    createOrLinkAccount: createOrLinkAccount,
     findLinkedEmployee: findLinkedEmployee,
     createLinkedEmployeeAccount: createLinkedEmployeeAccount,
     loadProfile: loadProfile,
