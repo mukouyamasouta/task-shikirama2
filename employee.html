@@ -922,6 +922,20 @@ function resetReportForm(){
   </div>
 </div>
 
+<!-- ガント日付編集モーダル -->
+<div id="gantt-edit-modal" onclick="if(event.target===this)closeGanttEdit()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9992;align-items:center;justify-content:center;padding:40px 16px">
+  <div style="background:#fff;border-radius:12px;width:100%;max-width:380px;padding:20px" onclick="event.stopPropagation()">
+    <div style="font-size:14px;font-weight:800;color:var(--accent);margin-bottom:4px">📅 期間を編集</div>
+    <div id="gantt-edit-name" style="font-size:12px;color:var(--text2);margin-bottom:14px;font-weight:600;word-break:break-all"></div>
+    <div class="fg"><label class="fl">開始日</label><input class="fi" type="date" id="gantt-edit-start"></div>
+    <div class="fg" style="margin-top:10px"><label class="fl">終了日</label><input class="fi" type="date" id="gantt-edit-due"></div>
+    <div style="display:flex;gap:8px;margin-top:18px">
+      <button class="f-submit" style="flex:1;background:#9CA3AF" onclick="closeGanttEdit()">キャンセル</button>
+      <button class="f-submit" style="flex:1" onclick="saveGanttEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- KPI編集モーダル -->
 <div id="kpi-edit-modal" onclick="if(event.target===this)closeKpiEdit()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9991;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:460px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
@@ -2899,6 +2913,55 @@ const GANTT_COLORS=['#0D9488','#6366F1','#EC4899','#F59E0B','#10B981','#06B6D4',
 let _ganttChartKey='';
 function _ganttDate(s){ if(!s)return null; const p=String(s).split(/[-/]/); if(p.length<3)return null; const d=new Date(+p[0],+p[1]-1,+p[2]); return isNaN(d.getTime())?null:d; }
 function onGanttChartChange(){ _ganttChartKey=(document.getElementById('gantt-chart-sel')||{}).value||''; renderGantt(); }
+// タスク期間に応じて目盛り単位（週/月/四半期）と列定義を動的算出
+function calcGanttTimeline(tasks){
+  const today=new Date();today.setHours(0,0,0,0);
+  const sof=t=>_ganttDate(t.startRaw)||_ganttDate(t.dueRaw)||null;
+  const eof=t=>_ganttDate(t.dueRaw)||_ganttDate(t.startRaw)||null;
+  let minD=null,maxD=null;
+  (tasks||[]).forEach(t=>{let s=sof(t),e=eof(t);if(s&&e&&e<s){const x=s;s=e;e=x;}if(s&&(!minD||s<minD))minD=new Date(s);if(e&&(!maxD||e>maxD))maxD=new Date(e);});
+  if(!minD&&!maxD){minD=new Date(today);maxD=new Date(today);}
+  else if(!minD)minD=new Date(maxD);
+  else if(!maxD)maxD=new Date(minD);
+  if(maxD<minD){const x=minD;minD=maxD;maxD=x;}
+  const totalDays=Math.round((maxD-minD)/864e5)+1;            // 全期間（最低1日）
+  const unit=totalDays<=60?'week':(totalDays<=365?'month':'quarter');
+  const cols=[],groups=[];
+  const pushGroup=(key,label)=>{const last=groups[groups.length-1];if(last&&last.key===key)last.span++;else groups.push({key,label,span:1});};
+  if(unit==='week'){
+    // 開始日を含む週の先頭（日曜）〜 終了日を含む週の末尾。グループは月でまとめる
+    const cur=new Date(minD);cur.setDate(cur.getDate()-cur.getDay());cur.setHours(0,0,0,0);
+    while(cur<=maxD){
+      const cs=new Date(cur),ce=new Date(cur);ce.setDate(ce.getDate()+6);
+      cols.push({start:cs,end:ce,label:(cs.getMonth()+1)+'/'+cs.getDate()});
+      pushGroup(cs.getFullYear()+'-'+cs.getMonth(),(cs.getMonth()+1)+'月');
+      cur.setDate(cur.getDate()+7);
+    }
+  } else if(unit==='month'){
+    // 開始月の1日〜終了月の末日。グループは年でまとめる
+    let cur=new Date(minD.getFullYear(),minD.getMonth(),1);
+    const lastM=new Date(maxD.getFullYear(),maxD.getMonth(),1);
+    while(cur<=lastM){
+      const cs=new Date(cur),ce=new Date(cur.getFullYear(),cur.getMonth()+1,0);
+      cols.push({start:cs,end:ce,label:(cs.getMonth()+1)+'月'});
+      pushGroup(cs.getFullYear(),cs.getFullYear()+'年');
+      cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);
+    }
+  } else {
+    // 開始四半期の先頭〜終了四半期の末尾。グループは年でまとめる
+    let cur=new Date(minD.getFullYear(),Math.floor(minD.getMonth()/3)*3,1);
+    const lastQ=new Date(maxD.getFullYear(),Math.floor(maxD.getMonth()/3)*3,1);
+    while(cur<=lastQ){
+      const cs=new Date(cur),ce=new Date(cur.getFullYear(),cur.getMonth()+3,0);
+      cols.push({start:cs,end:ce,label:'Q'+(Math.floor(cs.getMonth()/3)+1)});
+      pushGroup(cs.getFullYear(),cs.getFullYear()+'年');
+      cur=new Date(cur.getFullYear(),cur.getMonth()+3,1);
+    }
+  }
+  if(!cols.length){cols.push({start:new Date(minD),end:new Date(maxD),label:(minD.getMonth()+1)+'/'+minD.getDate()});groups.push({key:'x',label:(minD.getMonth()+1)+'月',span:1});}
+  return {unit,cols,groups,minD,maxD,totalDays};
+}
+// タスク期間に応じた可変目盛りの表形式ガントチャート
 function renderGantt(){
   const sel=document.getElementById('gantt-chart-sel');
   const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
@@ -2912,7 +2975,7 @@ function renderGantt(){
   // 最新のチャート編集（member_kpi_edits）を反映してから読む（古いキャッシュ参照を防ぐ）
   if(typeof syncKpiEditsFromCharts==='function')syncKpiEditsFromCharts();
   const d=CHARTS[k];const edits=_chartEdits(k);
-  // ★曼荼羅の内容（編集後を優先）を起点に骨格を作る
+  // ラベル用のCSF/KPI文言（編集後を優先）
   const csfText=si=>{const ed=edits['csf-'+si];return String(((ed&&ed.text!=null)?ed.text:(d.subs||[])[si])||'').trim();};
   const kpiText=(si,ai)=>{const ed=edits[si+'-'+ai];return String(((ed&&ed.text!=null)?ed.text:((d.acts||[])[si]||[])[ai])||'').trim();};
   const cn1=d.name||'',cn2=_chartKgiText(k)||'';
@@ -2920,73 +2983,93 @@ function renderGantt(){
   // このチャートに紐づくタスク（source_chart はチャート名 or KGI文言で保存され得るため両方照合）
   const tasks=[...ASSIGNMENTS,...ASSIGN_HISTORY].filter(t=>t.chart&&((cn1&&String(t.chart)===String(cn1))||(cn2&&String(t.chart)===String(cn2))));
   const head=`<div class="card" style="margin-bottom:14px"><div class="card-body" style="padding:12px 16px"><div style="font-size:10px;color:var(--text3);font-weight:700">KGI</div><div style="font-size:15px;font-weight:800;color:var(--accent)">🎯 ${kgiText}</div></div></div>`;
-  // セクション = 曼荼羅で定義済みのCSF ∪ タスクが付いているCSF（タスク取りこぼし防止）
-  const setIdx={};for(let si=0;si<8;si++){if(csfText(si))setIdx[si]=1;}
-  tasks.forEach(t=>{const ci=(t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1;setIdx[ci]=1;});
-  const sectionIdx=Object.keys(setIdx).map(Number).sort((a,b)=>a-b);
-  if(!sectionIdx.length){con.innerHTML=head+'<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">このチャートにはCSF/KPIがまだ入力されていません。<br>チャート管理でCSF・KPIを入力してください。</div></div>';return;}
-  // 日付範囲（タスクの開始〜期限から。タスク無しなら今日〜+14日）
-  const today=new Date();today.setHours(0,0,0,0);
-  const span=t=>{ let s=_ganttDate(t.startRaw)||_ganttDate(t.dueRaw)||today; let e=_ganttDate(t.dueRaw)||_ganttDate(t.startRaw)||today; if(e<s){const x=s;s=e;e=x;} return {s,e}; };
-  let minD=null,maxD=null;tasks.forEach(t=>{const{s,e}=span(t);if(!minD||s<minD)minD=s;if(!maxD||e>maxD)maxD=e;});
-  if(!minD)minD=today; if(!maxD||maxD<=minD)maxD=new Date(minD.getTime()+14*864e5);
-  const totalDays=Math.max(1,Math.round((maxD-minD)/864e5));
-  const byDue=(a,b)=>{const da=_ganttDate(a.dueRaw),db=_ganttDate(b.dueRaw);if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;return da-db;};
-  const fmtMd=dt=>dt?(dt.getMonth()+1)+'/'+dt.getDate():'—';
-  // タスクバー1行
-  function taskRow(label,t,color){
-    const{s,e}=span(t);
-    const left=Math.min(99,Math.max(0,(s-minD)/864e5/totalDays*100));
-    const width=Math.min(100-left,Math.max(2,((e-s)/864e5+1)/totalDays*100));
-    const pct=t.pct||0;const editable=!!t.id;
-    const dateCell=editable
-      ? `<input type="date" value="${t.startRaw||''}" onchange="ganttSaveDate('${t.id}','start',this.value)" style="font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;width:118px"><span style="color:var(--text3);font-size:10px">〜</span><input type="date" value="${t.dueRaw||''}" onchange="ganttSaveDate('${t.id}','due',this.value)" style="font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;width:118px">`
-      : `<span style="font-size:10px;color:var(--text3)">${fmtMd(s)}〜${fmtMd(e)}</span>`;
-    const taskNm=(t.name&&t.name!==label)?`<span style="font-size:9px;color:var(--text3);font-weight:400;margin-left:4px">📝${t.name}</span>`:'';
-    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #F3F4F6;flex-wrap:wrap">
-      <div style="min-width:170px;flex:0 0 170px;font-size:11px;font-weight:600;overflow:hidden"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:100%">${label}${taskNm}</span></div>
-      <div style="flex:1;min-width:150px;position:relative;height:18px;background:#F3F4F6;border-radius:9px">
-        <div style="position:absolute;left:${left}%;width:${width}%;top:0;height:18px;background:${color};border-radius:9px;opacity:.85"></div>
-        <div style="position:absolute;left:${left}%;width:${width}%;top:0;height:18px;border-radius:9px;background:rgba(255,255,255,.35);clip-path:inset(0 ${100-pct}% 0 0)"></div>
-      </div>
-      <div style="display:flex;align-items:center;gap:4px;flex:0 0 auto">${dateCell}<span style="font-size:10px;font-weight:700;color:${color};width:34px;text-align:right">${pct}%</span></div>
-    </div>`;
-  }
-  // タスク未作成のKPI（曼荼羅にはあるが未着手）のプレースホルダー行
-  function placeholderRow(label){
-    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #F3F4F6;flex-wrap:wrap;opacity:.7">
-      <div style="min-width:170px;flex:0 0 170px;font-size:11px;font-weight:600;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</div>
-      <div style="flex:1;min-width:150px;height:18px;background:repeating-linear-gradient(45deg,#F3F4F6,#F3F4F6 6px,#E5E7EB 6px,#E5E7EB 12px);border-radius:9px"></div>
-      <div style="flex:0 0 auto"><span style="font-size:9px;font-weight:700;color:var(--text3);background:#F3F4F6;border-radius:8px;padding:1px 7px">未着手</span></div>
-    </div>`;
-  }
-  let h=head+`<div class="card"><div class="card-body" style="padding:12px 16px">`;
-  h+=`<div style="font-size:10px;color:var(--text3);margin-bottom:8px">期間 ${fmtMd(minD)} 〜 ${fmtMd(maxD)}（${totalDays}日）／ 曼荼羅のCSF・KPIが骨格。バー＝紐づくタスクの開始〜期限。日付欄で編集できます。</div>`;
+  // タスク0件 → テーブルを崩さずメッセージ
+  if(!tasks.length){con.innerHTML=head+'<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">このチャートにはタスクがありません。<br>タスクを作成するとガントチャートに表示されます。</div></div>';return;}
+  // ★期間軸（タスク期間に応じた可変目盛り）を再計算
+  const tl=calcGanttTimeline(tasks);const cols=tl.cols;
+  const unitJp=tl.unit==='week'?'週':(tl.unit==='month'?'月':'四半期');
+  // 日付→列インデックス（境界からずれても含む列に寄せる）
+  const startCol=dt=>{for(let i=0;i<cols.length;i++){if(dt<=cols[i].end)return i;}return cols.length-1;};
+  const endCol=dt=>{for(let i=cols.length-1;i>=0;i--){if(dt>=cols[i].start)return i;}return 0;};
+  // CSFごとにグルーピング（タスク化されているCSFのみ）
+  const grp={};tasks.forEach(t=>{const si=(t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1;(grp[si]=grp[si]||[]).push(t);});
+  const dueOf=t=>_ganttDate(t.dueRaw)||_ganttDate(t.startRaw);
+  const byDue=(a,b)=>{const da=dueOf(a),db=dueOf(b);if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;return da-db;};
+  const minDue=si=>{let m=Infinity;grp[si].forEach(t=>{const dd=dueOf(t);if(dd&&dd.getTime()<m)m=dd.getTime();});return m;};
+  // CSFブロック並び順 = そのCSF内で最も近い期限が早い順
+  const sectionIdx=Object.keys(grp).map(Number).sort((a,b)=>minDue(a)-minDue(b));
+  // 行ラベル = チャート管理のKPI名（無ければCSF名→タスク名）
+  const rowLabel=t=>{const si=(t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1;if(si>=0&&t.kpiIdx!=null&&!isNaN(t.kpiIdx)){const kt=kpiText(si,t.kpiIdx);if(kt)return kt;}if(si>=0){const ct=csfText(si);if(ct)return ct;}return t.name||'タスク';};
+  const CW=64;const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  // ヘッダ（グループ行＋目盛り行）— sticky
+  let thead=`<tr><th style="position:sticky;left:0;top:0;z-index:6;background:#fff;border:1px solid var(--border);min-width:200px;width:200px;max-width:200px;padding:6px 8px;text-align:left;font-size:11px;font-weight:800">タスク（${unitJp}単位）</th>`;
+  tl.groups.forEach(g=>{thead+=`<th colspan="${g.span}" style="position:sticky;top:0;z-index:4;background:#F8FAFC;border:1px solid var(--border);font-size:10px;font-weight:800;color:var(--text2);padding:4px">${esc(g.label)}</th>`;});
+  thead+=`</tr><tr><th style="position:sticky;left:0;top:25px;z-index:6;background:#fff;border:1px solid var(--border);min-width:200px;width:200px"></th>`;
+  cols.forEach(c=>{thead+=`<th style="position:sticky;top:25px;z-index:4;background:#fff;border:1px solid var(--border);font-size:9px;color:var(--text3);font-weight:600;min-width:${CW}px;width:${CW}px;padding:3px">${esc(c.label)}</th>`;});
+  thead+=`</tr>`;
+  // ボディ — CSFごとに見出し行＋タスク行
+  let tbody='';
   sectionIdx.forEach(si=>{
     const color=si>=0?GANTT_COLORS[si%GANTT_COLORS.length]:'#9CA3AF';
-    const ctxt=si>=0?(csfText(si)||('CSF'+(si+1))):'CSF未指定';
-    h+=`<div style="display:flex;align-items:center;gap:6px;margin:14px 0 6px"><span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block"></span><span style="font-size:12px;font-weight:800;color:${color}">${si>=0?'CSF'+(si+1)+'：':''}${ctxt}</span></div>`;
-    const csfTasks=tasks.filter(t=>((t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1)===si);
-    let rows='';
-    if(si>=0){
-      // 曼荼羅の各KPIを骨格に、紐づくタスクをバー化。タスク無し定義済みKPIは未着手プレースホルダー。
-      // 文言もタスクも無い空KPIは非表示（曼荼羅の空欄は出さない）。空KPIでもタスクがあれば取りこぼさない。
-      for(let ai=0;ai<8;ai++){
-        const kt=kpiText(si,ai);
-        const kts=csfTasks.filter(t=>t.kpiIdx===ai).slice().sort(byDue);
-        if(!kt&&!kts.length)continue;
-        const label=`KPI${si+1}-${ai+1} ${kt||'（KPI未入力）'}`;
-        if(kts.length)kts.forEach(t=>{rows+=taskRow(label,t,color);});
-        else rows+=placeholderRow(label);
+    const tint=color+'14'; // 行背景（CSF単位の薄色）
+    const cap=si>=0?`CSF${si+1}：${esc(csfText(si)||('CSF'+(si+1)))}`:'CSF未指定';
+    tbody+=`<tr><td style="position:sticky;left:0;z-index:3;background:${color};color:#fff;border:1px solid var(--border);font-size:11px;font-weight:800;padding:5px 8px;max-width:200px"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cap}</div></td><td colspan="${cols.length}" style="background:${color};border:1px solid var(--border)"></td></tr>`;
+    grp[si].slice().sort(byDue).forEach(t=>{
+      const s=_ganttDate(t.startRaw)||_ganttDate(t.dueRaw)||tl.minD;
+      const e=_ganttDate(t.dueRaw)||_ganttDate(t.startRaw)||s;
+      let cs=startCol(s<e?s:e),ce=endCol(e>s?e:s);if(ce<cs)ce=cs; // 最低1列
+      const pct=t.pct||0;const editable=!!t.id;
+      const click=editable?`onclick="openGanttEdit('${t.id}')"`:'';
+      const cur=editable?'cursor:pointer':'cursor:default';
+      const lbl=rowLabel(t);
+      const taskNm=(t.name&&t.name!==lbl)?` <span style="color:var(--text3);font-weight:400;font-size:9px">${esc(t.name)}</span>`:'';
+      tbody+=`<tr style="background:${tint}"><td style="position:sticky;left:0;z-index:2;background:${tint};border:1px solid var(--border);font-size:11px;font-weight:600;padding:4px 8px;max-width:200px"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lbl)}${taskNm}</div></td>`;
+      for(let i=0;i<cols.length;i++){
+        if(i<cs||i>ce){tbody+=`<td style="border:1px solid #EEF2F4;min-width:${CW}px"></td>`;}
+        else{
+          const span=ce-cs+1;
+          const bar=`<div ${click} title="${esc((t.name||'')+'：'+(t.start||'—')+'〜'+(t.end||'—')+'（'+pct+'%）'+(editable?' クリックで日付編集':''))}" style="position:relative;height:18px;border-radius:9px;background:${color};opacity:.92;${cur};overflow:hidden">
+            <div style="position:absolute;inset:0;background:rgba(255,255,255,.42);clip-path:inset(0 0 0 ${pct}%)"></div>
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${pct}%</div>
+          </div>`;
+          tbody+=`<td colspan="${span}" style="border:1px solid #EEF2F4;padding:2px 3px">${bar}</td>`;
+          i=ce; // バーが占めた列をスキップ
+        }
       }
-    }
-    // CSF直下タスク（KPI紐付けなし）
-    csfTasks.filter(t=>t.kpiIdx==null).slice().sort(byDue).forEach(t=>{rows+=taskRow(t.name,t,color);});
-    if(!rows)rows=`<div style="font-size:10px;color:var(--text3);padding:4px 0">（このCSFにはまだKPI・タスクがありません）</div>`;
-    h+=rows;
+      tbody+=`</tr>`;
+    });
   });
-  h+=`</div></div>`;
-  con.innerHTML=h;
+  const fmtMd=dt=>(dt.getMonth()+1)+'/'+dt.getDate();
+  const meta=`<div style="font-size:10px;color:var(--text3);margin:0 0 8px">期間 ${fmtMd(tl.minD)} 〜 ${fmtMd(tl.maxD)}（${tl.totalDays}日 → <b>${unitJp}単位</b> ${cols.length}列）／ バーをクリックすると開始日・終了日を編集できます。</div>`;
+  con.innerHTML=head+`<div class="card"><div class="card-body" style="padding:12px 16px">${meta}<div style="overflow:auto;border:1px solid var(--border);border-radius:8px;max-height:72vh"><table style="border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;table-layout:fixed"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div></div></div>`;
+}
+// バーのクリック → 開始日・終了日編集モーダル
+let _ganttEditId=null;
+function openGanttEdit(taskId){
+  const t=[...ASSIGNMENTS,...ASSIGN_HISTORY].find(x=>String(x.id)===String(taskId));
+  if(!t){alert('このタスクは日付を編集できません');return;}
+  _ganttEditId=taskId;
+  const nm=document.getElementById('gantt-edit-name');if(nm)nm.textContent=t.name||'';
+  const si=document.getElementById('gantt-edit-start');if(si)si.value=t.startRaw||'';
+  const di=document.getElementById('gantt-edit-due');if(di)di.value=t.dueRaw||'';
+  const m=document.getElementById('gantt-edit-modal');if(m)m.style.display='flex';
+}
+function closeGanttEdit(){const m=document.getElementById('gantt-edit-modal');if(m)m.style.display='none';_ganttEditId=null;}
+async function saveGanttEdit(){
+  const id=_ganttEditId;if(!id)return;
+  const t=[...ASSIGNMENTS,...ASSIGN_HISTORY].find(x=>String(x.id)===String(id));if(!t)return;
+  const s=(document.getElementById('gantt-edit-start')||{}).value||null;
+  const dv=(document.getElementById('gantt-edit-due')||{}).value||null;
+  if(s&&dv&&dv<s){alert('終了日は開始日以降にしてください');return;}
+  t.startRaw=s;t.start=s?s.replace(/-/g,'/'):'—';t.dueRaw=dv;t.end=dv?dv.replace(/-/g,'/'):'—';
+  const API=window.VexumAPI;
+  if(API&&API.ready&&t.id&&API.updateTask){
+    try{const res=await API.updateTask(t.id,{start:s,due:dv});if(res&&res.error){alert('日付の保存に失敗しました: '+res.error);return;}}catch(e){alert('日付の保存に失敗しました');return;}
+  }
+  closeGanttEdit();
+  renderGantt(); // 軸範囲が変わる可能性があるため全体を再計算・再描画
+  if(typeof renderTaskTable==='function')renderTaskTable();
+  if(typeof renderProgressDash==='function')renderProgressDash();
 }
 async function ganttSaveDate(taskId,field,value){
   const t=[...ASSIGNMENTS,...ASSIGN_HISTORY].find(x=>String(x.id)===String(taskId));
