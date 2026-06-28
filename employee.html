@@ -678,6 +678,9 @@ async function asgSaveData(i,btn){
   const me=(document.getElementById('sb-uname')||{}).textContent;if(me&&me!=='（読み込み中）')a.editedBy=me;
   if(typeof _taskPersist==='function')_taskPersist(a);
   const old=btn.textContent;btn.textContent=`✓ 記録しました（+${hours}h／合計${a.hours}h）`;btn.style.background='var(--green)';
+  // 作業時間の変更を CSF/KGI 合計（ダッシュボード・チャート・ガント）へ即反映
+  if(typeof renderProgressDash==='function')renderProgressDash();
+  if(typeof renderGantt==='function'&&document.getElementById('tc-gantt')&&document.getElementById('tc-gantt').classList.contains('active'))renderGantt();
   setTimeout(()=>{btn.textContent=old;btn.style.background='var(--accent)';renderAssign();if(typeof renderTaskTable==='function')renderTaskTable();},1500);
   if(a.pct>=100){setTimeout(()=>processAssignCompletion(),1600);}
 }
@@ -987,11 +990,15 @@ function resetReportForm(){
       <span style="font-size:11px;font-weight:700;color:#0E7490">⏱ 合計作業時間（累計）</span>
       <span style="font-size:15px;font-weight:800;color:#0E7490"><span id="kpi-edit-hours-total">0</span>h</span>
     </div>
-    <!-- CSF専用: 作業時間の直接入力（KPI合計を上書き） -->
+    <!-- CSF専用: 合計時間の変更（配下KPI合計を上書き。空欄で自動計算に戻る） -->
     <div class="fg" id="kpi-edit-csfhours-wrap" style="display:none;background:#FFFBEB;border:1px solid #FCD34D;border-radius:6px;padding:8px 10px;margin-bottom:12px">
-      <label class="fl">このCSFの作業時間を直接入力（h・KPI合計を上書き）</label>
-      <input class="fi" id="kpi-edit-csfhours" type="number" min="0" step="0.5" placeholder="空欄ならKPI合計を自動表示">
-      <div style="font-size:10px;color:var(--text3);margin-top:4px">現在のKPI合計: <span id="kpi-edit-csfhours-auto">0</span>h（空欄に戻すとこの値に戻ります）</div>
+      <label class="fl">合計時間の変更</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="fi" id="kpi-edit-csfhours" type="number" min="0" step="0.5" placeholder="現在の自動計算値" style="flex:1">
+        <span style="font-size:12px;font-weight:700;color:var(--text2)">h</span>
+        <button type="button" class="card-btn" style="flex:0 0 auto;font-size:10px;padding:5px 8px" onclick="resetCsfHours()">リセット</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:5px">※ 入力すると配下KPIの合計時間を上書きし、KGIの合計時間にも反映されます。<br>現在の自動計算値（KPI合計）: <span id="kpi-edit-csfhours-auto">0</span>h（空欄で保存／リセットすると自動計算に戻ります）</div>
     </div>
     <!-- CSF/KPI専用: 期間（開始日・終了日）。紐づくタスクがあればそのタスクへ、無ければmember_kpi_editsへ保存 -->
     <div class="fg" id="kpi-edit-period-wrap" style="display:none;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:8px 10px;margin-bottom:12px">
@@ -2082,9 +2089,24 @@ function updateCmEditCount(k){
 // チャート管理の簡素表示（中心KGI + CSF8 の3x3）
 let _cmKpiOn=false;
 // CSF配下KPIの累計作業時間の合計（kpiEdits['si-ai'].hoursTotal）
+// このチャートに紐づくタスク（source_chart=チャート名 or KGI文言で照合）
+function _chartTasks(k){
+  const d=CHARTS[k];if(!d)return [];
+  const cn1=d.name||'',cn2=(typeof _chartKgiText==='function'?_chartKgiText(k):'')||'';
+  return [...ASSIGNMENTS,...ASSIGN_HISTORY].filter(t=>t.chart&&((cn1&&String(t.chart)===String(cn1))||(cn2&&String(t.chart)===String(cn2))));
+}
+// KPI単位の作業時間: そのKPIに紐づくタスクのtotal_hours合計（タスクがあれば優先）。無ければ曼荼羅セルのhoursTotal
+function _kpiHours(k,si,ai){
+  const tks=_chartTasks(k).filter(t=>t.csfIdx===si&&t.kpiIdx===ai);
+  if(tks.length)return tks.reduce((s,t)=>s+(+t.hours||0),0);
+  const ed=_chartEdits(k)[si+'-'+ai];
+  return (ed&&ed.hoursTotal)?(+ed.hoursTotal||0):0;
+}
+// CSF配下KPIのtotal_hours合計（KPIタスク＋CSF直下タスク＋未タスクKPIのセル時間）
 function _csfKpiHours(k,si){
-  const edits=_chartEdits(k);let sum=0;
-  for(let ai=0;ai<8;ai++){const ed=edits[si+'-'+ai];if(ed&&ed.hoursTotal)sum+=+ed.hoursTotal||0;}
+  let sum=0;
+  for(let ai=0;ai<8;ai++)sum+=_kpiHours(k,si,ai);
+  sum+=_chartTasks(k).filter(t=>t.csfIdx===si&&t.kpiIdx==null).reduce((s,t)=>s+(+t.hours||0),0); // CSF直下タスク
   return Math.round(sum*10)/10;
 }
 // CSFの作業時間: 上書き値（csf_hours_override[si]）があれば優先、なければKPI合計
@@ -2095,6 +2117,8 @@ function _csfHours(k,si){
 }
 // KGIの作業時間 = 全CSFの作業時間（上書き優先）の総和
 function _kgiHours(k){let s=0;for(let si=0;si<8;si++)s+=_csfHours(k,si);return Math.round(s*10)/10;}
+// 「合計時間の変更」をリセット（空欄に戻す→保存で自動計算=KPI合計に戻る）
+function resetCsfHours(){const ci=document.getElementById('kpi-edit-csfhours');if(ci)ci.value='';}
 function renderCmSimpleGrid(k){
   const d=CHARTS[k];if(!d)return;
   const edits=kpiEdits[k]||{};
@@ -2964,17 +2988,18 @@ function renderKgiProgress(){
     if(csfs.length){
       csfHtml=`<div style="margin-top:10px;border-top:1px dashed var(--border);padding-top:6px">`
         +`<div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.06em;margin-bottom:2px">CSF一覧（このKGIの配下）</div>`
-        +csfs.map(c=>{const cc=_csfColor(c.pct);
+        +csfs.map(c=>{const cc=_csfColor(c.pct);const ch=_csfHours(x.k,c.si);
           return `<div onclick="event.stopPropagation();gotoChartCsf('${x.k}',${c.si})" style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;border-radius:6px" onmouseover="this.style.background='#FAFAFA'" onmouseout="this.style.background=''">
             <span style="font-size:9px;color:var(--accent);font-weight:700;flex-shrink:0;min-width:30px">CSF${c.si+1}</span>
             <span style="font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.text}">${c.text}</span>
+            ${ch>0?`<span style="font-size:9px;color:var(--text3);font-weight:700;flex-shrink:0">合計 ${ch}h</span>`:''}
             <div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${c.pct}%;background:${cc}"></div></div><div class="pp" style="color:${cc}">${c.pct}%</div></div>
           </div>`;}).join('')
         +`</div>`;
     }
     return `<div onclick="gotoChartMgr('${x.k}')" style="cursor:pointer;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;transition:.12s" onmouseover="this.style.boxShadow='var(--shadow)';this.style.borderColor='var(--accent)'" onmouseout="this.style.boxShadow='';this.style.borderColor='var(--border)'">
       <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${x.name}${x.period?' / '+x.period:''}</div>
-      <div style="font-size:13px;font-weight:700;margin-bottom:8px">🎯 ${x.kgi||'（KGI未入力）'}</div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px"><div style="font-size:13px;font-weight:700;flex:1;min-width:0">🎯 ${x.kgi||'（KGI未入力）'}</div>${_kgiHours(x.k)>0?`<span style="font-size:10px;color:var(--text3);font-weight:700;flex-shrink:0">合計 ${_kgiHours(x.k)}h</span>`:''}</div>
       <div class="pw"><div class="pt"><div class="pf" style="width:${x.pct}%;background:${col}"></div></div><div class="pp" style="color:${col}">${x.pct}%</div></div>
       ${csfHtml}
     </div>`;
@@ -3147,7 +3172,11 @@ function renderGantt(){
     const lblBg=isCsf?(color+'26'):(color+'0E');
     const indent=isCsf?'':'padding-left:20px;';
     const arrow=isCsf?'':`<span style="color:${color};font-weight:700;font-size:11px;flex:0 0 auto">└</span>`;
-    const lblCell=`<td style="position:sticky;left:0;z-index:2;background:${lblBg};border:1px solid var(--border);border-left:3px solid ${color};font-size:11px;${isCsf?'font-weight:800;':'font-weight:600;'}padding:4px 8px;${indent}min-width:210px;width:210px;max-width:210px"><div style="display:flex;align-items:center;gap:5px;overflow:hidden">${arrow}<span title="${num}" style="flex:0 0 auto;font-size:8px;font-weight:800;color:#fff;background:${color};border-radius:4px;padding:1px 5px">${tag}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</span></div></td>`;
+    // 合計時間（CSF行=CSF合計、KPI行=そのKPIの作業時間）を行頭に小さく表示
+    const rowH=isCsf?_csfHours(k,r.si):_kpiHours(k,r.si,r.ai);
+    const ovSet=isCsf&&((_chartEdits(k).csf_hours_override||{})[r.si]!=null);
+    const hChip=rowH>0?`<span style="flex:0 0 auto;font-size:8px;font-weight:700;color:${ovSet?'#B45309':'var(--text3)'}" title="${isCsf?(ovSet?'合計時間（手動変更）':'CSF合計時間'):'KPI作業時間'}">⏱${rowH}h${ovSet?'*':''}</span>`:'';
+    const lblCell=`<td style="position:sticky;left:0;z-index:2;background:${lblBg};border:1px solid var(--border);border-left:3px solid ${color};font-size:11px;${isCsf?'font-weight:800;':'font-weight:600;'}padding:4px 8px;${indent}min-width:210px;width:210px;max-width:210px"><div style="display:flex;align-items:center;gap:5px;overflow:hidden">${arrow}<span title="${num}" style="flex:0 0 auto;font-size:8px;font-weight:800;color:#fff;background:${color};border-radius:4px;padding:1px 5px">${tag}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="${esc(r.label)}">${esc(r.label)}</span>${hChip}</div></td>`;
     // すべての行は専用の軽量編集パネルを開く（KGI/CSF/KPIは確定済みなので選択UIは出さない）
     const rclick=`onclick="openGanttTaskEdit('${k}',${r.si},${r.ai==null?'null':r.ai})"`;
     let timeline='';

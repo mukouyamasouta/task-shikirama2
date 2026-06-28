@@ -1781,10 +1781,38 @@
     paint();
   }
 
+  // ===== 作業時間の集計（KPI→CSF→KGI） =====
+  // CSFの合計作業時間: csf_hours_override があれば優先、なければ配下KPI（タスク）のtotal_hours合計。
+  //   tasks: [{source_chart, source_cell, total_hours}] / override: member_kpi_edits.csf_hours_override
+  function calcCsfTotalHours(chartId, csfIndex, tasks, override) {
+    if (override && override[csfIndex] != null && override[csfIndex] !== '') {
+      return Math.round((+override[csfIndex]) * 10) / 10;
+    }
+    var sum = (tasks || []).filter(function (t) {
+      return String(t.source_chart) === String(chartId) && String(t.source_cell) === String(csfIndex);
+    }).reduce(function (s, t) { return s + (+t.total_hours || 0); }, 0);
+    return Math.round(sum * 10) / 10;
+  }
+  // KGIの合計作業時間 = 全CSF(0..7)の合計時間（上書き含む）の総和
+  function calcKgiTotalHours(chartId, tasks, override) {
+    var total = 0;
+    for (var csfIndex = 0; csfIndex < 8; csfIndex++) {
+      total += calcCsfTotalHours(chartId, csfIndex, tasks, override);
+    }
+    return Math.round(total * 10) / 10;
+  }
+
   window.VexumAPI = {
     ready: ready,
     sb: sb,
     fetchAll: fetchAll,
+    calcCsfTotalHours: calcCsfTotalHours,
+    calcKgiTotalHours: calcKgiTotalHours,
+    renderEvalMandala: renderEvalMandala,
+    renderMandalaSimple: renderMandalaSimple,
+    loadAdminData: loadAdminData,
+    loadLeaderData: loadLeaderData,
+    addTeamMember: addTeamMember,
     renderEvalMandala: renderEvalMandala,
     renderMandalaSimple: renderMandalaSimple,
     loadAdminData: loadAdminData,
