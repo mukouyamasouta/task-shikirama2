@@ -327,6 +327,23 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
 </div>
 
+<!-- ===== CSF/KPI 期間設定モーダル（個人DB曼荼羅から） ===== -->
+<div id="md-period-modal" onclick="if(event.target===this)closeMdPeriodEdit()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;align-items:center;justify-content:center;padding:40px 16px">
+  <div style="background:#fff;border-radius:12px;width:100%;max-width:400px;padding:20px" onclick="event.stopPropagation()">
+    <div style="font-size:14px;font-weight:800;color:var(--accent);margin-bottom:4px">📅 期間を設定</div>
+    <div id="md-period-label" style="font-size:12px;color:var(--text2);margin-bottom:4px;font-weight:600;word-break:break-all"></div>
+    <div id="md-period-hint" style="font-size:10px;color:var(--text3);margin-bottom:12px"></div>
+    <div style="display:flex;gap:10px">
+      <div class="fg" style="flex:1;margin:0"><label class="fl">開始日</label><input class="fi" type="date" id="md-period-start"></div>
+      <div class="fg" style="flex:1;margin:0"><label class="fl">終了日</label><input class="fi" type="date" id="md-period-end"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:18px">
+      <button class="f-submit" style="flex:1;background:var(--text3)" onclick="closeMdPeriodEdit()">キャンセル</button>
+      <button class="f-submit" style="flex:1" onclick="saveMdPeriodEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 曼荼羅チャート モーダル ===== -->
 <div id="mandala-modal" onclick="if(event.target===this)closeMandala()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:840px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
@@ -730,10 +747,76 @@ function mdRenderMnd(chartId){
   const charts=window._mdCharts||[];
   const c=charts.find(x=>String(x.id)===String(chartId))||charts[0];
   if(!c){box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートがありません</div>';return;}
+  window._mdCurChart=c;
   const API=window.VexumAPI;
-  if(API&&API.renderMandalaSimple)API.renderMandalaSimple(box,c,c.member_kpi_edits||c.memberKpiEdits||{});
+  // CSF/KPIセルをクリック → 期間設定モーダル（API接続時のみ・読み取り専用ではない）
+  const opts=(API&&API.ready)?{onCellClick:(kind,si,ai)=>openMdPeriodEdit(kind,si,ai)}:{};
+  if(API&&API.renderMandalaSimple)API.renderMandalaSimple(box,c,c.member_kpi_edits||c.memberKpiEdits||{},opts);
   else if(API&&API.renderEvalMandala)API.renderEvalMandala(c,c.member_kpi_edits||c.memberKpiEdits||{},box);
   else box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートを表示できません</div>';
+}
+/* ===== 個人DB曼荼羅 CSF/KPI 期間設定（従業員画面と同じ保存ロジック） ===== */
+let _mdPeriodCtx=null;
+function _mdCellKey(kind,si,ai){return kind==='csf'?('csf-'+si):(si+'-'+ai);}
+function _mdCellText(c,kind,si,ai){
+  const e=(c.member_kpi_edits||c.memberKpiEdits||{});
+  if(kind==='csf'){const ed=e['csf-'+si];return (ed&&ed.text!=null?ed.text:(c.subs||[])[si])||('CSF'+(si+1));}
+  const ed=e[si+'-'+ai];return (ed&&ed.text!=null?ed.text:((c.acts||[])[si]||[])[ai])||('KPI'+(si+1)+'-'+(ai+1));
+}
+// このCSF/KPIに紐づくメンバータスク（現在の個人DBメンバー・現在のチャート）
+function _mdLinkedTasks(c,kind,si,ai){
+  const tasks=MEMBER_TASKS[window._mdMemberId]||[];
+  const cn=c.name||'',cc=c.center||'';
+  return tasks.filter(t=>{
+    const chartOk=!t.chart||String(t.chart)===String(cn)||String(t.chart)===String(cc);
+    const csfOk=((t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1)===si;
+    return chartOk&&csfOk&&(kind==='kpi'?(t.kpiIdx===ai):true);
+  });
+}
+function openMdPeriodEdit(kind,si,ai){
+  const c=window._mdCurChart;if(!c){alert('チャートが選択されていません');return;}
+  _mdPeriodCtx={chart:c,kind,si,ai};
+  document.getElementById('md-period-label').textContent=(kind==='csf'?'CSF'+(si+1):'KPI'+(si+1)+'-'+(ai+1))+'：'+_mdCellText(c,kind,si,ai);
+  const linked=_mdLinkedTasks(c,kind,si,ai);
+  let start='',end='';
+  if(linked.length){const wp=linked.find(t=>t.startRaw||t.dueRaw)||linked[0];start=wp.startRaw||'';end=wp.dueRaw||'';
+    document.getElementById('md-period-hint').textContent='紐づくタスク（'+linked.length+'件）の期間を更新します。従業員画面にも反映されます。';
+  }else{const per=((c.member_kpi_edits||c.memberKpiEdits||{}).period||{})[_mdCellKey(kind,si,ai)]||{};start=per.start||'';end=per.end||'';
+    document.getElementById('md-period-hint').textContent='まだタスクが無いため、チャートに期間情報として保存します（従業員画面のガントにも反映）。';
+  }
+  document.getElementById('md-period-start').value=start;
+  document.getElementById('md-period-end').value=end;
+  document.getElementById('md-period-modal').style.display='flex';
+}
+function closeMdPeriodEdit(){document.getElementById('md-period-modal').style.display='none';_mdPeriodCtx=null;}
+async function saveMdPeriodEdit(){
+  if(!_mdPeriodCtx)return;
+  const{chart:c,kind,si,ai}=_mdPeriodCtx;
+  const ps=(document.getElementById('md-period-start')||{}).value||null;
+  const pe=(document.getElementById('md-period-end')||{}).value||null;
+  if(ps&&pe&&pe<ps){alert('終了日は開始日以降にしてください');return;}
+  const API=window.VexumAPI;
+  const linked=_mdLinkedTasks(c,kind,si,ai);
+  if(linked.length){
+    for(const t of linked){
+      t.startRaw=ps;t.start=ps?ps.replace(/-/g,'/'):'—';t.dueRaw=pe;t.due=pe?pe.replace(/-/g,'/'):'—';
+      if(API&&API.ready&&t.id&&API.updateTask){try{const r=await API.updateTask(t.id,{start:ps,due:pe});if(r&&r.error){alert('期間の保存に失敗: '+r.error);return;}}catch(e){alert('期間の保存に失敗しました');return;}}
+    }
+    // タスクへ保存したので古い period 情報は掃除
+    const e=(c.member_kpi_edits=c.member_kpi_edits||c.memberKpiEdits||{});if(e.period)delete e.period[_mdCellKey(kind,si,ai)];
+  }else{
+    const e=(c.member_kpi_edits=c.member_kpi_edits||c.memberKpiEdits||{});
+    if(!e.period)e.period={};
+    if(!ps&&!pe)delete e.period[_mdCellKey(kind,si,ai)];
+    else e.period[_mdCellKey(kind,si,ai)]={start:ps||'',end:pe||''};
+    c.memberKpiEdits=e;
+    if(API&&API.ready&&c.id&&API.saveMemberKpiEdits){
+      try{const r=await API.saveMemberKpiEdits(c.id,e,c.acts,{center:c.center,subs:c.subs});if(r&&r.error){alert('期間の保存に失敗: '+r.error);return;}}catch(err){alert('期間の保存に失敗しました');return;}
+    }
+  }
+  closeMdPeriodEdit();
+  if(typeof mdRenderMnd==='function')mdRenderMnd(c.id);
+  if(typeof mdRenderTasks==='function')mdRenderTasks((document.getElementById('md-task-chart-sel')||{}).value||'');
 }
 // 全画面で曼荼羅を表示（現在選択中のチャート）
 function mdViewChart(){

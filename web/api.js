@@ -1497,9 +1497,12 @@
       var key = memKey(t.assignee_id); if (!key || !MEMBERS[key]) return;
       (MEMBER_TASKS[key] = MEMBER_TASKS[key] || []).push({
         id: t.id, name: t.title, kpi: t.related_kgi || '—', start: fmtMD(t.start_date), due: fmtMD(t.due_date),
+        startRaw: t.start_date || null, dueRaw: t.due_date || null,
         pri: t.priority, status: t.status, pct: t.progress || 0,
         hours: (t.total_hours != null ? +t.total_hours : 0), period: t.period || '', teamUuid: t.team_id,
-        chart: t.source_chart || null, sendId: t.source_send_id || null, cell: t.source_cell || null
+        chart: t.source_chart || null, sendId: t.source_send_id || null, cell: t.source_cell || null,
+        csfIdx: (t.source_cell != null && /^\d+$/.test(String(t.source_cell))) ? +t.source_cell : null,
+        kpiIdx: (t.source_kpi != null ? +t.source_kpi : null)
       });
     });
     var memberPid = {};
@@ -1671,6 +1674,8 @@
     var bg = chart.bg || '#CCEDE9';
     var subs = chart.subs || [];
     var acts = chart.acts || [];
+    var clickable = !!opts.onCellClick;          // CSF/KPIセルのクリック編集（リーダー個人DB等）
+    var cz = clickable ? 'cursor:pointer;' : '';
     if (containerEl._kpiOn === undefined) containerEl._kpiOn = false;
     var SP_MAP = [
       { cr: 3, cc: 3, oc: [1, 1], si: 0 }, { cr: 3, cc: 4, oc: [1, 4], si: 1 }, { cr: 3, cc: 5, oc: [1, 7], si: 2 },
@@ -1697,7 +1702,7 @@
           var ed2 = edits['csf-' + si];
           var label = (ed2 && ed2.text != null ? ed2.text : subs[si]) || '';
           var eb2 = ed2 ? 'box-shadow:inset 0 0 0 2px #F59E0B;background:#FEF3C7;' : 'background:' + bg + ';';
-          h += '<div style="position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:' + color + ';border:1.5px solid ' + color + ';border-radius:10px;padding:8px;line-height:1.4;' + eb2 + '"><div style="font-size:8px;color:#9CA3AF;font-weight:600;margin-bottom:2px">CSF ' + (si + 1) + '</div>' + label + badge(ed2) + '</div>';
+          h += '<div' + (clickable ? ' data-mnd-cell="csf-' + si + '"' : '') + ' style="position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:' + color + ';border:1.5px solid ' + color + ';border-radius:10px;padding:8px;line-height:1.4;' + cz + eb2 + '"><div style="font-size:8px;color:#9CA3AF;font-weight:600;margin-bottom:2px">CSF ' + (si + 1) + '</div>' + label + badge(ed2) + '</div>';
         }
       });
       h += '</div>';
@@ -1725,6 +1730,8 @@
         if (c2 === 2 || c2 === 5) sty += 'border-right:3px solid #9CA3AF;';
         if (r2 === 2 || r2 === 5) sty += 'border-bottom:3px solid #9CA3AF;';
         var tx = '';
+        var dataCell = (clickable && cell && (cell.t === 'sub' || cell.t === 'action')) ? (' data-mnd-cell="' + (cell.t === 'sub' ? ('csf-' + cell.si) : (cell.si + '-' + cell.ai)) + '"') : '';
+        if (clickable && cell && (cell.t === 'sub' || cell.t === 'action')) sty += cz;
         if (cell && cell.t === 'center') {
           var ed = edits['center'];
           sty += 'background:' + color + ';color:#fff;font-weight:800;font-size:10px;' + (ed ? 'box-shadow:inset 0 0 0 2px #F59E0B;' : '');
@@ -1746,7 +1753,7 @@
             tx = atext;
           }
         } else { sty += 'background:#E5E7EB;'; }
-        h += '<div style="' + sty + '">' + tx + '</div>';
+        h += '<div' + dataCell + ' style="' + sty + '">' + tx + '</div>';
       }
       h += '</div>';
       return h;
@@ -1760,6 +1767,16 @@
         '<div style="overflow-x:auto">' + inner + '</div>';
       var btn = containerEl.querySelector('[data-mnd-kpi-toggle]');
       if (btn) btn.onclick = function () { containerEl._kpiOn = !containerEl._kpiOn; paint(); };
+      if (clickable) {
+        var cells = containerEl.querySelectorAll('[data-mnd-cell]');
+        Array.prototype.forEach.call(cells, function (el) {
+          el.onclick = function () {
+            var key = el.getAttribute('data-mnd-cell');
+            if (key.indexOf('csf-') === 0) opts.onCellClick('csf', +key.slice(4), null);
+            else { var p = key.split('-'); opts.onCellClick('kpi', +p[0], +p[1]); }
+          };
+        });
+      }
     }
     paint();
   }
