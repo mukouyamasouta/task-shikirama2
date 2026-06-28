@@ -3055,98 +3055,94 @@ function renderGantt(){
   const kgiText=cn2||cn1||'(KGI未設定)';
   // このチャートに紐づくタスク（source_chart はチャート名 or KGI文言で保存され得るため両方照合）
   const tasks=[...ASSIGNMENTS,...ASSIGN_HISTORY].filter(t=>t.chart&&((cn1&&String(t.chart)===String(cn1))||(cn2&&String(t.chart)===String(cn2))));
-  const head=`<div class="card" style="margin-bottom:14px"><div class="card-body" style="padding:12px 16px"><div style="font-size:10px;color:var(--text3);font-weight:700">KGI</div><div style="font-size:15px;font-weight:800;color:var(--accent)">🎯 ${kgiText}</div></div></div>`;
   const CW=64;const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  // タスク0件 → テーブルを崩さずメッセージ
-  if(!tasks.length){con.innerHTML=head+'<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">このチャートにはタスクがありません。<br>タスクを作成するとガントチャートに表示されます。</div></div>';return;}
-  // ★期間の優先順位: 1)tasks.start/due 2)member_kpi_edits.period 3)未設定
+  const head=`<div class="card" style="margin-bottom:14px"><div class="card-body" style="padding:12px 16px"><div style="font-size:10px;color:var(--text3);font-weight:700">KGI</div><div style="font-size:15px;font-weight:800;color:var(--accent)">🎯 ${esc(kgiText)}</div></div></div>`;
   const periodMap=edits.period||{};
-  function eff(t){
-    let sRaw=t.startRaw||null,eRaw=t.dueRaw||null;
-    if(!sRaw&&!eRaw){ // フォールバック: 紐づくCSF/KPIセルの period
-      const si=(t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1;
-      const pk=(si>=0&&t.kpiIdx!=null&&!isNaN(t.kpiIdx))?(si+'-'+t.kpiIdx):(si>=0?('csf-'+si):null);
-      const per=pk&&periodMap[pk];
-      if(per){sRaw=per.start||null;eRaw=per.end||null;}
-    }
-    const s=_ganttDate(sRaw)||_ganttDate(eRaw),e=_ganttDate(eRaw)||_ganttDate(sRaw);
-    if(!s&&!e)return null;
-    return {s:(s<e?s:e),e:(e>s?e:s),sRaw,eRaw};
+  const _ymd=dt=>dt.getFullYear()+'-'+(dt.getMonth()+1)+'-'+dt.getDate();
+  // ★STEP1: 曼荼羅(acts/edits)から「定義済みCSF」を抽出（空文字でないCSFのみ）
+  const definedCsf=[];for(let si=0;si<8;si++){if(csfText(si))definedCsf.push(si);}
+  // ★STEP4: CSF・KPIもタスクも本当に何も無い真っ白なチャートのみメッセージ
+  if(!definedCsf.length&&!tasks.length){
+    con.innerHTML=head+'<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">このチャートにはCSF・KPIが入力されていません。<br>「チャート管理」でCSF・KPIを入力すると、ここにガントチャートとして表示されます。</div></div>';return;
   }
-  const effMap=new Map();tasks.forEach(t=>effMap.set(t,eff(t)));
-  const timed=tasks.filter(t=>effMap.get(t));      // 期間あり → バー表示・軸計算対象
-  const untimed=tasks.filter(t=>!effMap.get(t));   // 期間未設定 → 別枠リスト（除外しない）
-  // ★目盛り軸は「期間が設定されているタスクのみ」で計算。全未設定なら今月1ヶ月分
+  // ★STEP2: CSF/KPIセルに紐づくタスクを検索（期間付きを優先）
+  const usedTask=new Set();
+  const taskFor=(si,ai)=>{
+    const cand=tasks.filter(t=>{const ci=(t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1;if(ci!==si)return false;return ai==null?(t.kpiIdx==null):(t.kpiIdx===ai);});
+    if(!cand.length)return null;
+    return cand.find(t=>t.startRaw||t.dueRaw)||cand[0];
+  };
+  // 行の期間: 1)タスクのstart/due 2)member_kpi_edits.period 3)なし
+  const rowPeriod=(si,ai,t)=>{
+    if(t&&(t.startRaw||t.dueRaw)){const s=_ganttDate(t.startRaw)||_ganttDate(t.dueRaw),e=_ganttDate(t.dueRaw)||_ganttDate(t.startRaw);return {has:true,s:(s<e?s:e),e:(e>s?e:s),sRaw:t.startRaw||t.dueRaw,eRaw:t.dueRaw||t.startRaw};}
+    const pk=(ai!=null)?(si+'-'+ai):('csf-'+si);const per=periodMap[pk];
+    if(per&&(per.start||per.end)){const s=_ganttDate(per.start)||_ganttDate(per.end),e=_ganttDate(per.end)||_ganttDate(per.start);return {has:true,s:(s<e?s:e),e:(e>s?e:s),sRaw:per.start||per.end,eRaw:per.end||per.start};}
+    return {has:false};
+  };
+  // ★STEP1+2: 曼荼羅の骨格から行データを組み立てる（タスクが無くても必ず行を作る）
+  const rows=[];
+  definedCsf.forEach(si=>{
+    const ct=taskFor(si,null);if(ct)usedTask.add(ct);
+    rows.push(Object.assign({kind:'csf',si,ai:null,label:csfText(si),task:ct||null},rowPeriod(si,null,ct)));
+    for(let ai=0;ai<8;ai++){const kt=kpiText(si,ai);if(!kt)continue;const tt=taskFor(si,ai);if(tt)usedTask.add(tt);rows.push(Object.assign({kind:'kpi',si,ai,label:kt,task:tt||null},rowPeriod(si,ai,tt)));}
+  });
+  // 曼荼羅に載らないタスク（CSF未定義/空KPIに紐付く等）も取りこぼさず末尾に追加
+  tasks.filter(t=>!usedTask.has(t)).forEach(t=>{
+    const si=(t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1;const ai=(t.kpiIdx!=null&&!isNaN(t.kpiIdx))?t.kpiIdx:null;
+    rows.push(Object.assign({kind:ai!=null?'kpi':'csf',si,ai,label:(t.name||'タスク'),task:t,orphan:true},rowPeriod(si,ai,t)));
+  });
+  // ★STEP: 目盛り軸は「期間ありの行」のみで算出。無ければ今月1ヶ月分
+  const timedRows=rows.filter(r=>r.has&&r.s);
   let tl;
-  if(timed.length){tl=calcGanttTimeline(timed.map(t=>({startRaw:effMap.get(t).sRaw,dueRaw:effMap.get(t).eRaw})));}
-  else{const n=new Date();const isoOf=dt=>dt.getFullYear()+'-'+(dt.getMonth()+1)+'-'+dt.getDate();tl=calcGanttTimeline([{startRaw:isoOf(new Date(n.getFullYear(),n.getMonth(),1)),dueRaw:isoOf(new Date(n.getFullYear(),n.getMonth()+1,0))}]);}
+  if(timedRows.length){tl=calcGanttTimeline(timedRows.map(r=>({startRaw:r.sRaw,dueRaw:r.eRaw})));}
+  else{const n=new Date();tl=calcGanttTimeline([{startRaw:_ymd(new Date(n.getFullYear(),n.getMonth(),1)),dueRaw:_ymd(new Date(n.getFullYear(),n.getMonth()+1,0))}]);}
   const cols=tl.cols;
   const unitJp=tl.unit==='week'?'週':(tl.unit==='month'?'月':'四半期');
-  // 日付→列インデックス（境界からずれても含む列に寄せる）
   const startCol=dt=>{for(let i=0;i<cols.length;i++){if(dt<=cols[i].end)return i;}return cols.length-1;};
   const endCol=dt=>{for(let i=cols.length-1;i>=0;i--){if(dt>=cols[i].start)return i;}return 0;};
-  // ★CSFごとにグルーピング（期間あり＋未設定の全タスク。未設定も必ず同じ表に出す）
-  const grp={};tasks.forEach(t=>{const si=(t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1;(grp[si]=grp[si]||[]).push(t);});
-  const dueOf=t=>{const ef=effMap.get(t);return ef?ef.e:null;};
-  const byDue=(a,b)=>{const da=dueOf(a),db=dueOf(b);if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;return da-db;};
-  const minDue=si=>{let m=Infinity;grp[si].forEach(t=>{const dd=dueOf(t);if(dd&&dd.getTime()<m)m=dd.getTime();});return m;};
-  // CSFブロック並び順 = そのCSF内で最も近い期限が早い順（期間未設定のみのCSFは末尾）
-  const sectionIdx=Object.keys(grp).map(Number).sort((a,b)=>minDue(a)-minDue(b));
-  // 行ラベル = チャート管理のKPI名（無ければCSF名→タスク名）
-  const rowLabel=t=>{const si=(t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1;if(si>=0&&t.kpiIdx!=null&&!isNaN(t.kpiIdx)){const kt=kpiText(si,t.kpiIdx);if(kt)return kt;}if(si>=0){const ct=csfText(si);if(ct)return ct;}return t.name||'タスク';};
-  const labelCell=(t,bg)=>{const lbl=rowLabel(t);const taskNm=(t.name&&t.name!==lbl)?` <span style="color:var(--text3);font-weight:400;font-size:9px">${esc(t.name)}</span>`:'';return `<td style="position:sticky;left:0;z-index:2;background:${bg};border:1px solid var(--border);font-size:11px;font-weight:600;padding:4px 8px;max-width:200px"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lbl)}${taskNm}</div></td>`;};
+  const fmtMd=dt=>(dt.getMonth()+1)+'/'+dt.getDate();
   // ヘッダ（グループ行＋目盛り行）— sticky
-  let thead=`<tr><th style="position:sticky;left:0;top:0;z-index:6;background:#fff;border:1px solid var(--border);min-width:200px;width:200px;max-width:200px;padding:6px 8px;text-align:left;font-size:11px;font-weight:800">タスク（${unitJp}単位）</th>`;
+  let thead=`<tr><th style="position:sticky;left:0;top:0;z-index:6;background:#fff;border:1px solid var(--border);min-width:210px;width:210px;max-width:210px;padding:6px 8px;text-align:left;font-size:11px;font-weight:800">CSF / KPI（${unitJp}単位）</th>`;
   tl.groups.forEach(g=>{thead+=`<th colspan="${g.span}" style="position:sticky;top:0;z-index:4;background:#F8FAFC;border:1px solid var(--border);font-size:10px;font-weight:800;color:var(--text2);padding:4px">${esc(g.label)}</th>`;});
-  thead+=`</tr><tr><th style="position:sticky;left:0;top:25px;z-index:6;background:#fff;border:1px solid var(--border);min-width:200px;width:200px"></th>`;
+  thead+=`</tr><tr><th style="position:sticky;left:0;top:25px;z-index:6;background:#fff;border:1px solid var(--border);min-width:210px;width:210px"></th>`;
   cols.forEach(c=>{thead+=`<th style="position:sticky;top:25px;z-index:4;background:#fff;border:1px solid var(--border);font-size:9px;color:var(--text3);font-weight:600;min-width:${CW}px;width:${CW}px;padding:3px">${esc(c.label)}</th>`;});
   thead+=`</tr>`;
-  // ボディ — CSFごとに見出し行＋タスク行（期間あり=バー、未設定=バッジ。どちらも必ず表示）
-  let tbody='';let untimedCount=0;
-  sectionIdx.forEach(si=>{
-    const color=si>=0?GANTT_COLORS[si%GANTT_COLORS.length]:'#9CA3AF';
-    const tint=color+'14'; // 行背景（CSF単位の薄色）
-    const cap=si>=0?`CSF${si+1}：${esc(csfText(si)||('CSF'+(si+1)))}`:'CSF未指定';
-    tbody+=`<tr><td style="position:sticky;left:0;z-index:3;background:${color};color:#fff;border:1px solid var(--border);font-size:11px;font-weight:800;padding:5px 8px;max-width:200px"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cap}</div></td><td colspan="${cols.length}" style="background:${color};border:1px solid var(--border)"></td></tr>`;
-    const list=grp[si].slice();
-    const timedRows=list.filter(t=>effMap.get(t)).sort(byDue);
-    const untimedRows=list.filter(t=>!effMap.get(t));
-    // ① 期間あり → 通常のガントバー
-    timedRows.forEach(t=>{
-      const ef=effMap.get(t);const s=ef.s,e=ef.e;
-      let cs=startCol(s<e?s:e),ce=endCol(e>s?e:s);if(ce<cs)ce=cs; // 最低1列
-      const pct=t.pct||0;const editable=!!t.id;
+  // ボディ — 曼荼羅のCSF行＋KPI行。期間あり=バー / タスクあり期間なし=期間未設定 / タスク無し=タスク未作成
+  let tbody='';let noTaskCount=0,noPeriodCount=0;
+  rows.forEach(r=>{
+    const color=r.si>=0?GANTT_COLORS[r.si%GANTT_COLORS.length]:'#9CA3AF';
+    const isCsf=r.kind==='csf';
+    const tag=isCsf?'CSF':'KPI';
+    const num=isCsf?('CSF'+(r.si+1)):('KPI'+(r.si+1)+'-'+(r.ai+1));
+    const lblBg=isCsf?(color+'26'):(color+'0E');
+    const indent=isCsf?'':'padding-left:20px;';
+    const arrow=isCsf?'':`<span style="color:${color};font-weight:700;font-size:11px;flex:0 0 auto">└</span>`;
+    const lblCell=`<td style="position:sticky;left:0;z-index:2;background:${lblBg};border:1px solid var(--border);border-left:3px solid ${color};font-size:11px;${isCsf?'font-weight:800;':'font-weight:600;'}padding:4px 8px;${indent}min-width:210px;width:210px;max-width:210px"><div style="display:flex;align-items:center;gap:5px;overflow:hidden">${arrow}<span title="${num}" style="flex:0 0 auto;font-size:8px;font-weight:800;color:#fff;background:${color};border-radius:4px;padding:1px 5px">${tag}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</span></div></td>`;
+    let timeline='';
+    if(r.has&&r.s){ // 期間あり → バー
+      let cs=startCol(r.s),ce=endCol(r.e);if(ce<cs)ce=cs;
+      const t=r.task;const pct=(t&&t.pct)||0;const editable=t&&!!t.id;
       const click=editable?`onclick="openGanttEdit('${t.id}')"`:'';
       const cur=editable?'cursor:pointer':'cursor:default';
-      tbody+=`<tr style="background:${tint}">${labelCell(t,tint)}`;
       for(let i=0;i<cols.length;i++){
-        if(i<cs||i>ce){tbody+=`<td style="border:1px solid #EEF2F4;min-width:${CW}px"></td>`;}
-        else{
-          const span=ce-cs+1;
-          const bar=`<div ${click} title="${esc((t.name||'')+'：'+(t.start||'—')+'〜'+(t.end||'—')+'（'+pct+'%）'+(editable?' クリックで日付編集':''))}" style="position:relative;height:18px;border-radius:9px;background:${color};opacity:.92;${cur};overflow:hidden">
-            <div style="position:absolute;inset:0;background:rgba(255,255,255,.42);clip-path:inset(0 0 0 ${pct}%)"></div>
-            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${pct}%</div>
-          </div>`;
-          tbody+=`<td colspan="${span}" style="border:1px solid #EEF2F4;padding:2px 3px">${bar}</td>`;
-          i=ce; // バーが占めた列をスキップ
-        }
+        if(i<cs||i>ce){timeline+=`<td style="border:1px solid #EEF2F4;min-width:${CW}px"></td>`;}
+        else{const span=ce-cs+1;
+          const bar=`<div ${click} title="${esc(r.label+'：'+(r.sRaw||'—')+'〜'+(r.eRaw||'—')+'（'+pct+'%）'+(editable?' クリックで日付編集':''))}" style="position:relative;height:18px;border-radius:9px;background:${color};opacity:.92;${cur};overflow:hidden"><div style="position:absolute;inset:0;background:rgba(255,255,255,.42);clip-path:inset(0 0 0 ${pct}%)"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${pct}%</div></div>`;
+          timeline+=`<td colspan="${span}" style="border:1px solid #EEF2F4;padding:2px 3px">${bar}</td>`;i=ce;}
       }
-      tbody+=`</tr>`;
-    });
-    // ② 期間未設定 → バーは描かず「期間未設定」バッジを全列にまたいで表示（除外しない）
-    untimedRows.forEach(t=>{
-      untimedCount++;
-      const editable=!!t.id;
-      const click=editable?`onclick="openGanttEdit('${t.id}')"`:'';
-      const cur=editable?'cursor:pointer':'cursor:default';
-      tbody+=`<tr style="background:${tint}">${labelCell(t,tint)}<td ${click} colspan="${cols.length}" title="${editable?'クリックで開始日・終了日を設定':'期間未設定'}" style="border:1px solid #EEF2F4;padding:3px 8px;${cur}"><span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;color:#6B7280;background:#F3F4F6;border:1px dashed #CBD5E1;border-radius:8px;padding:2px 10px">🕓 期間未設定${editable?'（クリックで設定）':''}</span></td></tr>`;
-    });
+    }else if(r.task){ // タスクはあるが期間未設定 → バッジ（クリックで日付設定）
+      noPeriodCount++;const editable=!!r.task.id;const click=editable?`onclick="openGanttEdit('${r.task.id}')"`:'';
+      timeline=`<td ${click} colspan="${cols.length}" title="${editable?'クリックで開始日・終了日を設定':'期間未設定'}" style="border:1px solid #EEF2F4;padding:3px 8px;${editable?'cursor:pointer':''}"><span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;color:#6B7280;background:#F3F4F6;border:1px dashed #CBD5E1;border-radius:8px;padding:2px 10px">🕓 期間未設定${editable?'（クリックで設定）':''}</span></td>`;
+    }else{ // タスク未作成 → バッジ（クリックでこのCSF/KPIのタスク作成）
+      noTaskCount++;
+      timeline=`<td onclick="ganttCreateTask(${r.si},${r.ai==null?'null':r.ai})" colspan="${cols.length}" title="このCSF/KPIのタスクを作成" style="border:1px solid #EEF2F4;padding:3px 8px;cursor:pointer"><span style="display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;color:#92400E;background:#FEF3C7;border:1px dashed #FCD34D;border-radius:8px;padding:2px 10px">📝 タスク未作成（クリックで作成）</span></td>`;
+    }
+    tbody+=`<tr style="background:${isCsf?(color+'14'):'#fff'}">${lblCell}${timeline}</tr>`;
   });
-  const fmtMd=dt=>(dt.getMonth()+1)+'/'+dt.getDate();
   const tableBlock=`<div style="overflow:auto;border:1px solid var(--border);border-radius:8px;max-height:72vh"><table style="border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;table-layout:fixed"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
-  const metaTxt=timed.length
-    ? `期間 ${fmtMd(tl.minD)} 〜 ${fmtMd(tl.maxD)}（${tl.totalDays}日 → <b>${unitJp}単位</b> ${cols.length}列）／ バーをクリックで日付編集${untimedCount?`　・　🕓 期間未設定 ${untimedCount}件はバッジ表示（クリックで設定）`:''}`
-    : `今月の目盛りを表示中（全タスクが期間未設定）。各タスクの「🕓 期間未設定」をクリックすると開始日・終了日を設定でき、バーで表示されます。`;
+  const metaTxt=timedRows.length
+    ? `期間 ${fmtMd(tl.minD)} 〜 ${fmtMd(tl.maxD)}（${tl.totalDays}日 → <b>${unitJp}単位</b> ${cols.length}列）／ 曼荼羅のCSF・KPIを行表示。バー=期間設定済${noPeriodCount?`・🕓 期間未設定 ${noPeriodCount}`:''}${noTaskCount?`・📝 タスク未作成 ${noTaskCount}`:''}`
+    : `曼荼羅のCSF・KPIを表示中（まだ期間設定済の項目はありません）。各行をクリックでタスク作成／期間設定できます。`;
   const meta=`<div style="font-size:10px;color:var(--text3);margin:0 0 8px">${metaTxt}</div>`;
   con.innerHTML=head+`<div class="card"><div class="card-body" style="padding:12px 16px">${meta}${tableBlock}</div></div>`;
   }catch(err){
@@ -3154,6 +3150,19 @@ function renderGantt(){
     console.error('[VEXUM] ガントチャート描画エラー:',err);
     con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--red);font-size:12px;padding:24px">ガントチャートの表示中にエラーが発生しました。<br><span style="color:var(--text3);font-size:11px">'+String((err&&err.message)||err).replace(/</g,'&lt;')+'</span><br><button class="card-btn" style="margin-top:12px" onclick="renderGantt()">🔄 再読み込み</button></div></div>';
   }
+}
+// 「タスク未作成」バッジ → このCSF/KPIのタスク作成モーダルを事前選択で開く
+function ganttCreateTask(si,ai){
+  const k=_ganttChartKey;if(!k||!CHARTS[k]||typeof openTaskCreate!=='function')return;
+  openTaskCreate();
+  const cs=document.getElementById('tm-chart-sel');if(cs){cs.value=k;if(typeof onTmChartSel==='function')onTmChartSel();}
+  const csf=document.getElementById('tm-csf-sel');if(csf){csf.value=String(si);if(typeof onTmCsfSel==='function')onTmCsfSel();}
+  if(ai!=null){const kp=document.getElementById('tm-kpi-sel');if(kp)kp.value=String(ai);}
+  // タスク名を曼荼羅のKPI/CSF名で初期化（無ければ空）
+  const edits=_chartEdits(k),dd=CHARTS[k];const ed=(ai!=null)?edits[si+'-'+ai]:edits['csf-'+si];
+  const txt=(ed&&ed.text!=null)?ed.text:((ai!=null)?(((dd.acts||[])[si]||[])[ai]):((dd.subs||[])[si]));
+  const nm=document.getElementById('tm-name');if(nm)nm.value=txt||'';
+  if(typeof _updateTmCreateBtn==='function')_updateTmCreateBtn();
 }
 // バーのクリック → 開始日・終了日編集モーダル
 let _ganttEditId=null;
