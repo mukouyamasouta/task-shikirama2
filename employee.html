@@ -3033,15 +3033,18 @@ function calcGanttTimeline(tasks){
 }
 // タスク期間に応じた可変目盛りの表形式ガントチャート
 function renderGantt(){
+  const con=document.getElementById('gantt-body');
+  if(!con){console.warn('[VEXUM] gantt-body要素が見つかりません');return;}
+  try{
   const sel=document.getElementById('gantt-chart-sel');
-  const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
+  const keys=(typeof CHARTS==='object'&&CHARTS)?Object.keys(CHARTS).filter(k=>!k.startsWith('__')):[];
   if(sel){
     if(!_ganttChartKey||keys.indexOf(_ganttChartKey)<0)_ganttChartKey=keys[0]||'';
     sel.innerHTML=keys.length?keys.map(k=>`<option value="${k}"${k===_ganttChartKey?' selected':''}>${(_chartKgiText(k)||CHARTS[k].name||k)}</option>`).join(''):'<option value="">チャートなし</option>';
   }
-  const con=document.getElementById('gantt-body');if(!con)return;
   const k=_ganttChartKey;
-  if(!k||!CHARTS[k]){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">チャートがありません。先にチャートを作成してください。</div></div>';return;}
+  if(!keys.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">表示できるチャートがありません。<br>「チャート管理」でチャートを作成すると、ここにガントチャートが表示されます。</div></div>';return;}
+  if(!k||!CHARTS[k]){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">チャートを選択してください。</div></div>';return;}
   // 最新のチャート編集（member_kpi_edits）を反映してから読む（古いキャッシュ参照を防ぐ）
   if(typeof syncKpiEditsFromCharts==='function')syncKpiEditsFromCharts();
   const d=CHARTS[k];const edits=_chartEdits(k);
@@ -3146,6 +3149,11 @@ function renderGantt(){
     : `今月の目盛りを表示中（全タスクが期間未設定）。各タスクの「🕓 期間未設定」をクリックすると開始日・終了日を設定でき、バーで表示されます。`;
   const meta=`<div style="font-size:10px;color:var(--text3);margin:0 0 8px">${metaTxt}</div>`;
   con.innerHTML=head+`<div class="card"><div class="card-body" style="padding:12px 16px">${meta}${tableBlock}</div></div>`;
+  }catch(err){
+    // 無言で真っ白にせず、必ず原因を画面とConsoleに出す（CASE D 防御）
+    console.error('[VEXUM] ガントチャート描画エラー:',err);
+    con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--red);font-size:12px;padding:24px">ガントチャートの表示中にエラーが発生しました。<br><span style="color:var(--text3);font-size:11px">'+String((err&&err.message)||err).replace(/</g,'&lt;')+'</span><br><button class="card-btn" style="margin-top:12px" onclick="renderGantt()">🔄 再読み込み</button></div></div>';
+  }
 }
 // バーのクリック → 開始日・終了日編集モーダル
 let _ganttEditId=null;
