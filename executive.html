@@ -173,6 +173,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
   </div>
   <div id="account-container"></div>
+  <!-- 削除済みアカウント（論理削除=is_active:false）の復活セクション -->
+  <div id="inactive-accounts" style="margin-top:18px"></div>
 </div>
 
 <!-- チャート送信 -->
@@ -884,6 +886,60 @@ function renderAccount(){
     h+=`</div></div>`;
   }
   con.innerHTML=h;
+  renderInactiveAccounts();
+}
+/* Supabaseから全アカウント/チームを再取得して再描画（復活後の反映用） */
+async function reloadAllData(){
+  const API=window.VexumAPI;
+  if(!(API&&API.ready&&API.loadAdminData)){if(typeof renderAccount==='function')renderAccount();return;}
+  try{
+    const d=await API.loadAdminData();
+    if(d){const repl=(t,s)=>{Object.keys(t).forEach(k=>delete t[k]);Object.assign(t,s||{});};
+      repl(TEAMS,d.TEAMS);repl(MEMBERS,d.MEMBERS);repl(MND,d.MND);repl(EMP,d.EMP);}
+  }catch(e){}
+  if(typeof renderAccount==='function')renderAccount();
+}
+/* 削除済み（is_active=false）アカウントの一覧＋復活ボタン */
+const ROLE_JP_ENUM={admin:'管理者',executive:'幹部',leader:'リーダー',member:'メンバー'};
+async function renderInactiveAccounts(){
+  const box=document.getElementById('inactive-accounts');if(!box)return;
+  const API=window.VexumAPI;
+  if(!(API&&API.ready&&API.listInactiveAccounts)){box.innerHTML='';return;}
+  let rows=[];
+  try{rows=await API.listInactiveAccounts();}catch(e){rows=[];}
+  if(!rows.length){box.innerHTML='';return;}
+  // メールごとにロールをまとめて表示
+  const byEmail={},order=[];
+  rows.forEach(r=>{const e=(r.email||'').toLowerCase();if(!byEmail[e]){byEmail[e]=[];order.push(e);}byEmail[e].push(r);});
+  let h=`<div class="card" style="border:1px solid #FCA5A5"><div class="card-hd" style="background:#FEF2F2"><div><div class="card-title" style="color:#991B1B">🗑 削除済みアカウント（${rows.length}件）</div><div class="card-sub">論理削除されたアカウントです。「復活」で再び利用できます（同じメール・ロールの新規作成エラーも解消されます）。</div></div></div><div class="card-body" style="padding:0">`;
+  order.forEach(e=>{
+    const list=byEmail[e];const nm=list[0].full_name||'(氏名なし)';
+    const badges=list.map(r=>`<span class="badge b-member">${ROLE_JP_ENUM[r.role]||r.role} <span onclick="reviveAccount('${r.id}')" title="このロールを復活" style="cursor:pointer;font-weight:800;color:var(--green);margin-left:2px">↺</span></span>`).join(' ');
+    h+=`<div class="mem-row">
+      <div class="mem-avatar" style="background:#9CA3AF">${(nm||'?').charAt(0)}</div>
+      <div style="flex:1;min-width:0"><div class="mem-name">${nm} ${badges}</div><div class="mem-meta">${list[0].email}</div></div>
+      <button class="card-btn" style="margin-left:8px;background:#DCFCE7;color:#166534;font-weight:700" onclick="reviveAllRoles('${e}')">↺ すべて復活</button>
+    </div>`;
+  });
+  h+=`</div></div>`;
+  box.innerHTML=h;
+}
+async function reviveAccount(pid){
+  const API=window.VexumAPI;
+  if(!(API&&API.ready&&API.reactivateAccount)){showToast('Supabase未接続');return;}
+  const res=await API.reactivateAccount(pid);
+  if(res&&res.error){showToast('復活失敗: '+res.error);return;}
+  showToast('アカウントを復活しました ✓');
+  if(typeof reloadAllData==='function')await reloadAllData();else renderInactiveAccounts();
+}
+async function reviveAllRoles(email){
+  const API=window.VexumAPI;
+  if(!(API&&API.ready&&API.listInactiveAccounts&&API.reactivateAccount)){showToast('Supabase未接続');return;}
+  let rows=[];try{rows=await API.listInactiveAccounts();}catch(e){rows=[];}
+  const targets=rows.filter(r=>(r.email||'').toLowerCase()===String(email).toLowerCase());
+  for(const r of targets){const res=await API.reactivateAccount(r.id);if(res&&res.error){showToast('復活失敗: '+res.error);return;}}
+  showToast(`${targets.length}件のロールを復活しました ✓`);
+  if(typeof reloadAllData==='function')await reloadAllData();else renderInactiveAccounts();
 }
 function togglePanel(id){
   const el=document.getElementById(id);

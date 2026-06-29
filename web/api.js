@@ -1048,8 +1048,36 @@
     var roleEnumVal = roleToEnum(o.role || 'メンバー');
     if (!name) return { error: '氏名を入力してください' };
     if (!email) return { error: 'メールアドレスを入力してください' };
-    if (await _existsEmailRole(email, roleEnumVal)) return { error: 'このメール・ロールの組み合わせは既に存在します' };
+    // 同じ (email, role) の既存プロフィールを確認（論理削除 is_active=false も含めて検索）
+    var exq = await sb.from('profiles').select('id,is_active,auth_user_id').ilike('email', email).eq('role', roleEnumVal).limit(1);
+    var exRow = (!exq.error && exq.data && exq.data.length) ? exq.data[0] : null;
+    if (exRow && exRow.is_active !== false) {
+      return { error: 'このメール・ロールの組み合わせは既に存在します' };
+    }
     var reuseUid = await _reuseAuthUserId(email);
+    if (exRow) {
+      // ★論理削除(is_active=false)済みアカウント → 新規作成ではなく「復活（再アクティブ化）」する。
+      //   これにより、UNIQUE(lower(email),role) 違反のエラー（再作成できない）を解消する。
+      var patch = { is_active: true, full_name: name };
+      if (!exRow.auth_user_id && reuseUid) patch.auth_user_id = reuseUid;
+      var rr = await sb.from('profiles').update(patch).eq('id', exRow.id).select().single();
+      if (rr.error) return { error: friendlyErr(rr.error.message) };
+      var pidR = exRow.id;
+      var teamUuidR = o.teamId || o.teamUuid || (o.teamLetter ? teamUuidOf(o.teamLetter) : null);
+      if (teamUuidR) {
+        try {
+          await sb.from('team_members').upsert({
+            team_id: teamUuidR, profile_id: pidR,
+            role_in_team: (roleEnumVal === 'leader') ? 'leader' : 'member',
+            achievement_rate: (o.rate != null ? o.rate : 50)
+          }, { onConflict: 'team_id,profile_id' });
+        } catch (e) {}
+      }
+      // ログイン(auth)を確実化：auth_user_id が無ければ vexum_create_login で発行/再リンク
+      var loginR = !!(exRow.auth_user_id || reuseUid), pwR = null;
+      if (!loginR) { var gp = o.password || randomPassword(); try { var rp = await sb.rpc('vexum_create_login', { p_email: email, p_password: gp }); loginR = !rp.error; if (loginR && !o.password) pwR = gp; } catch (e) {} }
+      return { data: rr.data, pid: pidR, loginEnabled: loginR, password: pwR, reactivated: true };
+    }
     var row = { full_name: name, email: email, role: roleEnumVal, department: o.department || null, color: o.color || '#0D9488' };
     if (reuseUid) row.auth_user_id = reuseUid;
     var ins = await sb.from('profiles').insert(row).select().single();
@@ -1186,6 +1214,29 @@
     if (up.error) return { error: friendlyErr(up.error.message) };
     if (!up.data || up.data.length === 0) return { error: '削除できませんでした（権限不足の可能性。管理者/幹部でログインしてください）' };
     return { ok: true };
+  }
+  // 論理削除(is_active=false)されたアカウント一覧（復活UI用）。fetchAll は inactive を除外するため別取得。
+  async function listInactiveAccounts() {
+    if (!sb) return [];
+    var r = await sb.from('profiles').select('id,full_name,email,role,is_active,auth_user_id').eq('is_active', false).order('email', { ascending: true });
+    if (r.error) { err('listInactiveAccounts', r.error); return []; }
+    return r.data || [];
+  }
+  // 論理削除されたアカウントを復活（is_active=true）。auth_user_id が無ければログインを再リンク。
+  async function reactivateAccount(pid) {
+    if (!sb) return { error: 'Supabase未接続' };
+    if (!pid) return { error: '対象アカウントIDが不明です' };
+    var up = await sb.from('profiles').update({ is_active: true }).eq('id', pid).select('id,email,role,auth_user_id');
+    if (up.error) return { error: friendlyErr(up.error.message) };
+    if (!up.data || up.data.length === 0) return { error: '復活できませんでした（権限不足の可能性。管理者/幹部でログインしてください）' };
+    var row = up.data[0];
+    // auth_user_id が無ければ同メールの他プロフィールから流用、それも無ければ login を発行/再リンク
+    if (!row.auth_user_id) {
+      var reuse = await _reuseAuthUserId(row.email);
+      if (reuse) { try { await sb.from('profiles').update({ auth_user_id: reuse }).eq('id', pid); } catch (e) {} }
+      else { try { await sb.rpc('vexum_create_login', { p_email: row.email, p_password: 'vexum2025' }); } catch (e) {} }
+    }
+    return { ok: true, email: row.email, role: row.role };
   }
   async function createTeamRemote(o) {
     if (!sb) return { error: 'Supabase未接続' };
@@ -1862,6 +1913,8 @@
     loadTeamMembers: loadTeamMembers,
     updateAccount: updateAccount,
     deleteAccount: deleteAccount,
+    listInactiveAccounts: listInactiveAccounts,
+    reactivateAccount: reactivateAccount,
     resetPassword: resetPassword,
     setAccountPassword: setAccountPassword,
     sendResetEmail: sendResetEmail,
