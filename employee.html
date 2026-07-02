@@ -253,9 +253,9 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)" id="ep-d-late">—</div><div class="s-trend" style="color:var(--text3)">期限超過・未完了</div></div>
     <div class="stat-card"><div class="s-lbl">合計作業時間</div><div class="s-val" style="color:var(--accent)" id="ep-d-hours">—</div><div class="s-trend" style="color:var(--text3)">全タスク累計工数</div></div>
   </div>
-  <!-- 選択中KGIのCSF内訳（KGI絞り込み時のみ表示） -->
+  <!-- CSF内訳（常時表示・全チャート横断／KGI絞り込み時は該当チャートのみ） -->
   <div class="card" id="ep-csf-breakdown-card" style="display:none">
-    <div class="card-hd"><div><div class="card-title">CSF内訳</div><div class="card-sub">選択中のKGI配下のCSFごとの進捗・工数</div></div></div>
+    <div class="card-hd"><div><div class="card-title">CSF内訳</div><div class="card-sub">全チャート横断（KGI絞り込み時はそのKGI配下）のCSFごとの進捗・工数</div></div></div>
     <div class="card-body" id="ep-csf-breakdown-rows"></div>
   </div>
   <!-- KGI進捗（自分の全チャートのKGI・達成率100%未満） -->
@@ -3088,23 +3088,30 @@ function _dashFilteredTasks(tasks){
     return ok;
   });
 }
-/* 選択中KGIのCSF内訳を描画（未選択時は非表示） */
+/* CSF内訳を描画。KGI絞り込み時はそのチャートのみ、「全チャート」時は自分の全チャートを横断して表示 */
 function _renderCsfBreakdown(tasksAll){
   const card=document.getElementById('ep-csf-breakdown-card');
   const rows=document.getElementById('ep-csf-breakdown-rows');
   if(!card||!rows)return;
   const f=_getDashFilter();
-  if(f.chart==='all'||!CHARTS[f.chart]){card.style.display='none';return;}
-  const csfs=_chartCsf(f.chart).filter(c=>c.text);
-  if(!csfs.length){card.style.display='none';return;}
+  const keys=(f.chart!=='all'&&CHARTS[f.chart])?[f.chart]:Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
+  let items=[];
+  keys.forEach(k=>{
+    const kgiName=(typeof _chartKgiText==='function'&&_chartKgiText(k))||CHARTS[k].center||CHARTS[k].name||k;
+    _chartCsf(k).filter(c=>c.text).forEach(c=>items.push({k,kgiName,c}));
+  });
+  if(!items.length){card.style.display='none';return;}
   card.style.display='';
-  rows.innerHTML=csfs.map(c=>{
-    const linked=(tasksAll||[]).filter(t=>t.csfIdx===c.si);
+  const showKgiTag=keys.length>1;
+  rows.innerHTML=items.map(({k,kgiName,c})=>{
+    const linked=(tasksAll||[]).filter(t=>t.csfIdx===c.si&&(String(t.chart||'')===String(CHARTS[k].name||'')||String(t.chart||'')===String(kgiName)));
     const hrs=Math.round(linked.reduce((s,t)=>s+(t.hours||0),0)*10)/10;
     const cnt=linked.length;
     const col=_csfColor(c.pct);
-    return `<div onclick="gotoChartCsf('${f.chart}',${c.si})" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
+    const kgiTag=showKgiTag?`<span style="font-size:9px;background:#F1F5F9;color:var(--text3);padding:1px 7px;border-radius:8px;font-weight:700;flex-shrink:0;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${kgiName}">${kgiName.slice(0,14)}${kgiName.length>14?'…':''}</span>`:'';
+    return `<div onclick="gotoChartCsf('${k}',${c.si})" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
       <span style="font-size:9px;color:var(--accent);font-weight:700;flex-shrink:0;min-width:36px">CSF${c.si+1}</span>
+      ${kgiTag}
       <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.text}">${c.text}</span>
       <span style="font-size:10px;color:var(--text3);flex-shrink:0">タスク${cnt}件 ／ ${hrs}h</span>
       <div class="pw" style="min-width:100px;flex-shrink:0"><div class="pt"><div class="pf" style="width:${c.pct}%;background:${col}"></div></div><div class="pp" style="color:${col}">${c.pct}%</div></div>
