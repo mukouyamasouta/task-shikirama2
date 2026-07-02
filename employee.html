@@ -655,7 +655,7 @@ function _chartLabel(k){
   const c=CHARTS[k]||{};
   const kgi=((typeof _chartKgiText==='function'&&_chartKgiText(k))||c.center||c.name||k).replace(/\n/g,' ').slice(0,40);
   const sd=c.startDate||'';const ed=c.endDate||'';
-  const dateStr=(sd||ed)?` (${sd}${ed?'〜'+ed:''})`:'';
+  const dateStr=(sd||ed)?` (${sd}〜${ed||'?'})`:( c.period?` (${c.period})`:'');
   return kgi+dateStr;
 }
 /* ===== タブ切替 ===== */

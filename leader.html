@@ -755,7 +755,7 @@ function toggleMdMnd(){
 function mdChartLabel(c){
   const kgi=((c.center||'').replace(/\n/g,' ').trim().slice(0,40))||(c.name||'').trim()||c.scope_label||'チャート';
   const sd=c.start_date||c.startDate||'';const ed=c.end_date||c.endDate||'';
-  const dateStr=(sd||ed)?` (${sd}${ed?'〜'+ed:''})`:'';
+  const dateStr=(sd||ed)?` (${sd}〜${ed||'?'})`:( c.period?` (${c.period})`:'');
   return kgi+dateStr;
 }
 // チャートのCSF/KPI文言セット

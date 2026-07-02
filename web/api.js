@@ -178,7 +178,7 @@
 
     var MND = {}, EMP = {};
     raw.mandala_charts.forEach(function (c) {
-      var base = { color: c.color, bg: c.bg, name: c.name, center: c.center, subs: c.subs, acts: c.acts };
+      var base = { color: c.color, bg: c.bg, name: c.name, center: c.center, subs: c.subs, acts: c.acts, startDate: c.start_date ? fmtYMD(c.start_date) : '', endDate: c.end_date ? fmtYMD(c.end_date) : '', period: c.period || '' };
       if (c.owner_type === 'team') {
         var tk = TEAM_KEY[c.owner_team_id] || c.owner_team_id; if (!tk) return;
         base.team = c.name; MND[tk] = base;
@@ -1538,7 +1538,8 @@
         pid: p.id, name: p.full_name, role: m.role_in_team === 'leader' ? 'リーダー' : '従業員',
         team: team.name, teamUuid: m.team_id, color: p.color, rate: m.achievement_rate || 0, stats: stats,
         kpis: kpis, memberKpiEdits: c.member_kpi_edits || {},
-        center: c.center || '', subs: c.subs || [], acts: c.acts || []
+        center: c.center || '', subs: c.subs || [], acts: c.acts || [],
+        startDate: c.start_date ? fmtYMD(c.start_date) : '', endDate: c.end_date ? fmtYMD(c.end_date) : '', period: c.period || ''
       };
       DASH_IDS.push(key);
       if (m.role_in_team !== 'leader') EVAL_IDS.push(key);
