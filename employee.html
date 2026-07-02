@@ -224,23 +224,34 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- 進捗ダッシュボード -->
 <div id="tc-progress" class="tab-content active">
+  <!-- 絞り込みフィルター -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <span style="font-size:11px;font-weight:700;color:var(--text2);flex-shrink:0">絞り込み：</span>
+    <select class="fs" id="ep-kgi-filter" onchange="onDashFilterChange()" style="font-size:11px;padding:6px 10px;font-weight:600;max-width:200px;width:auto"><option value="all">全チャート</option></select>
+    <select class="fs" id="ep-period-filter" onchange="onDashFilterChange()" style="font-size:11px;padding:6px 10px;font-weight:600;max-width:180px;width:auto"><option value="all">全期間</option></select>
+    <button onclick="clearDashFilter()" id="ep-filter-clear" style="display:none;font-size:11px;padding:5px 12px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;color:var(--text2);font-weight:600">✕ 絞り込み解除</button>
+    <span id="ep-filter-badge" style="display:none;font-size:10px;background:var(--accent);color:#fff;padding:2px 10px;border-radius:12px;font-weight:700"></span>
+  </div>
   <div class="g4">
     <div class="stat-card"><div class="s-lbl">本日までの達成率</div><div class="s-val" style="color:var(--accent)" id="ep-d-todayrate">—</div><div class="s-trend" style="color:var(--text3)" id="ep-d-todayrate-sub">期限到来分の完了割合</div></div>
     <div class="stat-card"><div class="s-lbl">本日対応すべき</div><div class="s-val" id="ep-d-due">—</div><div class="s-trend" style="color:var(--text3)">期限が本日まで・未完了</div></div>
     <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)" id="ep-d-late">—</div><div class="s-trend" style="color:var(--text3)">期限超過・未完了</div></div>
     <div class="stat-card"><div class="s-lbl">合計作業時間</div><div class="s-val" style="color:var(--accent)" id="ep-d-hours">—</div><div class="s-trend" style="color:var(--text3)">全タスク累計工数</div></div>
   </div>
-  <!-- KGI進捗（最上部）：自分の全チャートのKGI（達成率100%未満）を表示 -->
+  <!-- KGI進捗（自分の全チャートのKGI・達成率100%未満） -->
   <div class="card">
-    <div class="card-hd"><div><div class="card-title">KGI進捗</div><div class="card-sub">達成率100%未満のKGIを表示・クリックでチャート管理へ</div></div>
-      <select class="fs" id="ep-kgi-filter" onchange="renderKgiProgress()" style="font-size:11px;padding:6px 10px;font-weight:600;max-width:220px;width:auto"><option value="all">全チャート</option></select>
-    </div>
+    <div class="card-hd"><div><div class="card-title">KGI進捗</div><div class="card-sub">達成率100%未満のKGIを表示・クリックでチャート管理へ</div></div></div>
     <div class="card-body" id="ep-kpi-rows"></div>
   </div>
-  <!-- 本日対応が必要・未完了タスク（期限が迫っている順） -->
+  <!-- 今日やるべきタスク（期限=本日・未完了） -->
   <div class="card">
-    <div class="card-hd"><div><div class="card-title">🎯 今日までにやるべきタスク・遅延タスク</div><div class="card-sub">期限が迫っている順。期限内／遅延を明示・進捗・優先度・工数つき</div></div><span id="ep-d-open-count" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div>
-    <div class="card-body" id="ep-d-open-list"><div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">読み込み中…</div></div>
+    <div class="card-hd"><div><div class="card-title">今日やるべきタスク</div><div class="card-sub">本日が期限のタスク（未完了）</div></div><span id="ep-d-today-count" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div>
+    <div class="card-body" id="ep-d-today-list"><div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">読み込み中…</div></div>
+  </div>
+  <!-- 遅延タスク（期限超過・未完了） -->
+  <div class="card">
+    <div class="card-hd"><div><div class="card-title">遅延タスク</div><div class="card-sub">期限超過・未完了のタスク</div></div><span id="ep-d-late-count" style="font-size:13px;font-weight:700;color:var(--red)"></span></div>
+    <div class="card-body" id="ep-d-late-list"><div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">読み込み中…</div></div>
   </div>
 </div>
 
@@ -2889,45 +2900,49 @@ function showToast(msg){
 }
 
 /* ===== 進捗ダッシュボード（実データ描画・Supabase接続時のみ） ===== */
-// 本日対応が必要・未完了タスク／完了済みタスクの一覧を描画
-function _epRenderTaskLists(){
-  const today=_epToday();
+// タスク行HTML生成（今日/遅延共通）
+function _taskRowHtml(a,today){
   const pri={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低'],urgent:['s-hi','緊急']};
-  function dueISO(a){ // ASSIGNMENTSはdueRaw、無ければend(YYYY/MM/DD)から
-    if(a.dueRaw)return a.dueRaw;
-    if(a.end&&/\d{4}\/\d{1,2}\/\d{1,2}/.test(a.end))return a.end.replace(/\//g,'-');
-    return null;
+  function dueISO(t){if(t.dueRaw)return t.dueRaw;if(t.end&&/\d{4}\/\d{1,2}\/\d{1,2}/.test(t.end))return t.end.replace(/\//g,'-');return null;}
+  const di=dueISO(a);const late=di&&di<today&&a.pct<100;const dueToday=di&&di===today;
+  const pc=pri[a.pri]||pri.md;
+  const badge=late?'<span class="chip s-late">遅延</span>':(dueToday?'<span class="chip s-hi">本日期限</span>':(a.pct>0?'<span class="chip s-wip">進行中</span>':'<span class="chip s-todo">未着手</span>'));
+  const col=a.pct>=80?'var(--green)':a.pct>=40?'var(--accent)':'var(--amber)';
+  const chartChip=a.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">${a.chart}</span>`:'';
+  const isChartTask=!!(a.chart||a.source_send_id||a.source_chart);
+  const jumpFn=isChartTask?`gotoChartFromDashTask(${JSON.stringify(a.chart||a.source_chart||'')})`:`gotoAssignFromDashTask(${ASSIGNMENTS.indexOf(a)})`;
+  return `<div onclick="${jumpFn}" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='transparent'" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);border-left:2px solid transparent;cursor:pointer;transition:.12s">
+    <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">${a.name}${chartChip}</div>
+    <div style="font-size:10px;color:${late?'var(--red)':'var(--text3)'}">期限 ${a.end||'—'}${late?' ⚠ 超過':''} ／ 工数 ${a.hours!=null?a.hours:0}h</div></div>
+    <span class="chip ${pc[0]}">${pc[1]}</span>${badge}
+    <div class="pw" style="min-width:110px"><div class="pt"><div class="pf" style="width:${a.pct}%;background:${col}"></div></div><div class="pp" style="color:${col}">${a.pct}%</div></div>
+  </div>`;
+}
+// 今日/遅延タスク一覧を描画（フィルター適用済み tasks を受け取る）
+function _epRenderTaskLists(filteredTasks){
+  const today=_epToday();
+  function dueISO(a){if(a.dueRaw)return a.dueRaw;if(a.end&&/\d{4}\/\d{1,2}\/\d{1,2}/.test(a.end))return a.end.replace(/\//g,'-');return null;}
+  const src=filteredTasks||ASSIGNMENTS;
+  // 今日期限（due === today、未完了）
+  const todayTasks=src.filter(a=>{const d=dueISO(a);return d&&d===today&&a.pct<100;}).sort((x,y)=>(dueISO(x)||'9999').localeCompare(dueISO(y)||'9999'));
+  // 遅延（due < today、未完了）
+  const lateTasks=src.filter(a=>{const d=dueISO(a);return d&&d<today&&a.pct<100;}).sort((x,y)=>(dueISO(y)||'').localeCompare(dueISO(x)||''));
+  const todayEl=document.getElementById('ep-d-today-list');
+  const todayCnt=document.getElementById('ep-d-today-count');
+  if(todayEl){
+    todayEl.innerHTML=todayTasks.length
+      ?todayTasks.map(a=>_taskRowHtml(a,today)).join('')
+      :'<div style="text-align:center;color:var(--green);font-size:12px;padding:20px">本日期限のタスクはありません</div>';
   }
-  const open=ASSIGNMENTS.slice().sort((x,y)=>(dueISO(x)||'9999').localeCompare(dueISO(y)||'9999'));
-  const oc=document.getElementById('ep-d-open-list');
-  if(oc){
-    if(!open.length)oc.innerHTML='<div style="text-align:center;color:var(--green);font-size:12px;padding:20px">未完了タスクはありません 🎉</div>';
-    else oc.innerHTML=open.map(a=>{
-      const di=dueISO(a);const late=di&&di<today&&a.pct<100;const dueToday=di&&di===today;
-      const pc=pri[a.pri]||pri.md;
-      const badge=late?'<span class="chip s-late">遅延</span>':(dueToday?'<span class="chip s-hi">本日期限</span>':(a.pct>0?'<span class="chip s-wip">進行中</span>':'<span class="chip s-todo">未着手</span>'));
-      const col=a.pct>=80?'var(--green)':a.pct>=40?'var(--accent)':'var(--amber)';
-      const chartChip=a.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${a.chart}</span>`:'';
-      const isChartTask=!!(a.chart||a.source_send_id||a.source_chart);
-      const jumpFn=isChartTask?`gotoChartFromDashTask(${JSON.stringify(a.chart||a.source_chart||'')})`:`gotoAssignFromDashTask(${ASSIGNMENTS.indexOf(a)})`;
-      return `<div onclick="${jumpFn}" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='transparent'" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);border-left:2px solid transparent;cursor:pointer;transition:.12s">
-        <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">${a.name}${chartChip}</div>
-        <div style="font-size:10px;color:${late?'var(--red)':'var(--text3)'}">期限 ${a.end||'—'}${late?' ⚠ 超過':''} ／ 工数 ${a.hours!=null?a.hours:0}h</div></div>
-        <span class="chip ${pc[0]}">${pc[1]}</span>${badge}
-        <div class="pw" style="min-width:110px"><div class="pt"><div class="pf" style="width:${a.pct}%;background:${col}"></div></div><div class="pp" style="color:${col}">${a.pct}%</div></div>
-      </div>`;
-    }).join('');
+  if(todayCnt)todayCnt.textContent=todayTasks.length?todayTasks.length+'件':'';
+  const lateEl=document.getElementById('ep-d-late-list');
+  const lateCnt=document.getElementById('ep-d-late-count');
+  if(lateEl){
+    lateEl.innerHTML=lateTasks.length
+      ?lateTasks.map(a=>_taskRowHtml(a,today)).join('')
+      :'<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">遅延タスクはありません</div>';
   }
-  const occ=document.getElementById('ep-d-open-count');if(occ)occ.textContent=open.length+'件';
-  const done=ASSIGN_HISTORY.slice();
-  const dc=document.getElementById('ep-d-done-list');
-  if(dc){
-    if(!done.length)dc.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">完了済みタスクはまだありません</div>';
-    else dc.innerHTML=done.slice(0,8).map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
-      <span style="color:var(--green)">✓</span><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">${a.name}</div>
-      <div style="font-size:10px;color:var(--text3)">完了 ${a.completed||'—'} ／ 合計工数 <b style="color:var(--accent)">${a.hours!=null?a.hours:0}h</b></div></div></div>`).join('');
-  }
-  const dcc=document.getElementById('ep-d-done-count');if(dcc)dcc.textContent=done.length+'件';
+  if(lateCnt)lateCnt.textContent=lateTasks.length?lateTasks.length+'件':'';
 }
 function gotoChartFromDashTask(chartName){
   gotoTab('chartmgr');
@@ -2963,19 +2978,81 @@ function _chartCsf(k){
 }
 /* CSF達成率→色（0=グレー / 1-49=黄 / 50-99=水色 / 100=緑） */
 function _csfColor(p){return p>=100?'var(--green)':p>=50?'var(--cyan)':p>=1?'var(--amber)':'#9CA3AF';}
+/* ===== ダッシュボード絞り込みヘルパー ===== */
+function _getDashFilter(){
+  return {
+    chart:(document.getElementById('ep-kgi-filter')||{}).value||'all',
+    period:(document.getElementById('ep-period-filter')||{}).value||'all'
+  };
+}
+function _dashFilteredTasks(tasks){
+  const f=_getDashFilter();
+  if(f.chart==='all'&&f.period==='all')return tasks;
+  return tasks.filter(a=>{
+    let ok=true;
+    if(f.chart!=='all'){
+      const chartId=a.source_chart||a.chartId||null;
+      const chartName=a.chart||'';
+      const cData=CHARTS[f.chart]||{};
+      ok=ok&&(chartId===f.chart||chartName===cData.name||chartId===f.chart);
+    }
+    if(f.period!=='all'){
+      const chartId=a.source_chart||a.chartId||null;
+      const chartName=a.chart||'';
+      const period=CHARTS[chartId]&&(CHARTS[chartId].period||'');
+      const periodByName=Object.values(CHARTS).find(c=>c.name===chartName)&&(Object.values(CHARTS).find(c=>c.name===chartName).period||'');
+      ok=ok&&(period===f.period||periodByName===f.period);
+    }
+    return ok;
+  });
+}
+function onDashFilterChange(){
+  const f=_getDashFilter();
+  const isFiltered=f.chart!=='all'||f.period!=='all';
+  const clearBtn=document.getElementById('ep-filter-clear');
+  const badge=document.getElementById('ep-filter-badge');
+  if(clearBtn)clearBtn.style.display=isFiltered?'':'none';
+  if(badge){
+    if(isFiltered){
+      const parts=[];
+      if(f.chart!=='all'&&CHARTS[f.chart])parts.push(CHARTS[f.chart].name||f.chart);
+      if(f.period!=='all')parts.push(f.period);
+      badge.textContent=parts.join(' / ');badge.style.display='';
+    }else{badge.style.display='none';}
+  }
+  renderKgiProgress();
+  renderProgressDash();
+}
+function clearDashFilter(){
+  const cs=document.getElementById('ep-kgi-filter');if(cs)cs.value='all';
+  const ps=document.getElementById('ep-period-filter');if(ps)ps.value='all';
+  onDashFilterChange();
+}
 /* KGI進捗カードを描画（自分の全チャートのKGI・達成率100%未満のみ） */
 function renderKgiProgress(){
   const kr=document.getElementById('ep-kpi-rows');if(!kr)return;
   syncKpiEditsFromCharts();
   const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
   const sel=document.getElementById('ep-kgi-filter');
-  let filter='all';
+  let chartFilter='all';
   if(sel){
-    filter=sel.value||'all';
-    if(filter!=='all'&&keys.indexOf(filter)<0)filter='all';
-    sel.innerHTML='<option value="all">全チャート</option>'+keys.map(k=>`<option value="${k}"${k===filter?' selected':''}>${(CHARTS[k].name||k)}${CHARTS[k].readonly?'（参照のみ）':''}</option>`).join('');
+    chartFilter=sel.value||'all';
+    if(chartFilter!=='all'&&keys.indexOf(chartFilter)<0)chartFilter='all';
+    sel.innerHTML='<option value="all">全チャート</option>'+keys.map(k=>`<option value="${k}"${k===chartFilter?' selected':''}>${(CHARTS[k].name||k)}${CHARTS[k].readonly?'（参照のみ）':''}</option>`).join('');
   }
-  const list=keys.filter(k=>filter==='all'||k===filter).map(k=>{
+  // 期間フィルタードロップダウンを動的生成
+  const ps=document.getElementById('ep-period-filter');
+  if(ps){
+    const curPeriod=ps.value||'all';
+    const periods=[...new Set(keys.map(k=>CHARTS[k].period||'').filter(Boolean))].sort();
+    ps.innerHTML='<option value="all">全期間</option>'+periods.map(p=>`<option value="${p}"${p===curPeriod?' selected':''}>${p}</option>`).join('');
+  }
+  const periodFilter=(ps&&ps.value)||'all';
+  const list=keys.filter(k=>{
+    if(chartFilter!=='all'&&k!==chartFilter)return false;
+    if(periodFilter!=='all'){const p=CHARTS[k].period||'';if(p!==periodFilter)return false;}
+    return true;
+  }).map(k=>{
     const d=CHARTS[k];
     return {k,name:d.name||k,period:d.period||d.scopeLabel||'',kgi:_chartKgiText(k),pct:_chartKgiPct(k)};
   }).filter(x=>x.pct<100);
@@ -3324,15 +3401,30 @@ async function ganttSaveDate(taskId,field,value){
   if(typeof renderProgressDash==='function')renderProgressDash();
 }
 function renderProgressDash(){
+  const today=_epToday();
+  const di=a=>a.dueRaw||(a.end&&/\d{4}\/\d{1,2}\/\d{1,2}/.test(a.end)?a.end.replace(/\//g,'-'):null);
+  // フィルター適用済みタスク
+  const filtered=_dashFilteredTasks(ASSIGNMENTS);
+  const filteredAll=_dashFilteredTasks([...ASSIGNMENTS,...ASSIGN_HISTORY]);
   let st=window._epStats;
   if(!st){ // デモ（Supabase未接続）: 手元のASSIGNMENTS等から簡易集計
-    const today=_epToday();
-    const di=a=>a.dueRaw||(a.end&&/\d{4}\/\d{1,2}\/\d{1,2}/.test(a.end)?a.end.replace(/\//g,'-'):null);
-    const late=ASSIGNMENTS.filter(a=>{const d=di(a);return d&&d<today&&a.pct<100;}).length;
-    const due=ASSIGNMENTS.filter(a=>{const d=di(a);return d&&d<=today&&a.pct<100;}).length;
-    const hrs=[...ASSIGNMENTS,...ASSIGN_HISTORY].reduce((s,a)=>s+(a.hours||0),0);
-    const taskTotal=ASSIGNMENTS.length+ASSIGN_HISTORY.length;
-    st={rate:72,done:ASSIGN_HISTORY.length,wip:ASSIGNMENTS.filter(a=>a.pct>0).length,late,dueToday:due,todayRate:taskTotal?72:null,taskCount:taskTotal,totalHours:Math.round(hrs*10)/10};
+    const late=filtered.filter(a=>{const d=di(a);return d&&d<today&&a.pct<100;}).length;
+    const due=filtered.filter(a=>{const d=di(a);return d&&d<=today&&a.pct<100;}).length;
+    const hrs=filteredAll.reduce((s,a)=>s+(a.hours||0),0);
+    const taskTotal=filteredAll.length;
+    const duePassed=filtered.filter(a=>{const d=di(a);return d&&d<=today;});
+    const doneOfDue=duePassed.filter(a=>a.pct>=100).length;
+    const todayRate=duePassed.length>0?Math.round(doneOfDue/duePassed.length*100):null;
+    st={late,dueToday:due,todayRate,taskCount:taskTotal,totalHours:Math.round(hrs*10)/10};
+  } else {
+    // Supabase接続時もフィルター適用で再計算
+    const late=filtered.filter(a=>{const d=di(a);return d&&d<today&&a.pct<100;}).length;
+    const due=filtered.filter(a=>{const d=di(a);return d&&d<=today&&a.pct<100;}).length;
+    const hrs=filteredAll.reduce((s,a)=>s+(a.hours||0),0);
+    const duePassed=filtered.filter(a=>{const d=di(a);return d&&d<=today;});
+    const doneOfDue=duePassed.filter(a=>a.pct>=100).length;
+    const todayRate=duePassed.length>0?Math.round(doneOfDue/duePassed.length*100):null;
+    st={...st,late,dueToday:due,totalHours:Math.round(hrs*10)/10,todayRate,taskCount:filteredAll.length};
   }
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
   // 今日基準のサマリ（0除算で誤った100%を出さない。タスク0件は「—」表示）
@@ -3341,14 +3433,14 @@ function renderProgressDash(){
     set('ep-d-todayrate-sub','期限到来分の完了割合');
   }else{
     set('ep-d-todayrate','—');
-    const hasAny=(st.taskCount!=null)?st.taskCount>0:(ASSIGNMENTS.length+ASSIGN_HISTORY.length>0);
+    const hasAny=(st.taskCount!=null)?st.taskCount>0:(filteredAll.length>0);
     set('ep-d-todayrate-sub',hasAny?'期限到来タスクがまだありません':'タスクがまだありません');
   }
   set('ep-d-due',st.dueToday!=null?st.dueToday:'0');
   set('ep-d-late',st.late!=null?st.late:'0');
   set('ep-d-hours',(st.totalHours!=null?st.totalHours:0)+'h');
-  // 本日対応が必要・未完了タスク一覧（ASSIGNMENTS=未完了の割当）
-  _epRenderTaskLists();
+  // タスク一覧（フィルター適用済み）
+  _epRenderTaskLists(filtered);
   // KGI進捗カード（全チャートのKGI・達成率100%未満）を描画
   renderKgiProgress();
   const team=window._epTeam;
