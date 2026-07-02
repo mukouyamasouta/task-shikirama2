@@ -2178,11 +2178,12 @@ function _kpiHours(k,si,ai){
   const ed=_chartEdits(k)[si+'-'+ai];
   return (ed&&ed.hoursTotal)?(+ed.hoursTotal||0):0;
 }
-// CSF配下KPIのtotal_hours合計（KPIタスク＋CSF直下タスク＋未タスクKPIのセル時間）
+// CSF配下KPIのtotal_hours合計（KPIタスク＋CSF直下タスク＋未タスクKPIのセル時間＋CSFセル自身の記入時間）
 function _csfKpiHours(k,si){
   let sum=0;
   for(let ai=0;ai<8;ai++)sum+=_kpiHours(k,si,ai);
   sum+=_chartTasks(k).filter(t=>t.csfIdx===si&&t.kpiIdx==null).reduce((s,t)=>s+(+t.hours||0),0); // CSF直下タスク
+  sum+=(+((_chartEdits(k)['csf-'+si]||{}).hoursTotal)||0); // CSFセル自身に記入した累計時間
   return Math.round(sum*10)/10;
 }
 // CSFの作業時間: 上書き値（csf_hours_override[si]）があれば優先、なければKPI合計
@@ -2191,8 +2192,8 @@ function _csfHours(k,si){
   if(ov[si]!=null&&ov[si]!=='')return Math.round((+ov[si])*10)/10;
   return _csfKpiHours(k,si);
 }
-// KGIの作業時間 = 全CSFの作業時間（上書き優先）の総和
-function _kgiHours(k){let s=0;for(let si=0;si<8;si++)s+=_csfHours(k,si);return Math.round(s*10)/10;}
+// KGIの作業時間 = 全CSFの作業時間（上書き優先）の総和 ＋ KGIセル自身に記入した累計時間
+function _kgiHours(k){let s=0;for(let si=0;si<8;si++)s+=_csfHours(k,si);s+=(+((_chartEdits(k)['center']||{}).hoursTotal)||0);return Math.round(s*10)/10;}
 // 「合計時間の変更」をリセット（空欄に戻す→保存で自動計算=KPI合計に戻る）
 function resetCsfHours(){const ci=document.getElementById('kpi-edit-csfhours');if(ci)ci.value='';}
 function renderCmSimpleGrid(k){
@@ -2213,7 +2214,7 @@ function renderCmSimpleGrid(k){
       const eb=ed?'box-shadow:inset 0 0 0 2px #F59E0B;background:#FEF3C7;':`background:${d.bg};`;
       const oc=ro?'':`onclick="openCellEdit('${k}','csf',${si})"`;
       const csfH=_csfHours(k,si);const ovSet=((_chartEdits(k).csf_hours_override||{})[si]!=null);
-      const csfHov=csfH>0?`<span title="${ovSet?'直接入力（KPI合計を上書き）':'KPI合計'}" style="position:absolute;bottom:3px;right:6px;font-size:8px;font-weight:700;color:${ovSet?'#B45309':'var(--text3)'}">⏱${csfH}h${ovSet?'*':''}</span>`:'';
+      const csfHov=csfH>0?`<span title="${ovSet?'直接入力（自動合計を上書き）':'CSF記入＋KPI・タスクの合計'}" style="position:absolute;bottom:3px;right:6px;font-size:8px;font-weight:700;color:${ovSet?'#B45309':'var(--text3)'}">⏱${csfH}h${ovSet?'*':''}</span>`:'';
       h+=`<div ${oc} data-csf="${si}" style="${ro?'cursor:default;':'cursor:pointer;'}position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:${d.color};border:1.5px solid ${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}"><div style="font-size:8px;color:var(--text3);font-weight:600;margin-bottom:2px">CSF ${si+1}</div>${label}${badge(ed)}${csfHov}</div>`;
     }
   });
@@ -3102,8 +3103,18 @@ function _renderCsfBreakdown(tasksAll){
     // テキスト未入力でも進捗・工数が記入済みのCSFは表示する（チャート管理の記載を漏らさない）
     _chartCsf(k).filter(c=>c.text||c.pct>0||(typeof _csfHours==='function'&&_csfHours(k,c.si)>0)).forEach(c=>items.push({k,kgiName,c}));
   });
-  if(!items.length){card.style.display='none';return;}
+  // 日付絞り込み: チャート管理で設定したCSFの期間（無ければチャート本体の期間）で判定
+  if(f.from||f.to){
+    items=items.filter(({k,c})=>{
+      const per=(typeof _cellPeriod==='function')?_cellPeriod(k,'csf',c.si):{start:'',end:''};
+      let s=per.start||'';
+      if(!s){const r=(typeof _chartDateRange==='function')?_chartDateRange(k):null;s=r?r.startISO:'';}
+      return inDateRange(s,f.from,f.to);
+    });
+  }
+  if(!items.length){card.style.display='none';rows.innerHTML='';return;}
   card.style.display='';
+  const today=_epToday();
   const showKgiTag=keys.length>1;
   rows.innerHTML=items.map(({k,kgiName,c})=>{
     const linked=(typeof _chartTasks==='function'?_chartTasks(k):[]).filter(t=>t.csfIdx===c.si);
@@ -3112,10 +3123,17 @@ function _renderCsfBreakdown(tasksAll){
     const cnt=linked.length;
     const col=_csfColor(c.pct);
     const kgiTag=showKgiTag?`<span style="font-size:9px;background:#F1F5F9;color:var(--text3);padding:1px 7px;border-radius:8px;font-weight:700;flex-shrink:0;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${kgiName}">${kgiName.slice(0,14)}${kgiName.length>14?'…':''}</span>`:'';
+    // チャート管理で設定した期間（ガントと同じ情報源）を表示。期限超過・未達成は赤で警告
+    const per=(typeof _cellPeriod==='function')?_cellPeriod(k,'csf',c.si):{start:'',end:''};
+    const overdue=per.end&&per.end<today&&c.pct<100;
+    const perTag=(per.start||per.end)
+      ?`<span style="font-size:9px;color:${overdue?'var(--red)':'var(--text3)'};font-weight:${overdue?'700':'600'};flex-shrink:0">📅 ${(per.start||'').replace(/-/g,'/')||'—'}〜${(per.end||'').replace(/-/g,'/')||'—'}${overdue?' ⚠超過':''}</span>`
+      :'';
     return `<div onclick="gotoChartCsf('${k}',${c.si})" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
       <span style="font-size:9px;color:var(--accent);font-weight:700;flex-shrink:0;min-width:36px">CSF${c.si+1}</span>
       ${kgiTag}
       <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${c.text?'':'color:var(--text3)'}" title="${c.text||'テキスト未入力'}">${c.text||'（CSFテキスト未入力）'}</span>
+      ${perTag}
       <span style="font-size:10px;color:var(--text3);flex-shrink:0">タスク${cnt}件 ／ ${hrs}h</span>
       <div class="pw" style="min-width:100px;flex-shrink:0"><div class="pt"><div class="pf" style="width:${c.pct}%;background:${col}"></div></div><div class="pp" style="color:${col}">${c.pct}%</div></div>
     </div>`;
@@ -3164,7 +3182,9 @@ function renderKgiProgress(){
     return true;
   }).map(k=>{
     const d=CHARTS[k];
-    return {k,name:d.name||k,period:d.period||d.scopeLabel||'',kgi:_chartKgiText(k),pct:_chartKgiPct(k)};
+    // チャート管理で設定した実期間（開始日〜終了日）を優先表示。無ければ文字列期間
+    const dates=(d.startDate||d.endDate)?`📅 ${d.startDate||'—'}〜${d.endDate||'—'}`:'';
+    return {k,name:d.name||k,period:dates||d.period||d.scopeLabel||'',kgi:_chartKgiText(k),pct:_chartKgiPct(k)};
   }).filter(x=>x.pct<100);
   if(!list.length){kr.innerHTML='<div style="text-align:center;color:var(--green);font-size:12px;padding:20px">未達成のKGIはありません 🎉</div>';return;}
   kr.innerHTML=list.map(x=>{
