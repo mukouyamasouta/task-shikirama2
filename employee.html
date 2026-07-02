@@ -2390,6 +2390,7 @@ function saveKpiEdit(){
   else{d.acts=(d.acts||[]).map(r=>[...(r||[])]);if(d.acts[si])d.acts[si][ai]=newText;}
   closeKpiEdit();onCmChartChange();
   if(typeof renderTaskTable==='function')renderTaskTable();  // タスク管理のチャート行も更新
+  if(typeof renderProgressDash==='function')renderProgressDash();  // ダッシュボード（統計カード・CSF内訳）も更新
   persistChart(k);  // 自動保存（localStorage＋Supabase）
 }
 // チャートの内容・編集を永続化（localStorage必ず＋Supabaseは可能なら、失敗時は再送キューへ）
@@ -3098,21 +3099,23 @@ function _renderCsfBreakdown(tasksAll){
   let items=[];
   keys.forEach(k=>{
     const kgiName=(typeof _chartKgiText==='function'&&_chartKgiText(k))||CHARTS[k].center||CHARTS[k].name||k;
-    _chartCsf(k).filter(c=>c.text).forEach(c=>items.push({k,kgiName,c}));
+    // テキスト未入力でも進捗・工数が記入済みのCSFは表示する（チャート管理の記載を漏らさない）
+    _chartCsf(k).filter(c=>c.text||c.pct>0||(typeof _csfHours==='function'&&_csfHours(k,c.si)>0)).forEach(c=>items.push({k,kgiName,c}));
   });
   if(!items.length){card.style.display='none';return;}
   card.style.display='';
   const showKgiTag=keys.length>1;
   rows.innerHTML=items.map(({k,kgiName,c})=>{
-    const linked=(tasksAll||[]).filter(t=>t.csfIdx===c.si&&(String(t.chart||'')===String(CHARTS[k].name||'')||String(t.chart||'')===String(kgiName)));
-    const hrs=Math.round(linked.reduce((s,t)=>s+(t.hours||0),0)*10)/10;
+    const linked=(typeof _chartTasks==='function'?_chartTasks(k):[]).filter(t=>t.csfIdx===c.si);
+    // 工数はチャート管理と同じ計算（CSF上書き値→KPIタスク合計→セル記入時間）
+    const hrs=(typeof _csfHours==='function')?_csfHours(k,c.si):Math.round(linked.reduce((s,t)=>s+(t.hours||0),0)*10)/10;
     const cnt=linked.length;
     const col=_csfColor(c.pct);
     const kgiTag=showKgiTag?`<span style="font-size:9px;background:#F1F5F9;color:var(--text3);padding:1px 7px;border-radius:8px;font-weight:700;flex-shrink:0;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${kgiName}">${kgiName.slice(0,14)}${kgiName.length>14?'…':''}</span>`:'';
     return `<div onclick="gotoChartCsf('${k}',${c.si})" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
       <span style="font-size:9px;color:var(--accent);font-weight:700;flex-shrink:0;min-width:36px">CSF${c.si+1}</span>
       ${kgiTag}
-      <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.text}">${c.text}</span>
+      <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${c.text?'':'color:var(--text3)'}" title="${c.text||'テキスト未入力'}">${c.text||'（CSFテキスト未入力）'}</span>
       <span style="font-size:10px;color:var(--text3);flex-shrink:0">タスク${cnt}件 ／ ${hrs}h</span>
       <div class="pw" style="min-width:100px;flex-shrink:0"><div class="pt"><div class="pf" style="width:${c.pct}%;background:${col}"></div></div><div class="pp" style="color:${col}">${c.pct}%</div></div>
     </div>`;
@@ -3507,6 +3510,21 @@ async function ganttSaveDate(taskId,field,value){
   if(typeof renderTaskTable==='function')renderTaskTable();
   if(typeof renderProgressDash==='function')renderProgressDash();
 }
+/* ダッシュボードの合計作業時間: チャート管理と同じ計算（CSF上書き値→KPIタスク→セル記入時間）を
+   全対象チャート分合算し、チャート集計に含まれないタスク（チャート未紐付け等）の工数を加算 */
+function _dashTotalHours(filteredAll){
+  const f=_getDashFilter();
+  const keys=(f.chart!=='all'&&CHARTS[f.chart])?[f.chart]:Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
+  let sum=0;
+  const counted=new Set();
+  keys.forEach(k=>{
+    if(typeof _kgiHours==='function')sum+=_kgiHours(k);
+    // チャート集計側で拾ったタスク（CSF紐付けあり）は二重加算しない
+    if(typeof _chartTasks==='function')_chartTasks(k).forEach(t=>{if(t.csfIdx!=null&&!isNaN(t.csfIdx))counted.add(t);});
+  });
+  (filteredAll||[]).forEach(t=>{if(!counted.has(t))sum+=(+t.hours||0);});
+  return Math.round(sum*10)/10;
+}
 function renderProgressDash(){
   const today=_epToday();
   const di=a=>a.dueRaw||(a.end&&/\d{4}\/\d{1,2}\/\d{1,2}/.test(a.end)?a.end.replace(/\//g,'-'):null);
@@ -3517,21 +3535,21 @@ function renderProgressDash(){
   if(!st){ // デモ（Supabase未接続）: 手元のASSIGNMENTS等から簡易集計
     const late=filtered.filter(a=>{const d=di(a);return d&&d<today&&a.pct<100;}).length;
     const due=filtered.filter(a=>{const d=di(a);return d&&d<=today&&a.pct<100;}).length;
-    const hrs=filteredAll.reduce((s,a)=>s+(a.hours||0),0);
+    const hrs=_dashTotalHours(filteredAll);
     const taskTotal=filteredAll.length;
     const duePassed=filtered.filter(a=>{const d=di(a);return d&&d<=today;});
     const doneOfDue=duePassed.filter(a=>a.pct>=100).length;
     const todayRate=duePassed.length>0?Math.round(doneOfDue/duePassed.length*100):null;
-    st={late,dueToday:due,todayRate,taskCount:taskTotal,totalHours:Math.round(hrs*10)/10};
+    st={late,dueToday:due,todayRate,taskCount:taskTotal,totalHours:hrs};
   } else {
     // Supabase接続時もフィルター適用で再計算
     const late=filtered.filter(a=>{const d=di(a);return d&&d<today&&a.pct<100;}).length;
     const due=filtered.filter(a=>{const d=di(a);return d&&d<=today&&a.pct<100;}).length;
-    const hrs=filteredAll.reduce((s,a)=>s+(a.hours||0),0);
+    const hrs=_dashTotalHours(filteredAll);
     const duePassed=filtered.filter(a=>{const d=di(a);return d&&d<=today;});
     const doneOfDue=duePassed.filter(a=>a.pct>=100).length;
     const todayRate=duePassed.length>0?Math.round(doneOfDue/duePassed.length*100):null;
-    st={...st,late,dueToday:due,totalHours:Math.round(hrs*10)/10,todayRate,taskCount:filteredAll.length};
+    st={...st,late,dueToday:due,totalHours:hrs,todayRate,taskCount:filteredAll.length};
   }
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
   // 今日基準のサマリ（0除算で誤った100%を出さない。タスク0件は「—」表示）
