@@ -266,10 +266,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
             <div class="fg"><label class="fl">開始日</label><input class="fi" id="task-asg-start" type="date"></div>
             <div class="fg"><label class="fl">期限</label><input class="fi" id="task-asg-due" type="date"></div>
           </div>
-          <div class="fr" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div class="fg"><label class="fl">対象期間（評価に連携）</label><select class="fs" id="task-asg-period"></select></div>
-            <div class="fg"><label class="fl">予定工数（h・任意）</label><input class="fi" id="task-asg-planhours" type="number" min="0" step="0.5" placeholder="例: 8"></div>
-          </div>
+          <div class="fg"><label class="fl">予定工数（h・任意）</label><input class="fi" id="task-asg-planhours" type="number" min="0" step="0.5" placeholder="例: 8"></div>
           <div class="fg"><label class="fl">優先度</label><select class="fs" id="task-asg-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select></div>
           <button class="f-submit" onclick="submitExecAssign()">タスクを割り当てる</button>
           <span class="toast" id="task-asg-saved">✅ 保存しました</span>
@@ -1597,8 +1594,6 @@ async function initExecTasks(){
       sel.value=cur; sel.dataset.n=String(EXEC_OV.teamsList.length);
     }
   }
-  const pSel=document.getElementById('task-asg-period');
-  if(pSel&&!pSel.dataset.init){pSel.innerHTML=periodOptions('');pSel.dataset.init='1';}
   const fpSel=document.getElementById('task-f-period');
   if(fpSel&&!fpSel.dataset.init){fpSel.innerHTML=periodOptions('');fpSel.dataset.init='1';}
   populateExecMemberSelects();
@@ -1626,13 +1621,13 @@ async function submitExecAssign(){
   const m=EXEC_OV.MEMBERS[id];
   const o={title:name,kpi:val('task-asg-kpi')||'—',assigneePid:pid,teamUuid:(m&&m.teamUuid)||null,
     start:fmtDate('task-asg-start'),due:fmtDate('task-asg-due'),priority:document.getElementById('task-asg-pri').value,
-    period:(document.getElementById('task-asg-period')||{}).value||null,plannedHours:parseFloat(val('task-asg-planhours'))||null};
+    plannedHours:parseFloat(val('task-asg-planhours'))||null};
   if(API&&API.ready){
     const res=await API.assignTask(o);
     if(res&&res.error){alert('割当失敗: '+res.error);return;}
   }
   if(!EXEC_OV.MEMBER_TASKS[id])EXEC_OV.MEMBER_TASKS[id]=[];
-  EXEC_OV.MEMBER_TASKS[id].push({name:name,kpi:o.kpi,start:fmtDateDisp('task-asg-start'),due:fmtDateDisp('task-asg-due'),pri:o.priority,status:'todo',period:o.period||'',pct:0,hours:0,teamUuid:o.teamUuid});
+  EXEC_OV.MEMBER_TASKS[id].push({name:name,kpi:o.kpi,start:fmtDateDisp('task-asg-start'),due:fmtDateDisp('task-asg-due'),pri:o.priority,status:'todo',pct:0,hours:0,teamUuid:o.teamUuid});
   document.getElementById('task-asg-name').value='';document.getElementById('task-asg-kpi').value='';document.getElementById('task-asg-planhours').value='';
   renderExecTasks();
   showToast('✅ タスクを割り当てました');

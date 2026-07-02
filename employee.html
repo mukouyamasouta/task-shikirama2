@@ -925,10 +925,7 @@ function resetReportForm(){
       <div class="fg"><label class="fl">開始日</label><input class="fi" id="tm-start" type="date"></div>
       <div class="fg"><label class="fl">期限</label><input class="fi" id="tm-due" type="date"></div>
     </div>
-    <div class="fr">
-      <div class="fg"><label class="fl">対象期間 <span style="font-weight:400;color:var(--text3)">（評価に連携）</span></label><select class="fs" id="tm-period"></select></div>
-      <div class="fg"><label class="fl">優先度</label><select class="fs" id="tm-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select></div>
-    </div>
+    <div class="fg"><label class="fl">優先度</label><select class="fs" id="tm-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select></div>
     <div style="display:flex;gap:8px;margin-top:6px">
       <button class="f-submit" style="flex:1;background:#9CA3AF" onclick="closeTaskCreate()">キャンセル</button>
       <button class="f-submit" style="flex:1" id="tm-create-btn" onclick="submitTask()">タスクを作成</button>
@@ -1065,12 +1062,11 @@ function resetReportForm(){
     </div>
     <div class="fg"><label class="fl">チャート名 *</label>
       <input class="fi" id="cm-ac-name" placeholder="例: Q3個人売上チャート"></div>
-    <div class="fg"><label class="fl">対象期間（任意・評価に連携）</label>
+    <div class="fg"><label class="fl">期間</label>
       <div class="fr">
         <div class="fg" style="margin:0"><label class="fl" style="font-weight:400">開始日</label><input class="fi" id="cm-ac-start" type="date"></div>
         <div class="fg" style="margin:0"><label class="fl" style="font-weight:400">終了日</label><input class="fi" id="cm-ac-end" type="date"></div>
       </div>
-      <input class="fi" id="cm-ac-periodtext" placeholder="または期間を文字で入力（例: 2026年度上期）" style="margin-top:6px">
     </div>
     <div style="background:var(--accent-l);border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:11px;color:var(--text2)">💡 作成後、チャートのKGI・CSF・KPIのセルをクリックして内容を記入すると自動保存されます。</div>
     <div style="display:flex;gap:8px;margin-top:4px">
@@ -1723,10 +1719,17 @@ async function persistMyChart(o){
     dbId='user_'+me.id+'_'+Date.now();
     const res=await API.upsertMemberChart({pid:me.id,id:dbId,name:o.name,center:o.center,subs:o.subs,acts:o.acts,color:'#0D9488',bg:'#CCEDE9'});
     if(res&&res.error){alert('チャートの保存に失敗しました: '+res.error);return false;}
-    if(o.period&&API.updateChart){try{await API.updateChart(dbId,{period:o.period,scope_label:'個人'});}catch(e){}}
+    if(API.updateChart){
+      const patch={scope_label:'個人'};
+      if(o.period)patch.period=o.period;
+      if(o.startDate!==undefined)patch.start_date=o.startDate||null;
+      if(o.endDate!==undefined)patch.end_date=o.endDate||null;
+      // end_date 列が未適用の環境向けフォールバック（39_remove_period_ui.sql 未実行時）
+      try{const ur=await API.updateChart(dbId,patch);if(ur&&ur.error&&/end_date|start_date|column|42703/i.test(ur.error)){delete patch.end_date;delete patch.start_date;await API.updateChart(dbId,patch);}}catch(e){}
+    }
   }
   const key=dbId||('local_'+Date.now());
-  CHARTS[key]={dbId,name:o.name,scopeLabel:'個人',period:o.period||'',team:'',color:'#0D9488',bg:'#CCEDE9',center:o.center,subs:o.subs,acts:o.acts,memberKpiEdits:{}};
+  CHARTS[key]={dbId,name:o.name,scopeLabel:'個人',period:o.period||'',startDate:o.startDate||'',endDate:o.endDate||'',team:'',color:'#0D9488',bg:'#CCEDE9',center:o.center,subs:o.subs,acts:o.acts,memberKpiEdits:{}};
   return key;
 }
 
@@ -1813,15 +1816,8 @@ function updateGridSummary(){
 }
 
 /* ===== タスク作成モーダル ===== */
-function _epPeriodOptions(){
-  const y=new Date().getFullYear();let o='';
-  [1,2,3,4].forEach(q=>o+=`<option value="${y} Q${q}">${y}年 Q${q}</option>`);
-  for(let mo=1;mo<=12;mo++){const v=`${y}-${String(mo).padStart(2,'0')}`;o+=`<option value="${v}">${y}年${mo}月</option>`;}
-  o+=`<option value="${y}年度">${y}年度（通年）</option>`;return o;
-}
 let _tmKgiMode=true;  // タスク作成モーダル: KGI紐付けモード（デフォルトON）
 function openTaskCreate(){
-  const ps=document.getElementById('tm-period');if(ps&&!ps.options.length)ps.innerHTML=_epPeriodOptions();
   _tmKgiMode=true;  // 既定はKGI紐付けUIを展開
   const lb=document.getElementById('tm-chart-link');if(lb)lb.style.display='block';
   const nm=document.getElementById('tm-name');if(nm)nm.value='';
@@ -1909,7 +1905,6 @@ function submitTask(){
   const start=fmtDate(startRaw);
   const due=fmtDate(dueRaw);
   const pri=document.getElementById('tm-pri').value;
-  const period=(document.getElementById('tm-period')||{}).value||'';
   // KGI紐付け（KGIモードかつチャート選択時）: チャート→CSF→KPI を紐付ける
   let chartKey='',chartName='',csfIdx=null,kpiIdx=null,csfText='';
   if(_tmKgiMode){
@@ -1927,13 +1922,13 @@ function submitTask(){
   }
   const cellStr=(csfIdx!=null)?String(csfIdx):null;
   const meta=chartName
-    ? ('📊 '+chartName+' ／ CSF'+((csfIdx||0)+1)+': '+csfText+(kpiIdx!=null?' ／ KPI'+(csfIdx+1)+'-'+(kpiIdx+1):'')+(period?' ／ 期間: '+period:''))
-    : ('チャート以外のタスク'+(period?' ／ 期間: '+period:''));
+    ? ('📊 '+chartName+' ／ CSF'+((csfIdx||0)+1)+': '+csfText+(kpiIdx!=null?' ／ KPI'+(csfIdx+1)+'-'+(kpiIdx+1):''))
+    : 'チャート以外のタスク';
   const task={id:null,name,kpi:chartName?csfText:'—',meta,from:'🙋 自分で作成',fromClass:'',
-    start:startRaw?startRaw.replace(/-/g,'/'):'—',end:dueRaw?dueRaw.replace(/-/g,'/'):'—',dueRaw:dueRaw||null,startRaw:startRaw||null,pct:0,comment:'',status:'todo',pri,self:true,period,chart:chartName||null,cell:cellStr,csfIdx,kpiIdx};
+    start:startRaw?startRaw.replace(/-/g,'/'):'—',end:dueRaw?dueRaw.replace(/-/g,'/'):'—',dueRaw:dueRaw||null,startRaw:startRaw||null,pct:0,comment:'',status:'todo',pri,self:true,chart:chartName||null,cell:cellStr,csfIdx,kpiIdx};
   const API=window.VexumAPI;
   if(API&&API.ready){
-    API.assignTask({title:name,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self',period:period||null,chartTitle:chartName||null,cell:cellStr,kpi:chartName?csfText:null,sourceKpi:kpiIdx})
+    API.assignTask({title:name,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self',chartTitle:chartName||null,cell:cellStr,kpi:chartName?csfText:null,sourceKpi:kpiIdx})
       .then(res=>{
         if(res&&res.error){alert('タスクの保存に失敗しました: '+res.error);return;}
         if(res&&res.data)task.id=res.data.id;
@@ -2513,22 +2508,20 @@ async function cmSaveTask(id,btn){
 }
 /* ===== チャート追加（新しい曼荼羅チャートを作成） ===== */
 function openCmAddTask(){
-  ['cm-ac-name','cm-ac-start','cm-ac-end','cm-ac-periodtext'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['cm-ac-name','cm-ac-start','cm-ac-end'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('cm-add-task-modal').style.display='flex';
 }
 function closeCmAddTask(){document.getElementById('cm-add-task-modal').style.display='none';}
 async function submitCmChart(){
   const name=((document.getElementById('cm-ac-name')||{}).value||'').trim();
   if(!name){alert('チャート名を入力してください');return;}
-  // 対象期間: 開始〜終了の日付、または文字入力
+  // 期間: 開始日・終了日（日付のみ。文字入力の期間欄は廃止）
   const st=(document.getElementById('cm-ac-start')||{}).value||'';
   const en=(document.getElementById('cm-ac-end')||{}).value||'';
-  const txt=((document.getElementById('cm-ac-periodtext')||{}).value||'').trim();
-  const period=txt||((st||en)?(st||'?')+'〜'+(en||'?'):'');
   // 空の曼荼羅（中心=チャート名、CSF/KPIは後でセルをクリックして記入）
   const subs=Array.from({length:8},(_,i)=>'CSF'+(i+1));
   const acts=Array.from({length:8},()=>Array(8).fill(''));
-  const key=await persistMyChart({name,center:name,subs,acts,period});
+  const key=await persistMyChart({name,center:name,subs,acts,startDate:st||null,endDate:en||null});
   if(!key)return;
   closeCmAddTask();
   // 作成したチャートを選択して開く（CSF/KPIを記入できる状態）
@@ -2979,6 +2972,19 @@ function _chartCsf(k){
 /* CSF達成率→色（0=グレー / 1-49=黄 / 50-99=水色 / 100=緑） */
 function _csfColor(p){return p>=100?'var(--green)':p>=50?'var(--cyan)':p>=1?'var(--amber)':'#9CA3AF';}
 /* ===== ダッシュボード絞り込みヘルパー ===== */
+// YYYY/MM/DD または YYYY-MM-DD → ISO(YYYY-MM-DD)。'YYYY/MM' 表示用ヘルパも用意
+function _isoFromYmd(s){if(!s)return '';const p=String(s).split(/[-/]/);if(p.length<3)return '';return p[0]+'-'+String(p[1]).padStart(2,'0')+'-'+String(p[2]).padStart(2,'0');}
+function _ym(s){if(!s)return '';const p=String(s).split(/[-/]/);if(p.length<2)return '';return p[0]+'/'+String(p[1]).padStart(2,'0');}
+// チャートの実日付から期間レンジを導出。{startISO,endISO,label,value} / startDate無しはnull
+function _chartDateRange(k){
+  const d=CHARTS[k]||{};const s=d.startDate||'';const e=d.endDate||'';
+  if(!s)return null;
+  const sI=_isoFromYmd(s),eI=e?_isoFromYmd(e):'';
+  let label;
+  if(eI){label=(_ym(s)===_ym(e))?_ym(s):(_ym(s)+'〜'+_ym(e));}
+  else{label=_ym(s)+'〜';}
+  return {startISO:sI,endISO:eI,label,value:sI+'__'+eI};
+}
 function _getDashFilter(){
   return {
     chart:(document.getElementById('ep-kgi-filter')||{}).value||'all',
@@ -2994,14 +3000,14 @@ function _dashFilteredTasks(tasks){
       const chartId=a.source_chart||a.chartId||null;
       const chartName=a.chart||'';
       const cData=CHARTS[f.chart]||{};
-      ok=ok&&(chartId===f.chart||chartName===cData.name||chartId===f.chart);
+      ok=ok&&(chartId===f.chart||chartName===cData.name);
     }
     if(f.period!=='all'){
-      const chartId=a.source_chart||a.chartId||null;
-      const chartName=a.chart||'';
-      const period=CHARTS[chartId]&&(CHARTS[chartId].period||'');
-      const periodByName=Object.values(CHARTS).find(c=>c.name===chartName)&&(Object.values(CHARTS).find(c=>c.name===chartName).period||'');
-      ok=ok&&(period===f.period||periodByName===f.period);
+      // 期間フィルターは "startISO__endISO"。タスクのdueRawが範囲内か（endが空なら開始以降すべて）
+      const parts=String(f.period).split('__');const fs=parts[0]||'';const fe=parts[1]||'';
+      const due=a.dueRaw||null;
+      if(!due)ok=false;
+      else{if(fs&&due<fs)ok=false;if(fe&&due>fe)ok=false;}
     }
     return ok;
   });
@@ -3015,8 +3021,8 @@ function onDashFilterChange(){
   if(badge){
     if(isFiltered){
       const parts=[];
-      if(f.chart!=='all'&&CHARTS[f.chart])parts.push(CHARTS[f.chart].name||f.chart);
-      if(f.period!=='all')parts.push(f.period);
+      if(f.chart!=='all'&&CHARTS[f.chart])parts.push(_chartKgiText(f.chart)||CHARTS[f.chart].name||f.chart);
+      if(f.period!=='all'){const pp=String(f.period).split('__');const lbl=(pp[0]?pp[0].slice(0,7).replace('-','/'):'')+'〜'+(pp[1]?pp[1].slice(0,7).replace('-','/'):'');parts.push(lbl);}
       badge.textContent=parts.join(' / ');badge.style.display='';
     }else{badge.style.display='none';}
   }
@@ -3038,19 +3044,30 @@ function renderKgiProgress(){
   if(sel){
     chartFilter=sel.value||'all';
     if(chartFilter!=='all'&&keys.indexOf(chartFilter)<0)chartFilter='all';
-    sel.innerHTML='<option value="all">全チャート</option>'+keys.map(k=>`<option value="${k}"${k===chartFilter?' selected':''}>${(CHARTS[k].name||k)}${CHARTS[k].readonly?'（参照のみ）':''}</option>`).join('');
+    // チャート絞り込みは KGI名（centerセルのテキスト）で表示
+    sel.innerHTML='<option value="all">全チャート</option>'+keys.map(k=>{
+      const kgiText=_chartKgiText(k)||CHARTS[k].name||k;
+      return `<option value="${k}"${k===chartFilter?' selected':''}>${kgiText}${CHARTS[k].readonly?'（参照のみ）':''}</option>`;
+    }).join('');
   }
-  // 期間フィルタードロップダウンを動的生成
+  // 期間フィルターは実日付(start_date/end_date)から導出した年月レンジで生成（同一レンジは重複排除）
   const ps=document.getElementById('ep-period-filter');
   if(ps){
     const curPeriod=ps.value||'all';
-    const periods=[...new Set(keys.map(k=>CHARTS[k].period||'').filter(Boolean))].sort();
-    ps.innerHTML='<option value="all">全期間</option>'+periods.map(p=>`<option value="${p}"${p===curPeriod?' selected':''}>${p}</option>`).join('');
+    const ranges={};keys.forEach(k=>{const r=_chartDateRange(k);if(r)ranges[r.value]=r.label;});
+    const vals=Object.keys(ranges).sort();
+    ps.innerHTML='<option value="all">全期間</option>'+vals.map(v=>`<option value="${v}"${v===curPeriod?' selected':''}>${ranges[v]}</option>`).join('');
   }
   const periodFilter=(ps&&ps.value)||'all';
   const list=keys.filter(k=>{
     if(chartFilter!=='all'&&k!==chartFilter)return false;
-    if(periodFilter!=='all'){const p=CHARTS[k].period||'';if(p!==periodFilter)return false;}
+    if(periodFilter!=='all'){
+      // チャートの start_date が選択レンジ内か（endが空なら開始以降）
+      const r=_chartDateRange(k);if(!r||!r.startISO)return false;
+      const pp=String(periodFilter).split('__');const fs=pp[0]||'';const fe=pp[1]||'';
+      if(fs&&r.startISO<fs)return false;
+      if(fe&&r.startISO>fe)return false;
+    }
     return true;
   }).map(k=>{
     const d=CHARTS[k];

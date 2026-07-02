@@ -820,7 +820,7 @@
   // 特定メンバーが持つ全曼荼羅チャート（評価対象選択用）
   async function loadChartsFor(pid) {
     if (!sb || !pid) return [];
-    var r = await sb.from('mandala_charts').select('id,name,period,scope_label,center,subs,acts,color,bg,member_kpi_edits').eq('owner_user_id', pid).order('created_at', { ascending: true });
+    var r = await sb.from('mandala_charts').select('id,name,period,scope_label,center,subs,acts,color,bg,member_kpi_edits,start_date,end_date').eq('owner_user_id', pid).order('created_at', { ascending: true });
     if (r.error) { err('chartsFor', r.error); return []; }
     return r.data || [];
   }
@@ -895,6 +895,7 @@
     var teamRow = raw.teams.filter(function (t) { return myTeamId && t.id === myTeamId; })[0];
     function chartObj(c) {
       return { dbId: c.id, name: c.name, scopeLabel: c.scope_label, period: c.period, startDate: c.start_date ? fmtYMD(c.start_date) : '',
+        endDate: c.end_date ? fmtYMD(c.end_date) : '',
         team: teamRow ? teamRow.name : '', color: c.color, bg: c.bg, center: c.center, subs: c.subs, acts: c.acts,
         memberKpiEdits: c.member_kpi_edits || {} };
     }

@@ -192,10 +192,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
           <div class="fg"><label class="fl">開始日</label><input class="fi" id="asg-start" type="date"></div>
           <div class="fg"><label class="fl">期限</label><input class="fi" id="asg-due" type="date"></div>
         </div>
-        <div class="fr">
-          <div class="fg"><label class="fl">対象期間 <span style="font-weight:400;color:var(--text3)">（評価に連携）</span></label><select class="fs" id="asg-period"></select></div>
-          <div class="fg"><label class="fl">予定工数（h・任意）</label><input class="fi" id="asg-planhours" type="number" min="0" step="0.5" placeholder="例: 8"></div>
-        </div>
+        <div class="fg"><label class="fl">予定工数（h・任意）</label><input class="fi" id="asg-planhours" type="number" min="0" step="0.5" placeholder="例: 8"></div>
         <div class="fg"><label class="fl">優先度</label><select class="fs" id="asg-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select></div>
         <button class="f-submit" onclick="submitAssign()">タスクを割り当てる</button>
         <span class="toast" id="asg-saved">✅ 保存しました</span>
@@ -248,7 +245,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
   </div>
   <!-- 選択期間のタスク・工数（評価の参考） -->
-  <div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">📋 選択期間のタスク・工数（参考）</div><div class="card-sub" id="evalp-sub">タスク作成時の「対象期間」で集計</div></div><span id="evalp-total" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div><div class="card-body" id="evalp-tasks" style="padding:0"><div style="padding:14px;color:var(--text3);font-size:12px">メンバーと期間を選択してください</div></div></div>
+  <div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">📋 選択期間のタスク・工数（参考）</div><div class="card-sub" id="evalp-sub">選択した評価期間で集計</div></div><span id="evalp-total" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div><div class="card-body" id="evalp-tasks" style="padding:0"><div style="padding:14px;color:var(--text3);font-size:12px">メンバーと期間を選択してください</div></div></div>
   <div style="background:#F0FDF4;border:1px solid #10B981;border-radius:8px;padding:9px 14px;margin-bottom:14px;font-size:11px;color:#065F46;display:flex;gap:14px;flex-wrap:wrap;align-items:center">
     <span style="font-weight:700">⭐ 星をクリックで5段階評価</span><span>KGI・各CSF・割当タスクごとにコメントを記入できます</span>
   </div>
@@ -1030,7 +1027,7 @@ function submitAssign(){
     alert('データ読み込み中です。少し待ってから再度お試しください。');return;
   }
   PENDING_ASSIGN={name,id,kpi:val('asg-kpi')||'—',pri:document.getElementById('asg-pri').value,
-    period:(document.getElementById('asg-period')||{}).value||'',planHours:parseFloat(val('asg-planhours'))||null,
+    planHours:parseFloat(val('asg-planhours'))||null,
     startV:val('asg-start')||null,dueV:val('asg-due')||null,startD:fmtDate('asg-start'),dueD:fmtDate('asg-due')};
   const m=MEMBERS[id];
   document.getElementById('assignchoice-title').textContent='「'+name+'」を '+(m?m.name:'')+' に割り当て';
@@ -1042,13 +1039,13 @@ async function doCreateTask(){
   const API=window.VexumAPI;
   let newId=null;
   if(API&&API.ready){
-    const res=await API.assignTask({title:pa.name,kpi:pa.kpi,assigneePid:pidOf(pa.id),teamUuid:teamMeta.uid,start:pa.startV,due:pa.dueV,priority:pa.pri,period:pa.period||null,plannedHours:pa.planHours});
+    const res=await API.assignTask({title:pa.name,kpi:pa.kpi,assigneePid:pidOf(pa.id),teamUuid:teamMeta.uid,start:pa.startV,due:pa.dueV,priority:pa.pri,plannedHours:pa.planHours});
     if(res&&res.error){alert('割当失敗: '+res.error);return null;}
     if(res&&res.data)newId=res.data.id;
   }
   if(!MEMBER_TASKS[pa.id])MEMBER_TASKS[pa.id]=[];
   // 返ってきた id を保持（リアルタイム再読込時に同一タスクが重複表示されないよう）
-  MEMBER_TASKS[pa.id].push({id:newId,name:pa.name,kpi:pa.kpi,start:pa.startD,due:pa.dueD,pri:pa.pri,status:'todo',period:pa.period||'',pct:0,hours:0});
+  MEMBER_TASKS[pa.id].push({id:newId,name:pa.name,kpi:pa.kpi,start:pa.startD,due:pa.dueD,pri:pa.pri,status:'todo',pct:0,hours:0});
   renderAssignedTasks();
   return pa.id;  // ※フォームは消さない（割当完了まで内容を保持）
 }
@@ -1095,7 +1092,7 @@ function clearEvalCache(){window._chartsCache={};window._evalCache={};}
 window._chartsCache={};  // pid -> charts[]
 window._evalCache={};    // pid+chartId -> {fromSelf,fromLeader,fromExec}
 let _evalChartId='';     // 現在選択中の評価対象チャートID
-// 評価期間ドロップダウンを生成（タスクの対象期間と揃える）
+// 評価期間ドロップダウンを生成（評価タブの期間絞り込み用）
 function ensureEvalPeriodOptions(){
   const ps=document.getElementById('evalin-period');
   if(ps&&(!ps.options.length||ps.dataset.gen!=='1')){const cur=ps.value;ps.innerHTML=periodOptions();ps.dataset.gen='1';if(cur)ps.value=cur;}
@@ -1109,7 +1106,7 @@ function renderEvalPeriodTasks(){
   if(!id||!MEMBERS[id]){con.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">メンバーを選択してください</div>';return;}
   let tasks=(MEMBER_TASKS[id]||[]);
   const inPeriod=period?tasks.filter(t=>t.period===period):tasks;
-  document.getElementById('evalp-sub').textContent=period?period+' のタスク（対象期間一致）':'全期間のタスク';
+  document.getElementById('evalp-sub').textContent=period?period+' のタスク':'全期間のタスク';
   const totalH=inPeriod.reduce((a,t)=>a+(t.hours||0),0);
   const doneN=inPeriod.filter(t=>t.status==='done'||((t.pct||0)>=100)).length;
   document.getElementById('evalp-total').textContent='合計 '+(Math.round(totalH*10)/10)+'h ／ 完了 '+doneN+'/'+inPeriod.length;
@@ -1584,11 +1581,8 @@ function populateSelects(){
     return `<option value="${id}">${m.name}（${m.role}）${hasSelf?' 📝自己評価あり':''}</option>`;
   }).join('');
   ['asg-member','evalin-member','chartedit-member'].forEach(sid=>{const s=document.getElementById(sid);if(s)s.innerHTML=opts;});
-  // 対象期間の選択肢（当年度の四半期＋月＋年次）
-  const ap=document.getElementById('asg-period');
-  if(ap&&!ap.options.length)ap.innerHTML=periodOptions();
 }
-// 対象期間の選択肢を生成（今年基準: Q1-Q4 / 各月 / 年度）
+// 評価期間の選択肢を生成（今年基準: Q1-Q4 / 各月 / 年度）※評価タブの期間絞り込み用
 function periodOptions(sel){
   const y=new Date().getFullYear();
   let o='';
