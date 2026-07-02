@@ -706,13 +706,13 @@ function filterTasks(s,btn){
  * 表示されるのは「チームチャートで与えられたタスク」(chart有り)と
  * 「チャートに紐づかない通常タスク」(chart無し)の2種類のみ。 */
 const ASSIGNMENTS=[
-  {name:'Q3 新規開拓 10社のリスト作成と初回接触',meta:'関連KGI: Q3個人売上 ¥15M達成 ／ カテゴリ: 営業',from:'📌 上長 · 田中 花子',fromClass:'',start:'2025/07/01',end:'2025/08/31',pct:40,comment:''},
-  {name:'提案書フォーマットの標準化プロジェクト',meta:'関連KGI: 提案力UP ／ カテゴリ: 業務改善',from:'📌 役員 · 山田 太郎',fromClass:'exec',start:'2025/06/15',end:'2025/07/31',pct:65,comment:''},
-  {name:'既存顧客リピート率向上の定期フォロー施策',meta:'関連KGI: 顧客フォロー強化 ／ カテゴリ: 顧客管理',from:'📌 上長 · 田中 花子',fromClass:'',start:'2025/07/01',end:'2025/09/30',pct:20,comment:''}
+  {name:'Q3 新規開拓 10社のリスト作成と初回接触',meta:'関連KGI: Q3個人売上 ¥15M達成 ／ カテゴリ: 営業',from:'📌 上長 · 田中 花子',fromClass:'',start:'2025/07/01',end:'2025/08/31',startRaw:'2025-07-01',dueRaw:'2025-08-31',pct:40,hours:12,comment:'',chart:'Q3個人売上 ¥15M達成'},
+  {name:'提案書フォーマットの標準化プロジェクト',meta:'関連KGI: Q2スキルアップ 目標達成 ／ カテゴリ: 業務改善',from:'📌 役員 · 山田 太郎',fromClass:'exec',start:'2025/06/15',end:'2025/07/31',startRaw:'2025-06-15',dueRaw:'2025-07-31',pct:65,hours:8,comment:'',chart:'Q2スキルアップ 目標達成'},
+  {name:'既存顧客リピート率向上の定期フォロー施策',meta:'関連KGI: 売上 ¥50M達成 ／ カテゴリ: 顧客管理',from:'📌 上長 · 田中 花子',fromClass:'',start:'2025/07/01',end:'2025/09/30',startRaw:'2025-07-01',dueRaw:'2025-09-30',pct:20,hours:5,comment:'',chart:'売上 ¥50M達成'}
 ];
 const ASSIGN_HISTORY=[
-  {name:'春季キャンペーン提案資料の作成',meta:'関連KGI: 提案力UP ／ カテゴリ: 営業',from:'📌 上長 · 田中 花子',fromClass:'',start:'2025/03/01',end:'2025/04/30',comment:'予定通り完了。商談3件で活用した。',completed:'2025/04/28'},
-  {name:'CRMデータ整備とクレンジング',meta:'関連KGI: 顧客管理強化 ／ カテゴリ: 業務改善',from:'📌 役員 · 山田 太郎',fromClass:'exec',start:'2025/02/01',end:'2025/03/31',comment:'重複2,300件を統合し精度向上。',completed:'2025/03/29'}
+  {name:'春季キャンペーン提案資料の作成',meta:'関連KGI: Q3個人売上 ¥15M達成 ／ カテゴリ: 営業',from:'📌 上長 · 田中 花子',fromClass:'',start:'2025/03/01',end:'2025/04/30',startRaw:'2025-03-01',dueRaw:'2025-04-30',pct:100,hours:20,comment:'予定通り完了。商談3件で活用した。',completed:'2025/04/28',chart:'Q3個人売上 ¥15M達成'},
+  {name:'CRMデータ整備とクレンジング',meta:'関連KGI: 売上 ¥50M達成 ／ カテゴリ: 業務改善',from:'📌 役員 · 山田 太郎',fromClass:'exec',start:'2025/02/01',end:'2025/03/31',startRaw:'2025-02-01',dueRaw:'2025-03-31',pct:100,hours:15,comment:'重複2,300件を統合し精度向上。',completed:'2025/03/29',chart:'売上 ¥50M達成'}
 ];
 let assignView='current';
 const numStyle='width:60px;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:14px;font-weight:700;color:var(--accent);text-align:center;font-family:inherit;outline:none';
