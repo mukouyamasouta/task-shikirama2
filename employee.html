@@ -650,6 +650,14 @@ function inDateRange(targetIso, fromIso, toIso){
   if(toIso   && targetIso > toIso)   return false;
   return true;
 }
+/* チャート選択肢の共通ラベル：「KGI名 (開始日〜終了日)」 */
+function _chartLabel(k){
+  const c=CHARTS[k]||{};
+  const kgi=((typeof _chartKgiText==='function'&&_chartKgiText(k))||c.center||c.name||k).replace(/\n/g,' ').slice(0,40);
+  const sd=c.startDate||'';const ed=c.endDate||'';
+  const dateStr=(sd||ed)?` (${sd}${ed?'〜'+ed:''})`:'';
+  return kgi+dateStr;
+}
 /* ===== タブ切替 ===== */
 const TITLES={progress:['進捗ダッシュボード','個人メニュー / 進捗'],tasks:['タスク管理','個人メニュー / タスク'],assign:['割り当て','個人メニュー / 割り当て'],reviews:['評価管理','個人メニュー / 評価'],report:['日報','個人メニュー / 日報'],chartmgr:['チャート管理','個人メニュー / チャート管理'],gantt:['ガントチャート','個人メニュー / ガントチャート'],inbox:['受信ボックス','個人メニュー / 受信ボックス']};
 /* 右上「新規作成」ボタンのタブ別制御（progress・assignでは非表示） */
@@ -1445,7 +1453,7 @@ function openSelfEval(){
     Object.entries(CHARTS).forEach(([k,c])=>{
       if(k.startsWith('__'))return;
       const dbId=c.dbId||(k==='self_q3'?'user_nakamura':k==='self_q2'?'user_nakamura_q2':k);
-      opts.push(`<option value="${dbId}">${c.name||k} — ${c.scopeLabel||''} ${c.period?'('+c.period+')':''}</option>`);
+      opts.push(`<option value="${dbId}">${_chartLabel(k)}</option>`);
     });
     csel.innerHTML=opts.join('')||'<option value="">— チャートなし —</option>';
     const curK=(typeof evalChartKey!=='undefined')?evalChartKey:(typeof curChartKey!=='undefined'?curChartKey:'self_q3');
@@ -1543,7 +1551,7 @@ function populateEvalChartSel(){
   const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
   if(!keys.length){sel.innerHTML='<option value="">— チャートなし —</option>';return;}
   if(keys.indexOf(evalChartKey)<0)evalChartKey=keys[0];
-  sel.innerHTML=keys.map(k=>{const c=CHARTS[k];return `<option value="${k}"${k===evalChartKey?' selected':''}>${(c.name||k)}${c.scopeLabel?' — '+c.scopeLabel:''}${c.period?' ('+c.period+')':''}</option>`;}).join('');
+  sel.innerHTML=keys.map(k=>`<option value="${k}"${k===evalChartKey?' selected':''}>${_chartLabel(k)}</option>`).join('');
 }
 function renderEval(){
   populateEvalChartSel();
@@ -1898,7 +1906,7 @@ function _fillTmChartSel(){
   const sel=document.getElementById('tm-chart-sel');if(!sel)return;
   const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__')&&!CHARTS[k].readonly);
   const cur=sel.value;
-  sel.innerHTML='<option value="">チャートを選択</option>'+keys.map(k=>`<option value="${k}">${_chartKgiText(k)||CHARTS[k].name||k}</option>`).join('');
+  sel.innerHTML='<option value="">チャートを選択</option>'+keys.map(k=>`<option value="${k}">${_chartLabel(k)}</option>`).join('');
   if(cur&&CHARTS[cur])sel.value=cur;
 }
 /* チャート選択 → そのチャートの「定義済みCSF」をCSFセレクタに反映 */
@@ -2131,7 +2139,7 @@ function initChartMgr(){
   let opts='';
   Object.entries(CHARTS).forEach(([k,c])=>{
     if(k.startsWith('__'))return;
-    opts+=`<option value="${k}">${c.name||k} — ${c.scopeLabel||''} ${c.period?'('+c.period+')':''}${c.readonly?'（参照のみ）':''}</option>`;
+    opts+=`<option value="${k}">${_chartLabel(k)}${c.readonly?'（参照のみ）':''}</option>`;
   });
   sel.innerHTML=opts||'<option value="">— チャートなし —</option>';
   onCmChartChange();
@@ -2778,7 +2786,7 @@ function renderTaskTable(){
     const chartKeys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
     if(_tmChartFilter!=='all'&&_tmChartFilter!=='__none__'&&chartKeys.indexOf(_tmChartFilter)<0)_tmChartFilter='all';
     const chartOpts='<option value="all">全チャート</option>'
-      +chartKeys.map(k=>{const nm=((CHARTS[k].center||CHARTS[k].name||k)+'').replace(/\n/g,' ');return `<option value="${k}"${k===_tmChartFilter?' selected':''}>${nm}</option>`;}).join('')
+      +chartKeys.map(k=>`<option value="${k}"${k===_tmChartFilter?' selected':''}>${_chartLabel(k)}</option>`).join('')
       +`<option value="__none__"${_tmChartFilter==='__none__'?' selected':''}>チャートなし</option>`;
     let csfOpts='<option value="all">全CSF</option>';
     if(!csfDisabled){
@@ -3100,12 +3108,7 @@ function renderKgiProgress(){
     chartFilter=sel.value||'all';
     if(chartFilter!=='all'&&keys.indexOf(chartFilter)<0)chartFilter='all';
     // チャート絞り込みは「KGI名 (開始日〜終了日)」で表示
-    sel.innerHTML='<option value="all">全チャート</option>'+keys.map(k=>{
-      const kgiText=_chartKgiText(k)||CHARTS[k].name||k;
-      const sd=CHARTS[k].startDate||'';const ed=CHARTS[k].endDate||'';
-      const dateStr=(sd||ed)?` (${sd}${ed?'〜'+ed:''})`:'';
-      return `<option value="${k}"${k===chartFilter?' selected':''}>${kgiText}${dateStr}${CHARTS[k].readonly?'（参照のみ）':''}</option>`;
-    }).join('');
+    sel.innerHTML='<option value="all">全チャート</option>'+keys.map(k=>`<option value="${k}"${k===chartFilter?' selected':''}>${_chartLabel(k)}${CHARTS[k].readonly?'（参照のみ）':''}</option>`).join('');
   }
   const f=_getDashFilter();
   const list=keys.filter(k=>{
@@ -3232,7 +3235,7 @@ function renderGantt(){
   const keys=(typeof CHARTS==='object'&&CHARTS)?Object.keys(CHARTS).filter(k=>!k.startsWith('__')):[];
   if(sel){
     if(!_ganttChartKey||keys.indexOf(_ganttChartKey)<0)_ganttChartKey=keys[0]||'';
-    sel.innerHTML=keys.length?keys.map(k=>`<option value="${k}"${k===_ganttChartKey?' selected':''}>${(_chartKgiText(k)||CHARTS[k].name||k)}</option>`).join(''):'<option value="">チャートなし</option>';
+    sel.innerHTML=keys.length?keys.map(k=>`<option value="${k}"${k===_ganttChartKey?' selected':''}>${_chartLabel(k)}</option>`).join(''):'<option value="">チャートなし</option>';
   }
   const k=_ganttChartKey;
   if(!keys.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">表示できるチャートがありません。<br>「チャート管理」でチャートを作成すると、ここにガントチャートが表示されます。</div></div>';return;}

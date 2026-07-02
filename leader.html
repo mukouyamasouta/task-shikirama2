@@ -753,8 +753,10 @@ function toggleMdMnd(){
 }
 // チャートの表示ラベル（KGI中心テキスト優先・コードに合わせ chart.center を使用）
 function mdChartLabel(c){
-  const t=(c.name||'').trim()||((c.center||'').split('\n')[0]||'').trim()||c.scope_label||'チャート';
-  return t+(c.period?'（'+c.period+'）':'');
+  const kgi=((c.center||'').replace(/\n/g,' ').trim().slice(0,40))||(c.name||'').trim()||c.scope_label||'チャート';
+  const sd=c.start_date||c.startDate||'';const ed=c.end_date||c.endDate||'';
+  const dateStr=(sd||ed)?` (${sd}${ed?'〜'+ed:''})`:'';
+  return kgi+dateStr;
 }
 // チャートのCSF/KPI文言セット
 function mdChartLabelSet(c){
