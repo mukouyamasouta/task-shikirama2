@@ -248,9 +248,9 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <span id="ep-filter-badge" style="display:none;font-size:10px;background:var(--accent);color:#fff;padding:2px 10px;border-radius:12px;font-weight:700;align-self:center"></span>
   </div>
   <div class="g4">
-    <div class="stat-card"><div class="s-lbl">本日までの達成率</div><div class="s-val" style="color:var(--accent)" id="ep-d-todayrate">—</div><div class="s-trend" style="color:var(--text3)" id="ep-d-todayrate-sub">期限到来分の完了割合</div></div>
-    <div class="stat-card"><div class="s-lbl">本日対応すべき</div><div class="s-val" id="ep-d-due">—</div><div class="s-trend" style="color:var(--text3)">期限が本日まで・未完了</div></div>
-    <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)" id="ep-d-late">—</div><div class="s-trend" style="color:var(--text3)">期限超過・未完了</div></div>
+    <div class="stat-card"><div class="s-lbl">本日までの達成率</div><div class="s-val" style="color:var(--accent)" id="ep-d-todayrate">—</div><div class="s-trend" style="color:var(--text3)" id="ep-d-todayrate-sub">期限到来分（タスク・KGI/CSF）の完了割合</div></div>
+    <div class="stat-card"><div class="s-lbl">本日対応すべき</div><div class="s-val" id="ep-d-due">—</div><div class="s-trend" style="color:var(--text3)">期限が本日まで・未完了（タスク・KGI/CSF）</div></div>
+    <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)" id="ep-d-late">—</div><div class="s-trend" style="color:var(--text3)">期限超過・未完了（タスク・KGI/CSF）</div></div>
     <div class="stat-card"><div class="s-lbl">合計作業時間</div><div class="s-val" style="color:var(--accent)" id="ep-d-hours">—</div><div class="s-trend" style="color:var(--text3)">全タスク累計工数</div></div>
   </div>
   <!-- CSF内訳（常時表示・全チャート横断／KGI絞り込み時は該当チャートのみ） -->
@@ -265,12 +265,12 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
   <!-- 今日やるべきタスク（期限=本日・未完了） -->
   <div class="card">
-    <div class="card-hd"><div><div class="card-title">今日やるべきタスク</div><div class="card-sub">本日が期限のタスク（未完了）</div></div><span id="ep-d-today-count" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div>
+    <div class="card-hd"><div><div class="card-title">今日やるべきタスク</div><div class="card-sub">本日が期限のタスク・KGI/CSF（未完了）</div></div><span id="ep-d-today-count" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div>
     <div class="card-body" id="ep-d-today-list"><div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">読み込み中…</div></div>
   </div>
   <!-- 遅延タスク（期限超過・未完了） -->
   <div class="card">
-    <div class="card-hd"><div><div class="card-title">遅延タスク</div><div class="card-sub">期限超過・未完了のタスク</div></div><span id="ep-d-late-count" style="font-size:13px;font-weight:700;color:var(--red)"></span></div>
+    <div class="card-hd"><div><div class="card-title">遅延タスク</div><div class="card-sub">期限超過・未完了のタスク・KGI/CSF</div></div><span id="ep-d-late-count" style="font-size:13px;font-weight:700;color:var(--red)"></span></div>
     <div class="card-body" id="ep-d-late-list"><div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">読み込み中…</div></div>
   </div>
 </div>
@@ -2986,30 +2986,51 @@ function _taskRowHtml(a,today){
   </div>`;
 }
 // 今日/遅延タスク一覧を描画（フィルター適用済み tasks を受け取る）
-function _epRenderTaskLists(filteredTasks){
+/* KGI/CSF（チャート由来）の行HTML。クリックでチャート管理の該当セルへ */
+function _cellRowHtml(it,today){
+  const late=it.due<today;
+  const col=it.pct>=80?'var(--green)':it.pct>=40?'var(--accent)':'var(--amber)';
+  const kindChip=it.kind==='kgi'
+    ?'<span style="font-size:9px;background:#0D9488;color:#fff;padding:1px 7px;border-radius:8px;font-weight:700">KGI</span>'
+    :`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700">CSF${it.si+1}</span>`;
+  const kgiTag=it.kind==='csf'?`<span style="font-size:9px;background:#F1F5F9;color:var(--text3);padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle" title="${it.kgiName}">${it.kgiName.slice(0,12)}${it.kgiName.length>12?'…':''}</span>`:'';
+  const jump=it.kind==='kgi'?`gotoChartMgr('${it.k}')`:`gotoChartCsf('${it.k}',${it.si})`;
+  return `<div onclick="${jump}" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='transparent'" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);border-left:2px solid transparent;cursor:pointer;transition:.12s">
+    <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">${kindChip} ${it.name}${kgiTag}</div>
+    <div style="font-size:10px;color:${late?'var(--red)':'var(--text3)'}">期限 ${it.due.replace(/-/g,'/')}${late?' ⚠ 超過':''} ／ チャート管理の設定期間</div></div>
+    ${late?'<span class="chip s-late">遅延</span>':'<span class="chip s-hi">本日期限</span>'}
+    <div class="pw" style="min-width:110px"><div class="pt"><div class="pf" style="width:${it.pct}%;background:${col}"></div></div><div class="pp" style="color:${col}">${it.pct}%</div></div>
+  </div>`;
+}
+function _epRenderTaskLists(filteredTasks,cellItems){
   const today=_epToday();
   function dueISO(a){if(a.dueRaw)return a.dueRaw;if(a.end&&/\d{4}\/\d{1,2}\/\d{1,2}/.test(a.end))return a.end.replace(/\//g,'-');return null;}
   const src=filteredTasks||ASSIGNMENTS;
+  const cells=cellItems||[];
   // 今日期限（due === today、未完了）
   const todayTasks=src.filter(a=>{const d=dueISO(a);return d&&d===today&&a.pct<100;}).sort((x,y)=>(dueISO(x)||'9999').localeCompare(dueISO(y)||'9999'));
+  const todayCells=cells.filter(c=>c.due===today&&c.pct<100);
   // 遅延（due < today、未完了）
   const lateTasks=src.filter(a=>{const d=dueISO(a);return d&&d<today&&a.pct<100;}).sort((x,y)=>(dueISO(y)||'').localeCompare(dueISO(x)||''));
+  const lateCells=cells.filter(c=>c.due<today&&c.pct<100).sort((x,y)=>y.due.localeCompare(x.due));
   const todayEl=document.getElementById('ep-d-today-list');
   const todayCnt=document.getElementById('ep-d-today-count');
+  const todayN=todayTasks.length+todayCells.length;
   if(todayEl){
-    todayEl.innerHTML=todayTasks.length
-      ?todayTasks.map(a=>_taskRowHtml(a,today)).join('')
+    todayEl.innerHTML=todayN
+      ?todayCells.map(c=>_cellRowHtml(c,today)).join('')+todayTasks.map(a=>_taskRowHtml(a,today)).join('')
       :'<div style="text-align:center;color:var(--green);font-size:12px;padding:20px">本日期限のタスクはありません</div>';
   }
-  if(todayCnt)todayCnt.textContent=todayTasks.length?todayTasks.length+'件':'';
+  if(todayCnt)todayCnt.textContent=todayN?todayN+'件':'';
   const lateEl=document.getElementById('ep-d-late-list');
   const lateCnt=document.getElementById('ep-d-late-count');
+  const lateN=lateTasks.length+lateCells.length;
   if(lateEl){
-    lateEl.innerHTML=lateTasks.length
-      ?lateTasks.map(a=>_taskRowHtml(a,today)).join('')
+    lateEl.innerHTML=lateN
+      ?lateCells.map(c=>_cellRowHtml(c,today)).join('')+lateTasks.map(a=>_taskRowHtml(a,today)).join('')
       :'<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">遅延タスクはありません</div>';
   }
-  if(lateCnt)lateCnt.textContent=lateTasks.length?lateTasks.length+'件':'';
+  if(lateCnt)lateCnt.textContent=lateN?lateN+'件':'';
 }
 function gotoChartFromDashTask(chartName){
   gotoTab('chartmgr');
@@ -3089,6 +3110,28 @@ function _dashFilteredTasks(tasks){
     }
     return ok;
   });
+}
+/* チャートのKGI/CSFを統計カード・タスク一覧に含めるためのアイテム化。
+   期限: KGI=チャート期間の終了日 / CSF=セルに設定した期間→無ければチャート終了日。
+   進捗: セルに記入した達成率。ダッシュボードのチャート・日付絞り込みも適用 */
+function _dashCellItems(){
+  const f=_getDashFilter();
+  const keys=(f.chart!=='all'&&CHARTS[f.chart])?[f.chart]:Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
+  const items=[];
+  keys.forEach(k=>{
+    const r=(typeof _chartDateRange==='function')?_chartDateRange(k):null;
+    const chartEnd=(r&&r.endISO)||'';
+    const kgiName=((typeof _chartKgiText==='function'&&_chartKgiText(k))||CHARTS[k].name||'').trim();
+    if(kgiName&&chartEnd)items.push({k,si:null,kind:'kgi',name:kgiName,kgiName,due:chartEnd,pct:_chartKgiPct(k)});
+    _chartCsf(k).forEach(c=>{
+      if(!c.text)return;
+      const per=(typeof _cellPeriod==='function')?_cellPeriod(k,'csf',c.si):{end:''};
+      const end=per.end||chartEnd;
+      if(!end)return;
+      items.push({k,si:c.si,kind:'csf',name:c.text,kgiName,due:end,pct:c.pct});
+    });
+  });
+  return (f.from||f.to)?items.filter(it=>inDateRange(it.due,f.from,f.to)):items;
 }
 /* CSF内訳を描画。KGI絞り込み時はそのチャートのみ、「全チャート」時は自分の全チャートを横断して表示 */
 function _renderCsfBreakdown(tasksAll){
@@ -3551,31 +3594,28 @@ function renderProgressDash(){
   // フィルター適用済みタスク
   const filtered=_dashFilteredTasks(ASSIGNMENTS);
   const filteredAll=_dashFilteredTasks([...ASSIGNMENTS,...ASSIGN_HISTORY]);
-  let st=window._epStats;
-  if(!st){ // デモ（Supabase未接続）: 手元のASSIGNMENTS等から簡易集計
-    const late=filtered.filter(a=>{const d=di(a);return d&&d<today&&a.pct<100;}).length;
-    const due=filtered.filter(a=>{const d=di(a);return d&&d<=today&&a.pct<100;}).length;
-    const hrs=_dashTotalHours(filteredAll);
-    const taskTotal=filteredAll.length;
-    const duePassed=filtered.filter(a=>{const d=di(a);return d&&d<=today;});
-    const doneOfDue=duePassed.filter(a=>a.pct>=100).length;
-    const todayRate=duePassed.length>0?Math.round(doneOfDue/duePassed.length*100):null;
-    st={late,dueToday:due,todayRate,taskCount:taskTotal,totalHours:hrs};
-  } else {
-    // Supabase接続時もフィルター適用で再計算
-    const late=filtered.filter(a=>{const d=di(a);return d&&d<today&&a.pct<100;}).length;
-    const due=filtered.filter(a=>{const d=di(a);return d&&d<=today&&a.pct<100;}).length;
+  // チャートのKGI/CSF（チャート管理で設定した期間・達成率）も統計に含める
+  const cells=(typeof _dashCellItems==='function')?_dashCellItems():[];
+  const cellLate=cells.filter(c=>c.due<today&&c.pct<100).length;
+  const cellDue=cells.filter(c=>c.due<=today&&c.pct<100).length;
+  const cellPassed=cells.filter(c=>c.due<=today);
+  let st;
+  {
+    // タスク＋KGI/CSFを合算して統計カードを計算（Supabase接続/デモ共通）
+    const late=filtered.filter(a=>{const d=di(a);return d&&d<today&&a.pct<100;}).length+cellLate;
+    const due=filtered.filter(a=>{const d=di(a);return d&&d<=today&&a.pct<100;}).length+cellDue;
     const hrs=_dashTotalHours(filteredAll);
     const duePassed=filtered.filter(a=>{const d=di(a);return d&&d<=today;});
-    const doneOfDue=duePassed.filter(a=>a.pct>=100).length;
-    const todayRate=duePassed.length>0?Math.round(doneOfDue/duePassed.length*100):null;
-    st={...st,late,dueToday:due,totalHours:hrs,todayRate,taskCount:filteredAll.length};
+    const passedTotal=duePassed.length+cellPassed.length;
+    const doneOfDue=duePassed.filter(a=>a.pct>=100).length+cellPassed.filter(c=>c.pct>=100).length;
+    const todayRate=passedTotal>0?Math.round(doneOfDue/passedTotal*100):null;
+    st={...(window._epStats||{}),late,dueToday:due,todayRate,taskCount:filteredAll.length+cells.length,totalHours:hrs};
   }
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
   // 今日基準のサマリ（0除算で誤った100%を出さない。タスク0件は「—」表示）
   if(st.todayRate!=null){
     set('ep-d-todayrate',st.todayRate+'%');
-    set('ep-d-todayrate-sub','期限到来分の完了割合');
+    set('ep-d-todayrate-sub','期限到来分（タスク・KGI/CSF）の完了割合');
   }else{
     set('ep-d-todayrate','—');
     const hasAny=(st.taskCount!=null)?st.taskCount>0:(filteredAll.length>0);
@@ -3584,8 +3624,8 @@ function renderProgressDash(){
   set('ep-d-due',st.dueToday!=null?st.dueToday:'0');
   set('ep-d-late',st.late!=null?st.late:'0');
   set('ep-d-hours',(st.totalHours!=null?st.totalHours:0)+'h');
-  // タスク一覧（フィルター適用済み）
-  _epRenderTaskLists(filtered);
+  // タスク一覧（フィルター適用済み、KGI/CSF行を含む）
+  _epRenderTaskLists(filtered,cells);
   // CSF内訳（KGI絞り込み時のみ）
   _renderCsfBreakdown(filteredAll);
   // KGI進捗カード（全チャートのKGI・達成率100%未満）を描画
