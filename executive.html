@@ -96,6 +96,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 .mnd-preview-wrap{display:grid;grid-template-columns:repeat(9,1fr);gap:1px;background:#D1D5DB;border-radius:4px;overflow:hidden}
 .fg{margin-bottom:16px}
 .fl{display:block;font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;letter-spacing:.04em}
+.f-btn{padding:7px 14px;border:1px solid var(--border);border-radius:var(--r-sm,6px);background:var(--card,#fff);color:var(--text2);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}
+.f-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .fi,.fs{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--text);background:var(--card);outline:none;transition:border .15s}
 .fi:focus,.fs:focus{border-color:var(--accent)}
 .f-submit{padding:10px 24px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
@@ -276,10 +278,13 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div>
       <div class="card">
         <div class="card-hd"><div><div class="card-title">割り当て済みタスク</div><div class="card-sub">チーム・メンバー・ステータス・期間で絞り込み</div></div></div>
-        <div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+        <div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--border)">
           <select class="fs" id="task-f-member" style="min-width:130px" onchange="renderExecTasks()"><option value="">全メンバー</option></select>
           <select class="fs" id="task-f-status" onchange="renderExecTasks()"><option value="">全ステータス</option><option value="todo">未着手</option><option value="wip">進行中</option><option value="done">完了</option><option value="late">遅延</option></select>
-          <select class="fs" id="task-f-period" onchange="renderExecTasks()"><option value="">全期間</option></select>
+          <div><div class="fl" style="margin-bottom:4px">開始日</div><div id="exec-from-ymd"></div></div>
+          <span style="align-self:flex-end;padding-bottom:6px;color:var(--text3)">〜</span>
+          <div><div class="fl" style="margin-bottom:4px">期限</div><div id="exec-to-ymd"></div></div>
+          <button class="f-btn active" style="align-self:flex-end" onclick="renderExecTasks()">絞り込む</button>
         </div>
         <div class="card-body" id="exec-assigned-list" style="padding:0"></div>
       </div>
@@ -372,8 +377,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
         </div>
       </div>
       <div id="dash-custom-range" style="display:none;gap:10px;align-items:flex-end">
-        <div><label class="fl">開始日</label><input class="fi" type="date" id="dash-date-from"></div>
-        <div><label class="fl">終了日</label><input class="fi" type="date" id="dash-date-to"></div>
+        <div><label class="fl">開始日</label><div id="exec-dash-from-ymd"></div></div>
+        <div><label class="fl">終了日</label><div id="exec-dash-to-ymd"></div></div>
       </div>
       <button class="f-submit" style="padding:9px 20px;font-size:12px" onclick="applyDashFilter()">絞り込む</button>
       <button class="card-btn" onclick="resetDashFilter()">リセット</button>
@@ -704,6 +709,48 @@ function getRat(id){if(!RATINGS[id])RATINGS[id]={stars:0,comment:''};return RATI
 </script>
 
 <script>
+/* ===== 年/月/日 入力ヘルパー（全ロール共通） ===== */
+function ymdHtml(idPrefix, labelText, required){
+  const y=new Date().getFullYear();
+  const yOpts=['<option value="">年</option>'];
+  for(let i=y-3;i<=y+5;i++) yOpts.push(`<option value="${i}">${i}年</option>`);
+  const mOpts=['<option value="">月</option>'];
+  for(let i=1;i<=12;i++) mOpts.push(`<option value="${String(i).padStart(2,'0')}">${i}月</option>`);
+  const dOpts=['<option value="">日</option>'];
+  for(let i=1;i<=31;i++) dOpts.push(`<option value="${String(i).padStart(2,'0')}">${i}日</option>`);
+  return `<div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap">
+    ${labelText?`<span style="font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;margin-right:4px">${labelText}</span>`:''}
+    <select class="fs" id="${idPrefix}-y" style="padding:5px 4px;font-size:11px;width:72px">${yOpts.join('')}</select>
+    <span style="font-size:11px;color:var(--text3)">/</span>
+    <select class="fs" id="${idPrefix}-m" style="padding:5px 4px;font-size:11px;width:56px">${mOpts.join('')}</select>
+    <span style="font-size:11px;color:var(--text3)">/</span>
+    <select class="fs" id="${idPrefix}-d" style="padding:5px 4px;font-size:11px;width:52px">${dOpts.join('')}</select>
+  </div>`;
+}
+function ymdValue(idPrefix){
+  const y=(document.getElementById(idPrefix+'-y')||{}).value||'';
+  const m=(document.getElementById(idPrefix+'-m')||{}).value||'';
+  const d=(document.getElementById(idPrefix+'-d')||{}).value||'';
+  return (y&&m&&d)?(y+'-'+m+'-'+d):null;
+}
+function ymdSet(idPrefix, iso){
+  if(!iso)return;
+  const p=String(iso).split(/[-/]/);
+  if(p.length<3)return;
+  const ye=document.getElementById(idPrefix+'-y'),mo=document.getElementById(idPrefix+'-m'),de=document.getElementById(idPrefix+'-d');
+  if(ye)ye.value=p[0];
+  if(mo)mo.value=String(p[1]).padStart(2,'0');
+  if(de)de.value=String(p[2]).padStart(2,'0');
+}
+function ymdClear(idPrefix){
+  [idPrefix+'-y',idPrefix+'-m',idPrefix+'-d'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+}
+function inDateRange(targetIso, fromIso, toIso){
+  if(!targetIso) return true; // 日付未設定は除外せず含める
+  if(fromIso && targetIso < fromIso) return false;
+  if(toIso   && targetIso > toIso)   return false;
+  return true;
+}
 /* ========== UI ========== */
 const TITLES={users:['アカウント管理','幹部コンソール / アカウント管理'],send:['チャート送信','幹部コンソール / チャート送信'],tasks:['タスク管理','幹部コンソール / タスク管理'],eval:['一覧・評価','幹部コンソール / 一覧・評価'],report:['日報','幹部コンソール / 日報'],dashboard:['ダッシュボード','幹部コンソール / ダッシュボード']};
 function swTab(id,btn){
@@ -1575,14 +1622,6 @@ function fmtDate(id){const v=val(id);if(!v)return null;return v;}
 function fmtDateDisp(id){const v=val(id);if(!v)return'-';const p=v.split('-');return p.length===3?`${+p[1]}/${+p[2]}`:v;}
 function statusChip(s){return {wip:['s-wip','進行中'],done:['s-done','完了'],late:['s-late','遅延'],todo:['s-todo','未着手']}[s]||['s-todo','未着手'];}
 function priChip(p){return {hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低']}[p]||['s-md','中'];}
-function periodOptions(sel){
-  const y=new Date().getFullYear();
-  let o='<option value="">全期間</option>';
-  [1,2,3,4].forEach(q=>{o+=`<option value="${y} Q${q}"${sel===y+' Q'+q?' selected':''}>${y}年 Q${q}</option>`;});
-  for(let mo=1;mo<=12;mo++){const v=`${y}-${String(mo).padStart(2,'0')}`;o+=`<option value="${v}"${sel===v?' selected':''}>${y}年${mo}月</option>`;}
-  o+=`<option value="${y}年度"${sel===y+'年度'?' selected':''}>${y}年度（通年）</option>`;
-  return o;
-}
 async function initExecTasks(){
   const API=window.VexumAPI;
   if(API&&API.ready){
@@ -1594,8 +1633,6 @@ async function initExecTasks(){
       sel.value=cur; sel.dataset.n=String(EXEC_OV.teamsList.length);
     }
   }
-  const fpSel=document.getElementById('task-f-period');
-  if(fpSel&&!fpSel.dataset.init){fpSel.innerHTML=periodOptions('');fpSel.dataset.init='1';}
   populateExecMemberSelects();
   renderExecTasks();
 }
@@ -1633,16 +1670,20 @@ async function submitExecAssign(){
   showToast('✅ タスクを割り当てました');
 }
 function renderExecTasks(){
+  // 期間（開始〜期限）YMDセレクトを初回生成
+  const efw=document.getElementById('exec-from-ymd');if(efw&&!efw.children.length)efw.innerHTML=ymdHtml('exec-from','');
+  const etw=document.getElementById('exec-to-ymd');if(etw&&!etw.children.length)etw.innerHTML=ymdHtml('exec-to','');
   const teamUuid=document.getElementById('task-team-sel').value||'';
   const fMem=(document.getElementById('task-f-member')||{}).value||'';
   const fSt=(document.getElementById('task-f-status')||{}).value||'';
-  const fPe=(document.getElementById('task-f-period')||{}).value||'';
+  const fromD=ymdValue('exec-from')||'';const toD=ymdValue('exec-to')||'';
+  const dateFiltered=!!(fromD||toD);
   const ids=Object.keys(EXEC_OV.MEMBERS).filter(id=>!teamUuid||EXEC_OV.MEMBERS[id].teamUuid===teamUuid);
   let h='',shown=0;
   ids.filter(id=>!fMem||id===fMem).forEach(id=>{
     const m=EXEC_OV.MEMBERS[id];let tasks=EXEC_OV.MEMBER_TASKS[id]||[];
     if(fSt)tasks=tasks.filter(t=>(t.status||'todo')===fSt);
-    if(fPe)tasks=tasks.filter(t=>(t.period||'')===fPe);
+    if(dateFiltered)tasks=tasks.filter(t=>inDateRange(t.dueRaw||t.startRaw,fromD,toD));
     h+=`<div style="padding:10px 16px;background:#FAFCFC;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);display:flex;align-items:center;gap:8px"><span class="tdot" style="background:${m.color||'#9CA3AF'}"></span>${m.name} <span style="font-weight:400;color:var(--text3)">（${m.team||'未所属'} ／ ${tasks.length}件）</span></div>`;
     if(!tasks.length)h+=`<div style="padding:10px 16px;font-size:11px;color:var(--text3)">該当なし</div>`;
     tasks.forEach(t=>{const sc=statusChip(t.status),pc=priChip(t.pri);shown++;
@@ -1650,7 +1691,7 @@ function renderExecTasks(){
       const hrs=t.hours!=null?` ／ ${t.hours}h`:'';
       h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${hrs}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${pct}%;background:${pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)'}"></div></div><div class="pp" style="font-size:10px">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
   });
-  if(!shown&&(fMem||fSt||fPe))h+='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">絞り込み条件に該当するタスクがありません</div>';
+  if(!shown&&(fMem||fSt||dateFiltered))h+='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">絞り込み条件に該当するタスクがありません</div>';
   if(!ids.length)h='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">対象メンバーがいません</div>';
   document.getElementById('exec-assigned-list').innerHTML=h;
 }
@@ -1774,7 +1815,7 @@ function dashDateRange(){
     const f=new Date(today.getFullYear(),today.getMonth()-1,1);const t=new Date(today.getFullYear(),today.getMonth(),0);
     return {from:ymd(f),to:ymd(t)};
   }else{
-    return {from:val('dash-date-from')||null,to:val('dash-date-to')||null};
+    return {from:ymdValue('exec-dash-from')||null,to:ymdValue('exec-dash-to')||null};
   }
 }
 // 期間セグメントボタン：選択を切り替え、カスタム時のみ日付ピッカーを表示（適用は「絞り込む」）
@@ -1783,6 +1824,10 @@ function setDashPeriod(p,btn){
   document.querySelectorAll('#dash-period-seg .seg-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   const wrap=document.getElementById('dash-custom-range');if(wrap)wrap.style.display=(p==='custom')?'flex':'none';
+  if(p==='custom'){
+    const fw=document.getElementById('exec-dash-from-ymd');if(fw&&!fw.children.length)fw.innerHTML=ymdHtml('exec-dash-from','');
+    const tw=document.getElementById('exec-dash-to-ymd');if(tw&&!tw.children.length)tw.innerHTML=ymdHtml('exec-dash-to','');
+  }
 }
 // チーム変更時：担当者プルダウンをそのチームのメンバーに更新
 function onDashTeamChange(){populateDashAssignee();}
@@ -1822,8 +1867,7 @@ function resetDashFilter(){
   _dashPeriod='thismonth';
   document.querySelectorAll('#dash-period-seg .seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.period==='thismonth'));
   const cr=document.getElementById('dash-custom-range');if(cr)cr.style.display='none';
-  const df=document.getElementById('dash-date-from');if(df)df.value='';
-  const dt=document.getElementById('dash-date-to');if(dt)dt.value='';
+  ymdClear('exec-dash-from');ymdClear('exec-dash-to');
   populateDashAssignee();
   applyDashFilter();
 }
@@ -1942,10 +1986,12 @@ async function loadExecMemberReports(id,pid,teamUuid){
   });
   box.innerHTML=rh;
 }
-// チャートの表示ラベル（KGI中心テキスト優先）
+// チャートの表示ラベル（KGI名 + 開始日〜終了日）
 function execChartLabel(c){
-  const t=(c.name||'').trim()||((c.center||'').split('\n')[0]||'').trim()||c.scope_label||'チャート';
-  return t+(c.period?'（'+c.period+'）':'');
+  const t=((c.center||'').replace(/\n/g,' ').trim().slice(0,30))||(c.name||'').trim()||c.scope_label||'チャート';
+  const sd=c.start_date||c.startDate||'';const ed=c.end_date||c.endDate||'';
+  const dateStr=(sd||ed)?` (${sd}${ed?'〜'+ed:''})`:'';
+  return t+dateStr;
 }
 // 個人DBの曼荼羅チャートを開閉（初期は閉じている。開いた時に遅延描画）
 function toggleExecMnd(){
@@ -2263,7 +2309,7 @@ async function injectEvalRefs(memberId,pid){
       if(charts.length){
         const cur=window._execChartChoice[memberId]||charts[0].id;
         window._execChartChoice[memberId]=cur;
-        selWrap.innerHTML=charts.map(c=>`<option value="${c.id}" ${c.id===cur?'selected':''}>${c.name||c.id}${c.period?' ('+c.period+')':''}</option>`).join('');
+        selWrap.innerHTML=charts.map(c=>`<option value="${c.id}" ${c.id===cur?'selected':''}>${execChartLabel(c)}</option>`).join('');
       }else{
         selWrap.innerHTML='<option value="">— チャートなし —</option>';
         document.getElementById('chart-sel-'+memberId).style.display='none';

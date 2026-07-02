@@ -239,7 +239,14 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="card" style="margin-bottom:16px">
     <div class="card-body" style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
       <div style="flex:1;min-width:200px"><label class="fl">評価するメンバー</label><select class="fs" id="evalin-member" onchange="renderMemberEval();renderEvalPeriodTasks()"></select></div>
-      <div style="min-width:150px"><label class="fl">評価期間</label><select class="fs" id="evalin-period" onchange="renderEvalPeriodTasks()"></select></div>
+      <div><label class="fl" style="margin-bottom:4px;display:block">評価期間（開始〜期限）</label>
+        <div style="display:flex;align-items:flex-end;gap:6px">
+          <div id="evalin-from-ymd"></div>
+          <span style="align-self:flex-end;padding-bottom:6px;color:var(--text3)">〜</span>
+          <div id="evalin-to-ymd"></div>
+          <button class="f-btn active" style="align-self:flex-end" onclick="renderEvalPeriodTasks()">絞り込む</button>
+        </div>
+      </div>
       <button class="f-submit" onclick="saveMemberEval()">💾 評価を保存</button>
       <span class="toast" id="evalin-saved">✅ 評価を保存しました（評価記録に反映）</span>
     </div>
@@ -295,12 +302,12 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="card" style="margin-bottom:14px">
     <div class="card-body" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
       <div><div class="fl" style="margin-bottom:4px">メンバー</div><select class="fs" id="sub-member" style="min-width:160px" onchange="renderSubmissions()"></select></div>
-      <div><div class="fl" style="margin-bottom:4px">期間</div><select class="fs" id="sub-period" onchange="renderSubmissions()"><option value="">全期間</option></select></div>
       <div><div class="fl" style="margin-bottom:4px">表示</div><select class="fs" id="sub-view" onchange="renderSubmissions()"><option value="both">日報＋工数</option><option value="report">日報のみ</option><option value="hours">工数のみ</option></select></div>
-      <div><div class="fl" style="margin-bottom:4px">提出日（開始）</div><input class="fi" type="date" id="sub-date-from" style="width:140px" onchange="renderSubmissions()"></div>
-      <div><div class="fl" style="margin-bottom:4px">提出日（終了）</div><input class="fi" type="date" id="sub-date-to" style="width:140px" onchange="renderSubmissions()"></div>
-      <button class="card-btn" onclick="renderSubmissions()">絞り込む</button>
-      <button class="card-btn" onclick="clearSubDateFilter()">クリア</button>
+      <div><div class="fl" style="margin-bottom:4px">提出日（開始）</div><div id="sub-from-ymd"></div></div>
+      <div style="align-self:flex-end;padding-bottom:6px;color:var(--text3)">〜</div>
+      <div><div class="fl" style="margin-bottom:4px">提出日（期限）</div><div id="sub-to-ymd"></div></div>
+      <button class="f-btn active" style="align-self:flex-end" onclick="renderSubmissions()">絞り込む</button>
+      <button class="card-btn" style="align-self:flex-end" onclick="clearSubDateFilter()">クリア</button>
       <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="sub-summary"></div>
     </div>
   </div>
@@ -536,6 +543,48 @@ function getEvalProgress(k){const st=evalStates[k]||{};return Math.round(Object.
 </script>
 
 <script>
+/* ===== 年/月/日 入力ヘルパー（全ロール共通） ===== */
+function ymdHtml(idPrefix, labelText, required){
+  const y=new Date().getFullYear();
+  const yOpts=['<option value="">年</option>'];
+  for(let i=y-3;i<=y+5;i++) yOpts.push(`<option value="${i}">${i}年</option>`);
+  const mOpts=['<option value="">月</option>'];
+  for(let i=1;i<=12;i++) mOpts.push(`<option value="${String(i).padStart(2,'0')}">${i}月</option>`);
+  const dOpts=['<option value="">日</option>'];
+  for(let i=1;i<=31;i++) dOpts.push(`<option value="${String(i).padStart(2,'0')}">${i}日</option>`);
+  return `<div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap">
+    ${labelText?`<span style="font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;margin-right:4px">${labelText}</span>`:''}
+    <select class="fs" id="${idPrefix}-y" style="padding:5px 4px;font-size:11px;width:72px">${yOpts.join('')}</select>
+    <span style="font-size:11px;color:var(--text3)">/</span>
+    <select class="fs" id="${idPrefix}-m" style="padding:5px 4px;font-size:11px;width:56px">${mOpts.join('')}</select>
+    <span style="font-size:11px;color:var(--text3)">/</span>
+    <select class="fs" id="${idPrefix}-d" style="padding:5px 4px;font-size:11px;width:52px">${dOpts.join('')}</select>
+  </div>`;
+}
+function ymdValue(idPrefix){
+  const y=(document.getElementById(idPrefix+'-y')||{}).value||'';
+  const m=(document.getElementById(idPrefix+'-m')||{}).value||'';
+  const d=(document.getElementById(idPrefix+'-d')||{}).value||'';
+  return (y&&m&&d)?(y+'-'+m+'-'+d):null;
+}
+function ymdSet(idPrefix, iso){
+  if(!iso)return;
+  const p=String(iso).split(/[-/]/);
+  if(p.length<3)return;
+  const ye=document.getElementById(idPrefix+'-y'),mo=document.getElementById(idPrefix+'-m'),de=document.getElementById(idPrefix+'-d');
+  if(ye)ye.value=p[0];
+  if(mo)mo.value=String(p[1]).padStart(2,'0');
+  if(de)de.value=String(p[2]).padStart(2,'0');
+}
+function ymdClear(idPrefix){
+  [idPrefix+'-y',idPrefix+'-m',idPrefix+'-d'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+}
+function inDateRange(targetIso, fromIso, toIso){
+  if(!targetIso) return true; // 日付未設定は除外せず含める
+  if(fromIso && targetIso < fromIso) return false;
+  if(toIso   && targetIso > toIso)   return false;
+  return true;
+}
 /* ===== タブ切替・共通 ===== */
 const TITLES={dashboard:['チームダッシュボード','チームリーダーメニュー / チームDB'],assign:['タスク割当','チームリーダーメニュー / タスク割当'],inbox:['受信ボックス','チームリーダーメニュー / 受信ボックス'],evalin:['メンバー評価入力','チームリーダーメニュー / 評価入力'],evalrec:['評価記録','チームリーダーメニュー / 評価記録'],report:['日報','チームリーダーメニュー / 日報'],teamedit:['チーム編集','チームリーダーメニュー / チーム編集'],submissions:['提出物（日報・工数）','チームリーダーメニュー / 提出物']};
 function swTab(id,btn){
@@ -567,7 +616,7 @@ function _teamCharts(){
     const center=((m.center||'').split('\n')[0]||'').trim();
     const label=center||((m.name||'')+' のチャート');
     if(seen[label])return;seen[label]=1;
-    out.push({key:(m.chartId||('mem:'+id)),label:label,ownerId:id,subs:m.subs||[],acts:m.acts||[],center:m.center||'',name:label});
+    out.push({key:(m.chartId||('mem:'+id)),label:label,ownerId:id,subs:m.subs||[],acts:m.acts||[],center:m.center||'',name:label,startDate:m.startDate||'',endDate:m.endDate||''});
   });
   return out;
 }
@@ -592,19 +641,32 @@ function _renderDashFilterBar(){
   const ids=DASH_IDS.filter(id=>MEMBERS[id]);
   const memOpts='<option value="">全員</option>'+ids.map(id=>`<option value="${id}"${id===memF?' selected':''}>${MEMBERS[id].name}</option>`).join('');
   const charts=_teamCharts();
-  const chartOpts='<option value="">全チャート</option>'+charts.map(c=>`<option value="${c.key}"${c.key===chartF?' selected':''}>${c.label}</option>`).join('');
+  const chartOpts='<option value="">全チャート</option>'+charts.map(c=>{
+    const kgiText=(c.center||c.kgi||c.label||'').replace(/\n/g,' ').trim()||c.label;
+    const sd=c.startDate||'';const ed=c.endDate||'';
+    const dateStr=(sd||ed)?` (${sd}${ed?'〜'+ed:''})`:'';
+    return `<option value="${c.key}"${c.key===chartF?' selected':''}>${kgiText}${dateStr}</option>`;
+  }).join('');
   const lbl='font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:5px';
   bar.innerHTML=`
     <div><div style="${lbl}">従業員</div><select class="fs" id="dash-f-member" style="font-size:12px;padding:7px 10px;font-weight:600;min-width:150px">${memOpts}</select></div>
     <div><div style="${lbl}">チャート</div><select class="fs" id="dash-f-chart" style="font-size:12px;padding:7px 10px;font-weight:600;min-width:200px">${chartOpts}</select></div>
-    <div style="display:flex;gap:8px"><button class="f-btn active" onclick="applyDashFilter()">絞り込む</button><button class="f-btn" onclick="resetDashFilter()">リセット</button></div>`;
+    <div><div style="${lbl}">開始日</div><div id="ld-from-ymd"></div></div>
+    <div style="align-self:flex-end;padding-bottom:6px;color:var(--text3)">〜</div>
+    <div><div style="${lbl}">期限</div><div id="ld-to-ymd"></div></div>
+    <div style="display:flex;gap:8px;align-items:flex-end"><button class="f-btn active" onclick="applyDashFilter()">絞り込む</button><button class="f-btn" onclick="resetDashFilter()">リセット</button></div>`;
+  const lfw=document.getElementById('ld-from-ymd');if(lfw&&!lfw.children.length)lfw.innerHTML=ymdHtml('ld-from','');
+  const ltw=document.getElementById('ld-to-ymd');if(ltw&&!ltw.children.length)ltw.innerHTML=ymdHtml('ld-to','');
+  ymdSet('ld-from',window._dashFromFilter||'');ymdSet('ld-to',window._dashToFilter||'');
 }
 function applyDashFilter(){
   window._dashMemberFilter=(document.getElementById('dash-f-member')||{}).value||'';
   window._dashChartFilter=(document.getElementById('dash-f-chart')||{}).value||'';
+  window._dashFromFilter=ymdValue('ld-from')||'';
+  window._dashToFilter=ymdValue('ld-to')||'';
   renderDashboard();
 }
-function resetDashFilter(){window._dashMemberFilter='';window._dashChartFilter='';renderDashboard();}
+function resetDashFilter(){window._dashMemberFilter='';window._dashChartFilter='';window._dashFromFilter='';window._dashToFilter='';ymdClear('ld-from');ymdClear('ld-to');renderDashboard();}
 function renderDashboard(){
   _renderDashFilterBar();
   // 統計カード（人物単位の人数・チャート基準の進捗。0件は「—」＝0除算で誤った%を出さない）
@@ -626,6 +688,14 @@ function renderDashboard(){
   let ids=DASH_IDS.filter(id=>MEMBERS[id]);
   if(memF)ids=ids.filter(id=>id===memF);
   if(chart)ids=ids.filter(id=>_memberMatchesChart(id,chart));
+  const from=window._dashFromFilter||'',to=window._dashToFilter||'';
+  if(from||to){
+    ids=ids.filter(id=>{
+      const tasks=(MEMBER_TASKS[id]||[]);
+      // メンバーのタスクのいずれかが期間内なら対象（タスク無しは除外しない）
+      return !tasks.length || tasks.some(t=>inDateRange(t.dueRaw||t.startRaw,from,to));
+    });
+  }
   let h='';
   ids.forEach(id=>{
     const m=MEMBERS[id];const col=rateColor(m.rate);
@@ -1092,26 +1162,27 @@ function clearEvalCache(){window._chartsCache={};window._evalCache={};}
 window._chartsCache={};  // pid -> charts[]
 window._evalCache={};    // pid+chartId -> {fromSelf,fromLeader,fromExec}
 let _evalChartId='';     // 現在選択中の評価対象チャートID
-// 評価期間ドロップダウンを生成（評価タブの期間絞り込み用）
+// 評価期間の日付範囲YMDセレクトを初回生成
 function ensureEvalPeriodOptions(){
-  const ps=document.getElementById('evalin-period');
-  if(ps&&(!ps.options.length||ps.dataset.gen!=='1')){const cur=ps.value;ps.innerHTML=periodOptions();ps.dataset.gen='1';if(cur)ps.value=cur;}
+  const efw=document.getElementById('evalin-from-ymd');if(efw&&!efw.children.length)efw.innerHTML=ymdHtml('evalin-from','');
+  const etw=document.getElementById('evalin-to-ymd');if(etw&&!etw.children.length)etw.innerHTML=ymdHtml('evalin-to','');
 }
 // 選択メンバー×選択期間のタスクと工数を表示（評価の参考）
 function renderEvalPeriodTasks(){
   ensureEvalPeriodOptions();
   const id=(document.getElementById('evalin-member')||{}).value;
-  const period=(document.getElementById('evalin-period')||{}).value||'';
+  const fromD=ymdValue('evalin-from')||'';
+  const toD=ymdValue('evalin-to')||'';
   const con=document.getElementById('evalp-tasks');if(!con)return;
   if(!id||!MEMBERS[id]){con.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">メンバーを選択してください</div>';return;}
   let tasks=(MEMBER_TASKS[id]||[]);
-  const inPeriod=period?tasks.filter(t=>t.period===period):tasks;
-  document.getElementById('evalp-sub').textContent=period?period+' のタスク':'全期間のタスク';
+  const inPeriod=(fromD||toD)?tasks.filter(t=>inDateRange(t.dueRaw||t.startRaw,fromD,toD)):tasks;
+  document.getElementById('evalp-sub').textContent=(fromD||toD)?((fromD||'')+'〜'+(toD||'')+' のタスク'):'全期間のタスク';
   const totalH=inPeriod.reduce((a,t)=>a+(t.hours||0),0);
   const doneN=inPeriod.filter(t=>t.status==='done'||((t.pct||0)>=100)).length;
   document.getElementById('evalp-total').textContent='合計 '+(Math.round(totalH*10)/10)+'h ／ 完了 '+doneN+'/'+inPeriod.length;
   if(!inPeriod.length){con.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">この期間の割当タスクはありません</div>';return;}
-  con.innerHTML=inPeriod.map(t=>{const sc=statusChip(t.status),pct=t.pct!=null?t.pct:0;return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-bottom:1px solid var(--border)"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}</div><div style="font-size:10px;color:var(--text3)">${t.kpi}${t.period?' ／ '+t.period:''}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><span style="font-size:12px;font-weight:700;color:var(--accent)">${t.hours||0}h</span><span style="font-size:10px">${pct}%</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;}).join('');
+  con.innerHTML=inPeriod.map(t=>{const sc=statusChip(t.status),pct=t.pct!=null?t.pct:0;return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-bottom:1px solid var(--border)"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}</div><div style="font-size:10px;color:var(--text3)">${t.kpi}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><span style="font-size:12px;font-weight:700;color:var(--accent)">${t.hours||0}h</span><span style="font-size:10px">${pct}%</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;}).join('');
 }
 async function renderMemberEval(){
   const sel=document.getElementById('evalin-member');if(!sel)return;const id=sel.value;if(!id)return;
@@ -1181,7 +1252,8 @@ function renderEvalinMnd(){
   if(API&&API.renderEvalMandala)API.renderEvalMandala(chart,chart.member_kpi_edits||chart.memberKpiEdits||{},box);
 }
 function saveMemberEval(){
-  const id=document.getElementById('evalin-member').value;const period=document.getElementById('evalin-period').value;
+  const id=document.getElementById('evalin-member').value;
+  const _ef=ymdValue('evalin-from')||'',_et=ymdValue('evalin-to')||'';const period=(_ef||_et)?((_ef||'')+'〜'+(_et||'')):'';
   const API0=window.VexumAPI;
   if(API0&&API0.ready&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pidOf(id))){
     alert('データ読み込み中です。少し待ってから再度お試しください。');return;
@@ -1204,7 +1276,6 @@ function saveMemberEval(){
 
 /* ===== 評価記録（メンバー選択→CSFまで網羅的に表示） ===== */
 let _evalRecSel='';
-let _evalRecPeriod='';
 let _evalRecFrom='';
 let _evalRecTo='';
 function _evalRecMemberId(name){return EVAL_IDS.find(id=>MEMBERS[id]&&MEMBERS[id].name===name)||DASH_IDS.find(id=>MEMBERS[id]&&MEMBERS[id].name===name);}
@@ -1220,13 +1291,14 @@ function renderEvalRec(){
     <select class="fs" style="width:auto;min-width:200px" onchange="_evalRecSel=this.value;renderEvalRec()">
       ${list.map(n=>`<option value="${n}" ${n===_evalRecSel?'selected':''}>${n}</option>`).join('')}
     </select>
-    <label class="fl" style="margin:0">チャート作成期間</label>
-    <select class="fs" id="evalrec-period-sel" style="width:auto;min-width:180px" onchange="_evalRecPeriod=this.value;_evalRecDetail()"><option value="">全期間</option></select>
-    <label class="fl" style="margin:0">開始日〜終了日</label>
-    <input class="fi" type="date" style="width:130px" value="${_evalRecFrom}" onchange="_evalRecFrom=this.value;_evalRecDetail()">
-    <span style="color:var(--text3);font-size:11px">〜</span>
-    <input class="fi" type="date" style="width:130px" value="${_evalRecTo}" onchange="_evalRecTo=this.value;_evalRecDetail()">
-    <span style="font-size:10px;color:var(--text3)">KGI・各CSF・タスクの★とコメントを網羅表示（チャートの作成期間で絞り込み）</span>
+    <label class="fl" style="margin:0">チャート期間（開始〜終了）</label>
+    <div style="display:flex;align-items:flex-end;gap:6px">
+      <div id="evalrec-from-ymd"></div>
+      <span style="align-self:flex-end;padding-bottom:6px;color:var(--text3);font-size:11px">〜</span>
+      <div id="evalrec-to-ymd"></div>
+      <button class="f-btn active" style="align-self:flex-end" onclick="_evalRecDetail()">絞り込む</button>
+    </div>
+    <span style="font-size:10px;color:var(--text3)">KGI・各CSF・タスクの★とコメントを網羅表示（チャートの期間で絞り込み）</span>
   </div><div id="evalrec-detail" style="padding:14px 16px"><div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">読み込み中…</div></div>`;
   _evalRecDetail();
 }
@@ -1244,20 +1316,17 @@ async function _evalRecDetail(){
     if(!charts){try{charts=await API.loadChartsFor(m.pid);window._chartsCache[m.pid]=charts;}catch(e){charts=[];}}
     charts=charts||[];
     const chartMap={};charts.forEach(c=>chartMap[c.id]=c);
-    const psel=document.getElementById('evalrec-period-sel');
-    if(psel){
-      const periods=[...new Set(charts.map(c=>c.period).filter(Boolean))];
-      const cur=_evalRecPeriod;
-      psel.innerHTML='<option value="">全期間</option>'+periods.map(p=>`<option value="${p}" ${p===cur?'selected':''}>${p}</option>`).join('');
-    }
+    // チャート期間の日付範囲YMDセレクトを初回生成
+    const rfw=document.getElementById('evalrec-from-ymd');if(rfw&&!rfw.children.length)rfw.innerHTML=ymdHtml('evalrec-from','');
+    const rtw=document.getElementById('evalrec-to-ymd');if(rtw&&!rtw.children.length)rtw.innerHTML=ymdHtml('evalrec-to','');
+    const _rf=ymdValue('evalrec-from')||'',_rt=ymdValue('evalrec-to')||'';
     evs=evs.filter(ev=>{
       const c=ev.chartId&&chartMap[ev.chartId];
-      if(_evalRecPeriod){if(!c||c.period!==_evalRecPeriod)return false;}
-      if(_evalRecFrom||_evalRecTo){
+      if(_rf||_rt){
         const sd=c&&c.start_date;const ed=(c&&(c.end_date||c.start_date))||sd;
         if(!sd)return false;
-        if(_evalRecFrom&&ed&&ed<_evalRecFrom)return false;
-        if(_evalRecTo&&sd>_evalRecTo)return false;
+        if(_rf&&ed&&ed<_rf)return false;
+        if(_rt&&sd>_rt)return false;
       }
       return true;
     });
@@ -1346,18 +1415,15 @@ async function renderSubmissions(){
     if(_subLogsCache[mid]) logs=_subLogsCache[mid];
     else { logs=await API.loadMemberTimeLogs(m.pid); _subLogsCache[mid]=logs; }
   }
-  // 期間選択肢を工数ログから構築
-  const psel=document.getElementById('sub-period');
-  const periods=[...new Set(logs.map(l=>l.period).filter(Boolean))];
-  if(psel){const cur=psel.value;psel.innerHTML='<option value="">全期間</option>'+periods.map(p=>`<option value="${p}">${p}</option>`).join('');if(periods.indexOf(cur)>=0)psel.value=cur;}
-  const period=(psel||{}).value||'';
-  // 提出期間（開始日・終了日）でのフロントエンド絞り込み
-  const dFrom=(document.getElementById('sub-date-from')||{}).value||'';
-  const dTo=(document.getElementById('sub-date-to')||{}).value||'';
-  const inDateRange=d=>(!dFrom||d>=dFrom)&&(!dTo||d<=dTo);
+  // 提出日（開始〜期限）YMDセレクトを初回生成
+  const sfw=document.getElementById('sub-from-ymd');if(sfw&&!sfw.children.length)sfw.innerHTML=ymdHtml('sub-from','');
+  const stw=document.getElementById('sub-to-ymd');if(stw&&!stw.children.length)stw.innerHTML=ymdHtml('sub-to','');
+  // 提出日（YYYY-MM-DD）でのフロントエンド絞り込み
+  const fromD=ymdValue('sub-from')||'';
+  const toD=ymdValue('sub-to')||'';
   // 日報
   const rep=document.getElementById('sub-reports');
-  const reps=repList(mid).filter(r=>inDateRange(r.date)).sort((a,b)=>b.date.localeCompare(a.date));
+  const reps=repList(mid).filter(r=>inDateRange(r.date,fromD,toD)).sort((a,b)=>b.date.localeCompare(a.date));
   if(view==='hours'){rep.parentElement.style.display='none';}
   else{
     rep.parentElement.style.display='';
@@ -1368,7 +1434,7 @@ async function renderSubmissions(){
   }
   // 工数履歴
   const hrsEl=document.getElementById('sub-hours');
-  const flogs=(period?logs.filter(l=>l.period===period):logs).filter(l=>inDateRange(l.date));
+  const flogs=logs.filter(l=>inDateRange(l.date,fromD,toD));
   const totalEl=document.getElementById('sub-hours-total');
   if(view==='report'){hrsEl.parentElement.style.display='none';}
   else{
@@ -1384,8 +1450,7 @@ async function renderSubmissions(){
   const sm=document.getElementById('sub-summary');if(sm)sm.textContent=m.name+(dFrom||dTo?'（'+(dFrom||'…')+' 〜 '+(dTo||'…')+'）':'')+' ／ 日報 '+reps.length+'件 ／ 工数記録 '+flogs.length+'件';
 }
 function clearSubDateFilter(){
-  const f=document.getElementById('sub-date-from'),t=document.getElementById('sub-date-to');
-  if(f)f.value='';if(t)t.value='';
+  ymdClear('sub-from');ymdClear('sub-to');
   renderSubmissions();
 }
 function jumpToReportFromSub(mid,date){
@@ -1583,14 +1648,6 @@ function populateSelects(){
   ['asg-member','evalin-member','chartedit-member'].forEach(sid=>{const s=document.getElementById(sid);if(s)s.innerHTML=opts;});
 }
 // 評価期間の選択肢を生成（今年基準: Q1-Q4 / 各月 / 年度）※評価タブの期間絞り込み用
-function periodOptions(sel){
-  const y=new Date().getFullYear();
-  let o='';
-  [1,2,3,4].forEach(q=>{o+=`<option value="${y} Q${q}"${sel===y+' Q'+q?' selected':''}>${y}年 Q${q}</option>`;});
-  for(let mo=1;mo<=12;mo++){const v=`${y}-${String(mo).padStart(2,'0')}`;o+=`<option value="${v}"${sel===v?' selected':''}>${y}年${mo}月</option>`;}
-  o+=`<option value="${y}年度"${sel===y+'年度'?' selected':''}>${y}年度（通年）</option>`;
-  return o;
-}
 async function updateSelfEvalMarkers(){
   const API=window.VexumAPI;if(!(API&&API.ready))return;
   try{

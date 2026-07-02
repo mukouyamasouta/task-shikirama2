@@ -224,13 +224,28 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- 進捗ダッシュボード -->
 <div id="tc-progress" class="tab-content active">
-  <!-- 絞り込みフィルター -->
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-    <span style="font-size:11px;font-weight:700;color:var(--text2);flex-shrink:0">絞り込み：</span>
-    <select class="fs" id="ep-kgi-filter" onchange="onDashFilterChange()" style="font-size:11px;padding:6px 10px;font-weight:600;max-width:200px;width:auto"><option value="all">全チャート</option></select>
-    <select class="fs" id="ep-period-filter" onchange="onDashFilterChange()" style="font-size:11px;padding:6px 10px;font-weight:600;max-width:180px;width:auto"><option value="all">全期間</option></select>
-    <button onclick="clearDashFilter()" id="ep-filter-clear" style="display:none;font-size:11px;padding:5px 12px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;color:var(--text2);font-weight:600">✕ 絞り込み解除</button>
-    <span id="ep-filter-badge" style="display:none;font-size:10px;background:var(--accent);color:#fff;padding:2px 10px;border-radius:12px;font-weight:700"></span>
+  <!-- 絞り込みフィルター（KGI名＋年/月/日 日付範囲） -->
+  <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:14px;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;box-shadow:var(--shadow)">
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">チャート（KGI）</div>
+      <select class="fs" id="ep-kgi-filter" onchange="onDashFilterChange()" style="font-size:11px;padding:6px 10px;font-weight:600;min-width:200px">
+        <option value="all">全チャート</option>
+      </select>
+    </div>
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">開始日</div>
+      <div id="ep-from-ymd"></div>
+    </div>
+    <div style="display:flex;align-items:flex-end;padding-bottom:6px;color:var(--text3)">〜</div>
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">期限</div>
+      <div id="ep-to-ymd"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <button class="f-btn active" onclick="onDashFilterChange()">絞り込む</button>
+      <button class="f-btn" onclick="clearDashFilter()">リセット</button>
+    </div>
+    <span id="ep-filter-badge" style="display:none;font-size:10px;background:var(--accent);color:#fff;padding:2px 10px;border-radius:12px;font-weight:700;align-self:center"></span>
   </div>
   <div class="g4">
     <div class="stat-card"><div class="s-lbl">本日までの達成率</div><div class="s-val" style="color:var(--accent)" id="ep-d-todayrate">—</div><div class="s-trend" style="color:var(--text3)" id="ep-d-todayrate-sub">期限到来分の完了割合</div></div>
@@ -593,6 +608,48 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 </div>
 
 <script>
+/* ===== 年/月/日 入力ヘルパー（全ロール共通） ===== */
+function ymdHtml(idPrefix, labelText, required){
+  const y=new Date().getFullYear();
+  const yOpts=['<option value="">年</option>'];
+  for(let i=y-3;i<=y+5;i++) yOpts.push(`<option value="${i}">${i}年</option>`);
+  const mOpts=['<option value="">月</option>'];
+  for(let i=1;i<=12;i++) mOpts.push(`<option value="${String(i).padStart(2,'0')}">${i}月</option>`);
+  const dOpts=['<option value="">日</option>'];
+  for(let i=1;i<=31;i++) dOpts.push(`<option value="${String(i).padStart(2,'0')}">${i}日</option>`);
+  return `<div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap">
+    ${labelText?`<span style="font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;margin-right:4px">${labelText}</span>`:''}
+    <select class="fs" id="${idPrefix}-y" style="padding:5px 4px;font-size:11px;width:72px">${yOpts.join('')}</select>
+    <span style="font-size:11px;color:var(--text3)">/</span>
+    <select class="fs" id="${idPrefix}-m" style="padding:5px 4px;font-size:11px;width:56px">${mOpts.join('')}</select>
+    <span style="font-size:11px;color:var(--text3)">/</span>
+    <select class="fs" id="${idPrefix}-d" style="padding:5px 4px;font-size:11px;width:52px">${dOpts.join('')}</select>
+  </div>`;
+}
+function ymdValue(idPrefix){
+  const y=(document.getElementById(idPrefix+'-y')||{}).value||'';
+  const m=(document.getElementById(idPrefix+'-m')||{}).value||'';
+  const d=(document.getElementById(idPrefix+'-d')||{}).value||'';
+  return (y&&m&&d)?(y+'-'+m+'-'+d):null;
+}
+function ymdSet(idPrefix, iso){
+  if(!iso)return;
+  const p=String(iso).split(/[-/]/);
+  if(p.length<3)return;
+  const ye=document.getElementById(idPrefix+'-y'),mo=document.getElementById(idPrefix+'-m'),de=document.getElementById(idPrefix+'-d');
+  if(ye)ye.value=p[0];
+  if(mo)mo.value=String(p[1]).padStart(2,'0');
+  if(de)de.value=String(p[2]).padStart(2,'0');
+}
+function ymdClear(idPrefix){
+  [idPrefix+'-y',idPrefix+'-m',idPrefix+'-d'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+}
+function inDateRange(targetIso, fromIso, toIso){
+  if(!targetIso) return true; // 日付未設定は除外せず含める
+  if(fromIso && targetIso < fromIso) return false;
+  if(toIso   && targetIso > toIso)   return false;
+  return true;
+}
 /* ===== タブ切替 ===== */
 const TITLES={progress:['進捗ダッシュボード','個人メニュー / 進捗'],tasks:['タスク管理','個人メニュー / タスク'],assign:['割り当て','個人メニュー / 割り当て'],reviews:['評価管理','個人メニュー / 評価'],report:['日報','個人メニュー / 日報'],chartmgr:['チャート管理','個人メニュー / チャート管理'],gantt:['ガントチャート','個人メニュー / ガントチャート'],inbox:['受信ボックス','個人メニュー / 受信ボックス']};
 /* 右上「新規作成」ボタンのタブ別制御（progress・assignでは非表示） */
@@ -2988,12 +3045,13 @@ function _chartDateRange(k){
 function _getDashFilter(){
   return {
     chart:(document.getElementById('ep-kgi-filter')||{}).value||'all',
-    period:(document.getElementById('ep-period-filter')||{}).value||'all'
+    from: ymdValue('ep-from') || null,
+    to:   ymdValue('ep-to')   || null
   };
 }
 function _dashFilteredTasks(tasks){
   const f=_getDashFilter();
-  if(f.chart==='all'&&f.period==='all')return tasks;
+  if(f.chart==='all'&&!f.from&&!f.to)return tasks;
   return tasks.filter(a=>{
     let ok=true;
     if(f.chart!=='all'){
@@ -3002,27 +3060,21 @@ function _dashFilteredTasks(tasks){
       const cData=CHARTS[f.chart]||{};
       ok=ok&&(chartId===f.chart||chartName===cData.name);
     }
-    if(f.period!=='all'){
-      // 期間フィルターは "startISO__endISO"。タスクのdueRawが範囲内か（endが空なら開始以降すべて）
-      const parts=String(f.period).split('__');const fs=parts[0]||'';const fe=parts[1]||'';
-      const due=a.dueRaw||null;
-      if(!due)ok=false;
-      else{if(fs&&due<fs)ok=false;if(fe&&due>fe)ok=false;}
+    if(f.from||f.to){
+      ok=ok&&inDateRange(a.dueRaw||a.startRaw, f.from, f.to);
     }
     return ok;
   });
 }
 function onDashFilterChange(){
   const f=_getDashFilter();
-  const isFiltered=f.chart!=='all'||f.period!=='all';
-  const clearBtn=document.getElementById('ep-filter-clear');
+  const isFiltered=f.chart!=='all'||!!f.from||!!f.to;
   const badge=document.getElementById('ep-filter-badge');
-  if(clearBtn)clearBtn.style.display=isFiltered?'':'none';
   if(badge){
     if(isFiltered){
       const parts=[];
       if(f.chart!=='all'&&CHARTS[f.chart])parts.push(_chartKgiText(f.chart)||CHARTS[f.chart].name||f.chart);
-      if(f.period!=='all'){const pp=String(f.period).split('__');const lbl=(pp[0]?pp[0].slice(0,7).replace('-','/'):'')+'〜'+(pp[1]?pp[1].slice(0,7).replace('-','/'):'');parts.push(lbl);}
+      if(f.from||f.to)parts.push((f.from||'')+'〜'+(f.to||''));
       badge.textContent=parts.join(' / ');badge.style.display='';
     }else{badge.style.display='none';}
   }
@@ -3031,43 +3083,34 @@ function onDashFilterChange(){
 }
 function clearDashFilter(){
   const cs=document.getElementById('ep-kgi-filter');if(cs)cs.value='all';
-  const ps=document.getElementById('ep-period-filter');if(ps)ps.value='all';
+  ymdClear('ep-from'); ymdClear('ep-to');
   onDashFilterChange();
 }
 /* KGI進捗カードを描画（自分の全チャートのKGI・達成率100%未満のみ） */
 function renderKgiProgress(){
   const kr=document.getElementById('ep-kpi-rows');if(!kr)return;
   syncKpiEditsFromCharts();
+  // 日付範囲YMDセレクトを初回生成
+  const fw=document.getElementById('ep-from-ymd');if(fw&&!fw.children.length)fw.innerHTML=ymdHtml('ep-from','');
+  const tw=document.getElementById('ep-to-ymd');if(tw&&!tw.children.length)tw.innerHTML=ymdHtml('ep-to','');
   const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
   const sel=document.getElementById('ep-kgi-filter');
   let chartFilter='all';
   if(sel){
     chartFilter=sel.value||'all';
     if(chartFilter!=='all'&&keys.indexOf(chartFilter)<0)chartFilter='all';
-    // チャート絞り込みは KGI名（centerセルのテキスト）で表示
+    // チャート絞り込みは「KGI名 (開始日〜終了日)」で表示
     sel.innerHTML='<option value="all">全チャート</option>'+keys.map(k=>{
       const kgiText=_chartKgiText(k)||CHARTS[k].name||k;
-      return `<option value="${k}"${k===chartFilter?' selected':''}>${kgiText}${CHARTS[k].readonly?'（参照のみ）':''}</option>`;
+      const sd=CHARTS[k].startDate||'';const ed=CHARTS[k].endDate||'';
+      const dateStr=(sd||ed)?` (${sd}${ed?'〜'+ed:''})`:'';
+      return `<option value="${k}"${k===chartFilter?' selected':''}>${kgiText}${dateStr}${CHARTS[k].readonly?'（参照のみ）':''}</option>`;
     }).join('');
   }
-  // 期間フィルターは実日付(start_date/end_date)から導出した年月レンジで生成（同一レンジは重複排除）
-  const ps=document.getElementById('ep-period-filter');
-  if(ps){
-    const curPeriod=ps.value||'all';
-    const ranges={};keys.forEach(k=>{const r=_chartDateRange(k);if(r)ranges[r.value]=r.label;});
-    const vals=Object.keys(ranges).sort();
-    ps.innerHTML='<option value="all">全期間</option>'+vals.map(v=>`<option value="${v}"${v===curPeriod?' selected':''}>${ranges[v]}</option>`).join('');
-  }
-  const periodFilter=(ps&&ps.value)||'all';
+  const f=_getDashFilter();
   const list=keys.filter(k=>{
     if(chartFilter!=='all'&&k!==chartFilter)return false;
-    if(periodFilter!=='all'){
-      // チャートの start_date が選択レンジ内か（endが空なら開始以降）
-      const r=_chartDateRange(k);if(!r||!r.startISO)return false;
-      const pp=String(periodFilter).split('__');const fs=pp[0]||'';const fe=pp[1]||'';
-      if(fs&&r.startISO<fs)return false;
-      if(fe&&r.startISO>fe)return false;
-    }
+    if(f.from||f.to){const r=_chartDateRange(k);const cs2=r?r.startISO:'';if(!inDateRange(cs2,f.from,f.to))return false;}
     return true;
   }).map(k=>{
     const d=CHARTS[k];
