@@ -291,7 +291,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
   </div>
   <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
-    <span style="font-size:14px">💡</span><span>達成度（0〜100%）を入力しコメントを添えて保存。達成度を100%にしてタブを切り替えると、自動で「過去の履歴」へ移動します。</span>
+    <span style="font-size:14px">💡</span><span>「✏ 進捗・作業時間を記入」ボタンから達成度・本日の作業時間・コメントを入力して保存。達成度を100%で保存すると、自動で「過去の履歴」へ移動します。</span>
   </div>
   <div id="assign-container"></div>
 </div>
@@ -813,31 +813,27 @@ function renderAssign(){
       con.innerHTML=h+'<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">'+(list.length?'該当する割り当てはありません':'現在の割り当てはありません。完了したタスクは「🕘 過去の履歴」で確認できます。')+'</div></div>';return;
     }
     const totAll=rows.reduce((s,x)=>s+(x.a.hours!=null?x.a.hours:0),0);
-    h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">📌 割り当てられたタスク</div><div class="card-sub">${rows.length}件 ／ 合計時間 ${Math.round(totAll*10)/10}h（自動計算）</div></div></div><div class="card-body">`;
+    h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">📌 割り当てられたタスク</div><div class="card-sub">${rows.length}件 ／ 合計時間 ${Math.round(totAll*10)/10}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
+    // タスク管理タブと同じ行デザイン: 行＋緑の「✏ 進捗・作業時間を記入」ボタン → 編集モーダル
+    const priMap={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低'],urgent:['s-hi','緊急']};
     rows.forEach(({a,i})=>{
-      const chartChip=a.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:2px 8px;border-radius:8px;font-weight:700;margin-left:6px">📊 チームチャート: ${a.chart}</span>`:'<span style="font-size:9px;background:#F3F4F6;color:#4B5563;padding:2px 8px;border-radius:8px;font-weight:700;margin-left:6px">🗂 通常タスク</span>';
+      const chartChip=a.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${a.chart}</span>`:'';
       const late=a.status==='late'||(a.dueRaw&&a.dueRaw<_epToday()&&a.pct<100);
-      const stChip=late?'<span class="chip s-late" style="margin-left:6px">遅延</span>':(a.pct>0?'<span class="chip s-wip" style="margin-left:6px">進行中</span>':'<span class="chip s-todo" style="margin-left:6px">未着手</span>');
+      const stChip=late?'<span class="chip s-late">遅延</span>':(a.pct>0?'<span class="chip s-wip">進行中</span>':'<span class="chip s-todo">未着手</span>');
+      const pc=priMap[a.pri]||priMap.md;
+      const col=a.pct>=100?'var(--green)':a.pct>=40?'var(--accent)':'var(--amber)';
       const totH=a.hours!=null?a.hours:0;
       const planH=a.planned!=null?` / 予定 ${a.planned}h`:'';
-      h+=`<div class="asg-card" id="asg-card-${i}">
-        <div class="asg-top"><div><div class="asg-name">${a.name}${chartChip}${stChip}</div><div class="asg-meta">${a.meta}</div></div><span class="asg-from ${a.fromClass}">${a.from}</span></div>
-        <div class="asg-dates"><span>開始 <b>${a.start}</b></span><span>期限 <b${late?' style=\"color:var(--red)\"':''}>${a.end}${late?' ⚠':''}</b></span><span>合計工数 <b style="color:var(--accent)">${totH}h</b>${planH}</span></div>
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-          <div style="flex:1"><div class="asg-prog-label"><span>達成度</span><span id="asg-v${i}" style="color:var(--accent);font-weight:700">${a.pct}%</span></div>
-            <input type="range" id="asg-r${i}" class="asg-slider" min="0" max="100" value="${a.pct}" oninput="asgUpdate(${i},this.value)"></div>
-          <div><div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px">達成度 %</div>
-            <div style="display:flex;align-items:center;gap:4px"><input type="number" id="asg-n${i}" min="0" max="100" value="${a.pct}" style="${numStyle}" oninput="asgUpdate(${i},this.value)"><span style="font-size:13px;font-weight:700;color:var(--text2)">%</span></div></div>
-          <div><div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px">本日の作業時間</div>
-            <div style="display:flex;align-items:center;gap:4px"><input type="number" id="asg-h${i}" min="0" step="0.5" placeholder="0" style="${numStyle}"><span style="font-size:13px;font-weight:700;color:var(--text2)">h</span></div></div>
-          <div style="background:#ECFEFF;border:1px solid #67E8F9;border-radius:6px;padding:5px 10px;text-align:center"><div style="font-size:9px;font-weight:700;color:#0E7490">合計</div><div style="font-size:15px;font-weight:800;color:#0E7490">${totH}h</div></div>
+      h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6" id="asg-card-${i}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="min-width:0"><div style="font-size:12px;font-weight:600">${a.name}${chartChip} <span class="asg-from ${a.fromClass}" style="margin-left:6px">${a.from}</span></div>
+          <div style="font-size:10px;color:${late?'var(--red)':'var(--text3)'}">開始 ${a.start} ／ 期限 ${a.end}${late?' ⚠ 超過':''} ／ 合計 ${totH}h${planH}</div></div>
+          <div style="display:flex;gap:6px;align-items:center"><span class="chip ${pc[0]}">${pc[1]}</span>${stChip}<div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${a.pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${a.pct}%</div></div></div>
         </div>
-        <textarea class="asg-comment" rows="2" placeholder="進捗状況・メモ・上長への報告コメントを入力…" oninput="asgComment(${i},this.value)">${a.comment}</textarea>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button class="asg-save" style="flex:2;margin:0" onclick="asgSaveData(${i},this)">💾 本日分を記録して保存</button>
-          <button class="asg-save" style="flex:1;margin:0;background:var(--green)" onclick="asgComplete(${i},this)">✓ 完了にする</button>
+        ${a.comment?`<div style="margin-top:6px;font-size:11px;color:var(--text2);background:#FAFAFA;border:1px solid var(--border);border-radius:6px;padding:6px 10px;line-height:1.5">💬 ${a.comment}</div>`:''}
+        <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+          <button class="card-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="openTaskEdit('A${i}')">✏ 進捗・作業時間を記入</button>
         </div>
-        <div id="asg-hint${i}" style="display:${a.pct>=100?'block':'none'};margin-top:8px;font-size:11px;color:var(--green);font-weight:700">✅ 達成度100% — 保存すると合計工数とともに「過去の履歴」へ移動し、リーダーへ完了通知が届きます</div>
       </div>`;
     });
     h+=`</div></div>`;
@@ -2891,8 +2887,11 @@ function openTaskEdit(rid){
   document.getElementById('te-prog-val').textContent=pg+'%';
   document.getElementById('te-hours').value='';
   document.getElementById('te-note').value=a.comment||'';
-  // 紐付け（チャート／CSF／KPI）セレクトを現在の値で初期化
+  // 紐付け（チャート／CSF／KPI）セレクトを現在の値で初期化。
+  // リーダー割当タスクは紐付け変更不可のためブロックごと非表示
   _fillTeChartSel(a);
+  const linkWrap=document.getElementById('te-chart-link');
+  if(linkWrap)linkWrap.style.display=a.self?'':'none';
   // 削除ボタン: 自作タスクのみ表示（リーダー割当は不可）
   const delWrap=document.getElementById('te-del-wrap');
   if(delWrap)delWrap.style.display=a.self?'':'none';
@@ -2989,11 +2988,11 @@ async function saveTaskEdit(){
   a.pct=pct;a.comment=memo;
   a.startRaw=startRaw;a.start=startRaw?startRaw.replace(/-/g,'/'):'—';
   a.dueRaw=dueRaw;a.end=dueRaw?dueRaw.replace(/-/g,'/'):'—';
-  // 紐付け（チャート／CSF／KPI）の変更を反映
+  // 紐付け（チャート／CSF／KPI）の変更を反映（自作タスクのみ。割当タスクは紐付け固定）
   const prevChart=a.chart||null,prevCell=a.cell!=null?String(a.cell):null,prevKpi=a.kpiIdx!=null?a.kpiIdx:null;
   const teK=(document.getElementById('te-chart-sel')||{}).value||'';
   let linkChanged=false;
-  {
+  if(a.self){
     let nChart=null,nCell=null,nCsfIdx=null,nKpiIdx=null,nKgi='—';
     if(teK&&CHARTS[teK]){
       const d=CHARTS[teK];const edits=_chartEdits(teK);
