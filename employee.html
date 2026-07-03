@@ -3064,7 +3064,7 @@ function _cellRowHtml(it,today){
     ?'<span style="font-size:9px;background:#0D9488;color:#fff;padding:1px 7px;border-radius:8px;font-weight:700">KGI</span>'
     :`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700">CSF${it.si+1}</span>`;
   const kgiTag=it.kind==='csf'?`<span style="font-size:9px;background:#F1F5F9;color:var(--text3);padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle" title="${it.kgiName}">${it.kgiName.slice(0,12)}${it.kgiName.length>12?'…':''}</span>`:'';
-  const jump=it.kind==='kgi'?`gotoChartMgr('${it.k}')`:`gotoChartCsf('${it.k}',${it.si})`;
+  const jump=it.kind==='kgi'?`gotoChartMgrEdit('${it.k}')`:`gotoChartCsfEdit('${it.k}',${it.si})`;
   return `<div onclick="${jump}" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='transparent'" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);border-left:2px solid transparent;cursor:pointer;transition:.12s">
     <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">${kindChip} ${it.name}${kgiTag}</div>
     <div style="font-size:10px;color:${late?'var(--red)':'var(--text3)'}">期限 ${it.due.replace(/-/g,'/')}${late?' ⚠ 超過':''} ／ チャート管理の設定期間</div></div>
@@ -3242,7 +3242,7 @@ function _renderCsfBreakdown(tasksAll){
     const perTag=(per.start||per.end)
       ?`<span style="font-size:9px;color:${overdue?'var(--red)':'var(--text3)'};font-weight:${overdue?'700':'600'};flex-shrink:0">📅 ${(per.start||'').replace(/-/g,'/')||'—'}〜${(per.end||'').replace(/-/g,'/')||'—'}${overdue?' ⚠超過':''}</span>`
       :'';
-    return `<div onclick="gotoChartCsf('${k}',${c.si})" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
+    return `<div onclick="gotoChartCsfEdit('${k}',${c.si})" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
       <span style="font-size:9px;color:var(--accent);font-weight:700;flex-shrink:0;min-width:36px">CSF${c.si+1}</span>
       ${kgiTag}
       <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${c.text?'':'color:var(--text3)'}" title="${c.text||'テキスト未入力'}">${c.text||'（CSFテキスト未入力）'}</span>
@@ -3309,7 +3309,7 @@ function renderKgiProgress(){
       csfHtml=`<div style="margin-top:10px;border-top:1px dashed var(--border);padding-top:6px">`
         +`<div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.06em;margin-bottom:2px">CSF一覧（このKGIの配下）</div>`
         +csfs.map(c=>{const cc=_csfColor(c.pct);const ch=_csfHours(x.k,c.si);
-          return `<div onclick="event.stopPropagation();gotoChartCsf('${x.k}',${c.si})" style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;border-radius:6px" onmouseover="this.style.background='#FAFAFA'" onmouseout="this.style.background=''">
+          return `<div onclick="event.stopPropagation();gotoChartCsfEdit('${x.k}',${c.si})" style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;border-radius:6px" onmouseover="this.style.background='#FAFAFA'" onmouseout="this.style.background=''">
             <span style="font-size:9px;color:var(--accent);font-weight:700;flex-shrink:0;min-width:30px">CSF${c.si+1}</span>
             <span style="font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.text}">${c.text}</span>
             ${ch>0?`<span style="font-size:9px;color:var(--text3);font-weight:700;flex-shrink:0">合計 ${ch}h</span>`:''}
@@ -3317,7 +3317,7 @@ function renderKgiProgress(){
           </div>`;}).join('')
         +`</div>`;
     }
-    return `<div onclick="gotoChartMgr('${x.k}')" style="cursor:pointer;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;transition:.12s" onmouseover="this.style.boxShadow='var(--shadow)';this.style.borderColor='var(--accent)'" onmouseout="this.style.boxShadow='';this.style.borderColor='var(--border)'">
+    return `<div onclick="gotoChartMgrEdit('${x.k}')" style="cursor:pointer;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;transition:.12s" onmouseover="this.style.boxShadow='var(--shadow)';this.style.borderColor='var(--accent)'" onmouseout="this.style.boxShadow='';this.style.borderColor='var(--border)'">
       <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${x.name}${x.period?' / '+x.period:''}</div>
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px"><div style="font-size:13px;font-weight:700;flex:1;min-width:0">🎯 ${x.kgi||'（KGI未入力）'}</div>${_kgiHours(x.k)>0?`<span style="font-size:10px;color:var(--text3);font-weight:700;flex-shrink:0">合計 ${_kgiHours(x.k)}h</span>`:''}</div>
       <div class="pw"><div class="pt"><div class="pf" style="width:${x.pct}%;background:${col}"></div></div><div class="pp" style="color:${col}">${x.pct}%</div></div>
@@ -3340,6 +3340,37 @@ function gotoChartCsf(chartId,csfIndex){
         setTimeout(()=>{cell.style.outline='';cell.style.outlineOffset='';},1500);
       }
     },140);
+  },60);
+}
+/* ダッシュボードから: チャート管理へ移動し、該当CSFセルの編集モーダルまで自動で開く */
+function gotoChartCsfEdit(chartId,csfIndex){
+  const ro=!!(CHARTS[chartId]&&CHARTS[chartId].readonly);
+  gotoTab('chartmgr');
+  initChartMgr();
+  setTimeout(()=>{
+    const sel=document.getElementById('cm-chart-sel');
+    if(sel&&chartId&&CHARTS[chartId]){sel.value=chartId;onCmChartChange();}
+    setTimeout(()=>{
+      if(!ro&&typeof openCellEdit==='function'){openCellEdit(chartId,'csf',csfIndex);return;}
+      // 参照のみ（チームチャート等）は編集不可なのでハイライトのみ
+      const cell=document.querySelector(`#cm-kpi-grid-simple [data-csf="${csfIndex}"]`)||document.querySelector(`[data-csf="${csfIndex}"]`);
+      if(cell){cell.scrollIntoView({behavior:'smooth',block:'center'});cell.style.outline='3px solid var(--accent)';cell.style.outlineOffset='2px';setTimeout(()=>{cell.style.outline='';cell.style.outlineOffset='';},1500);}
+    },160);
+  },60);
+}
+/* ダッシュボードから: チャート管理へ移動し、KGI（中心セル）の編集モーダルまで自動で開く */
+function gotoChartMgrEdit(chartId){
+  const ro=!!(CHARTS[chartId]&&CHARTS[chartId].readonly);
+  gotoTab('chartmgr');
+  initChartMgr();
+  setTimeout(()=>{
+    const sel=document.getElementById('cm-chart-sel');
+    if(sel&&chartId&&CHARTS[chartId]){sel.value=chartId;onCmChartChange();}
+    setTimeout(()=>{
+      if(!ro&&typeof openCellEdit==='function'){openCellEdit(chartId,'center');return;}
+      const g=document.getElementById('cm-kpi-grid-simple');
+      if(g)g.scrollIntoView({behavior:'smooth',block:'start'});
+    },160);
   },60);
 }
 /* KGIカードクリック → チャート管理タブの該当チャートを選択して編集グリッドへスクロール */
