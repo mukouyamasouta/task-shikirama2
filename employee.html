@@ -1104,6 +1104,16 @@ function resetReportForm(){
       <button onclick="closeTaskEdit()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
     </div>
     <div id="te-meta" style="font-size:10px;color:var(--text3);margin-bottom:12px">—</div>
+    <div id="te-chart-link" style="background:var(--accent-l);border-radius:8px;padding:10px 12px;margin-bottom:14px">
+      <div class="fg" style="margin-bottom:8px"><label class="fl">① チャート（KGI）を選択</label>
+        <select class="fs" id="te-chart-sel" onchange="onTeChartSel()"><option value="">チャートなし（紐付けしない）</option></select></div>
+      <div class="fg" style="margin-bottom:8px"><label class="fl">② 紐付けるCSFを選択</label>
+        <select class="fs" id="te-csf-sel" onchange="onTeCsfSel()"><option value="">（先にチャートを選択）</option></select></div>
+      <div class="fg" style="margin-bottom:8px"><label class="fl">③ 紐付けるKPI（任意）</label>
+        <select class="fs" id="te-kpi-sel"><option value="">KPIなし（CSFのみに紐付け）</option></select></div>
+      <button class="card-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="teOpenChartEditor()">→ このチャートを編集する</button>
+      <div style="font-size:10px;color:var(--text2);margin-top:6px;line-height:1.5">※ 紐付け（チャート／CSF／KPI）はここで変更できます。</div>
+    </div>
     <div class="fg"><label class="fl">タスク名</label><input class="fi" id="te-name" placeholder="タスク名を入力…"></div>
     <div class="fr">
       <div class="fg"><label class="fl">開始日</label><input class="fi" id="te-start" type="date"></div>
@@ -1119,6 +1129,13 @@ function resetReportForm(){
     <div style="display:flex;gap:8px;margin-top:4px">
       <button class="f-submit" style="flex:1;background:var(--text3)" onclick="closeTaskEdit()">キャンセル</button>
       <button class="f-submit" style="flex:1" onclick="saveTaskEdit()">💾 保存</button>
+    </div>
+    <div id="te-del-wrap" style="margin-top:10px;border-top:1px dashed var(--border);padding-top:10px">
+      <button class="card-btn" style="width:100%;background:#FEE2E2;color:var(--red);border-color:#FCA5A5" onclick="teAskDelete()">🗑 このタスクを削除</button>
+      <div id="te-del-confirm" style="display:none;margin-top:8px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:10px">
+        <div style="font-size:12px;color:#991B1B;font-weight:700;margin-bottom:8px">このタスクを削除しますか？（元に戻せません）</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><button class="card-btn" onclick="teCancelDelete()">キャンセル</button><button class="card-btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="teDoDelete(this)">削除する</button></div>
+      </div>
     </div>
   </div>
 </div>
@@ -2765,80 +2782,30 @@ function renderTaskTable(){
   const priMap={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低'],urgent:['s-hi','緊急']};
   const stMap={wip:['s-wip','進行中'],done:['s-done','完了'],late:['s-late','遅延'],todo:['s-todo','未着手']};
   const stOf=t=>t.done||t.pct>=100?'done':t.pct>0?'wip':(t.late?'late':'todo');
-  // 割当・自作タスク（参照保持）
+  // タスク作成画面で作成したチャート外タスクのみ表示
+  // （チャート紐付きタスクはダッシュボード、割当タスクは「割り当て」タブで管理）
+  const own=a=>a.self&&!a.chart&&!a.sendId;
   const taskRows=[
     ...ASSIGNMENTS.map((a,i)=>({kind:'task',ref:a,arr:'A',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,pct:a.pct||0,hours:a.hours!=null?a.hours:0,done:false,late:a.status==='late'})),
     ...ASSIGN_HISTORY.map((a,i)=>({kind:'task',ref:a,arr:'H',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,pct:100,hours:a.hours!=null?a.hours:0,done:true}))
-  ];
-  // サイドバー「タスク管理」バッジ＝未完了タスク件数（ハードコードの"2"を廃止）
-  (function(){const b=document.getElementById('tasks-badge');if(!b)return;const open=ASSIGNMENTS.length;b.textContent=open;b.style.display=open?'':'none';})();
-  // チャート（CSF＝チャートのタスク）: 各チャートのCSF8件を進捗・工数つきで
-  // ※ チームチャート(readonly)は除外。進捗はtasks側（割り当て/タスク管理のチャートバッジ付き行）で管理する
-  const chartRows=[];
-  Object.entries(CHARTS).forEach(([k,d])=>{
-    if(k.startsWith('__')||d.readonly)return;
-    const edits=kpiEdits[k]||{};
-    (d.subs||[]).forEach((s,si)=>{
-      const ed=edits['csf-'+si]||{};
-      chartRows.push({kind:'csf',chartKey:k,chartName:d.name||k,si,name:(ed.text!=null?ed.text:s)||('CSF'+(si+1)),pct:ed.progress||0,hours:ed.hoursTotal||0,by:ed.by||'',done:(ed.progress||0)>=100});
-    });
-  });
-  const all=[...chartRows,...taskRows];
+  ].filter(r=>own(r.ref));
+  // サイドバー「タスク管理」バッジ＝このタブに表示される未完了タスク件数
+  (function(){const b=document.getElementById('tasks-badge');if(!b)return;const open=ASSIGNMENTS.filter(own).length;b.textContent=open;b.style.display=open?'':'none';})();
   const match=t=>_tmFilter==='all'||stOf(t)===_tmFilter;
-  // 絞り込みバー: [全チャート ▼] [CSF ▼] [全ステータス ▼] [リセット]
+  // 絞り込みバー: [全ステータス ▼] [リセット]（チャート/CSF絞り込みはダッシュボードへ移行）
   const f=document.getElementById('ep-task-filters');
-  const csfDisabled=(_tmChartFilter==='all'||_tmChartFilter==='__none__');
-  if(csfDisabled)_tmCsfFilter='all';
   if(f){
-    const chartKeys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
-    if(_tmChartFilter!=='all'&&_tmChartFilter!=='__none__'&&chartKeys.indexOf(_tmChartFilter)<0)_tmChartFilter='all';
-    const chartOpts='<option value="all">全チャート</option>'
-      +chartKeys.map(k=>`<option value="${k}"${k===_tmChartFilter?' selected':''}>${_chartLabel(k)}</option>`).join('')
-      +`<option value="__none__"${_tmChartFilter==='__none__'?' selected':''}>チャートなし</option>`;
-    let csfOpts='<option value="all">全CSF</option>';
-    if(!csfDisabled){
-      const subs=(CHARTS[_tmChartFilter]||{}).subs||[];const edits=_chartEdits(_tmChartFilter);
-      subs.forEach((s,si)=>{const ed=edits['csf-'+si]||{};const txt=((ed.text!=null?ed.text:s)||'').replace(/\n/g,' ');if(txt)csfOpts+=`<option value="${si}"${String(si)===String(_tmCsfFilter)?' selected':''}>CSF${si+1} ${txt}</option>`;});
-    }
     const statusOpts=[['all','全ステータス'],['todo','未着手'],['wip','進行中'],['done','完了'],['late','遅延']]
       .map(([k,l])=>`<option value="${k}"${k===_tmFilter?' selected':''}>${l}</option>`).join('');
-    f.innerHTML=`<select class="fs" onchange="tmFilterChart(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto;max-width:240px">${chartOpts}</select>
-      <select class="fs" onchange="tmFilterCsf(this.value)" ${csfDisabled?'disabled':''} title="${csfDisabled?'チャートを選択するとCSFで絞り込めます':'CSFで絞り込む'}" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto;max-width:240px;${csfDisabled?'opacity:.5;cursor:not-allowed':''}">${csfOpts}</select>
-      <select class="fs" onchange="tmFilterStatus(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto">${statusOpts}</select>
+    f.innerHTML=`<select class="fs" onchange="tmFilterStatus(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto">${statusOpts}</select>
       <button class="f-btn" onclick="tmFilterReset()">リセット</button>`;
   }
-  // CSF絞り込み判定: CSF行は si 一致、タスク行は source_cell の si 一致
-  function _csfFilterMatch(r){
-    if(csfDisabled||_tmCsfFilter==='all')return true;
-    const idx=parseInt(_tmCsfFilter,10);if(isNaN(idx))return true;
-    if(r.kind==='csf')return r.chartKey===_tmChartFilter&&r.si===idx;
-    if(r.cell){const si=parseInt(String(r.cell).split('-')[0],10);return si===idx;}
-    return false;
-  }
-  // チャート絞り込み判定（選択チャートのCSF群＋そのチャート名を持つタスク群を表示）
-  function _chartFilterMatch(groupKey){
-    if(_tmChartFilter==='all')return true;
-    if(_tmChartFilter==='__none__')return groupKey==='__none__';
-    if(groupKey===_tmChartFilter)return true;
-    const nm=(CHARTS[_tmChartFilter]||{}).name;
-    return !!nm&&groupKey==='name:'+nm;
-  }
-  // グルーピング: チャート名キー、チャート以外は __none__
-  const groups={};const order=[];
-  function push(key,name,row){if(!groups[key]){groups[key]={name,rows:[]};order.push(key);}groups[key].rows.push(row);}
-  Object.entries(CHARTS).forEach(([k,d])=>{if(!k.startsWith('__'))push(k,d.name||k,null);}); // チャート順を確保
-  chartRows.filter(r=>match(r)&&_csfFilterMatch(r)).forEach(r=>push(r.chartKey,r.chartName,r));
-  taskRows.filter(r=>match(r)&&_csfFilterMatch(r)).forEach(r=>push(r.chart?('name:'+r.chart):'__none__',r.chart||'チャート以外のタスク',r));
-  // 空グループ除去（行なし）＋チャート絞り込み
-  const keys=order.filter(k=>groups[k].rows.filter(Boolean).length&&_chartFilterMatch(k));
-  keys.sort((a,b)=>a==='__none__'?1:b==='__none__'?-1:0);
-  if(!keys.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:24px">該当するタスクはありません</div></div>';return;}
+  const rows=taskRows.filter(match);
+  if(!rows.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:24px">該当するタスクはありません（「＋ 新規作成」からタスクを追加できます）</div></div>';return;}
   let h='';
-  keys.forEach(key=>{
-    const g=groups[key];const rows=g.rows.filter(Boolean);if(!rows.length)return;
-    const isNone=key==='__none__';
+  {
     const totH=rows.reduce((s,t)=>s+(t.hours||0),0);
-    h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd" style="${isNone?'':'border-left:4px solid #C2410C'}"><div><div class="card-title">${isNone?'🗂 チャート以外のタスク':'📊 '+g.name}</div><div class="card-sub">${rows.length}件 ／ 合計時間 ${Math.round(totH*10)/10}h</div></div></div><div class="card-body" style="padding:0">`;
+    h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">☰ 作成したタスク</div><div class="card-sub">${rows.length}件 ／ 合計時間 ${Math.round(totH*10)/10}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
     rows.forEach(t=>{
       const st=stOf(t),sc=stMap[st]||stMap.todo;
       const col=t.pct>=100?'var(--green)':t.pct>=40?'var(--accent)':'var(--amber)';
@@ -2871,7 +2838,7 @@ function renderTaskTable(){
       h+=`</div>`;
     });
     h+=`</div></div>`;
-  });
+  }
   con.innerHTML=h;
 }
 // タスクの進捗・工数をlocalStorageへ（リロードしても残す）
@@ -2901,9 +2868,87 @@ function openTaskEdit(rid){
   document.getElementById('te-prog-val').textContent=pg+'%';
   document.getElementById('te-hours').value='';
   document.getElementById('te-note').value=a.comment||'';
+  // 紐付け（チャート／CSF／KPI）セレクトを現在の値で初期化
+  _fillTeChartSel(a);
+  // 削除ボタン: 自作タスクのみ表示（リーダー割当は不可）
+  const delWrap=document.getElementById('te-del-wrap');
+  if(delWrap)delWrap.style.display=a.self?'':'none';
+  const delC=document.getElementById('te-del-confirm');if(delC)delC.style.display='none';
   document.getElementById('task-edit-modal').style.display='flex';
 }
 function closeTaskEdit(){document.getElementById('task-edit-modal').style.display='none';_editingTask=null;}
+/* タスクのchart名 → CHARTSキー逆引き（チャート名 or KGIテキストで照合） */
+function _chartKeyOfTask(a){
+  if(!a||!a.chart)return '';
+  const t=String(a.chart);
+  return Object.keys(CHARTS).filter(k=>!k.startsWith('__')).find(k=>{
+    const d=CHARTS[k];
+    return String(d.name||'')===t||String((typeof _chartKgiText==='function'&&_chartKgiText(k))||'')===t;
+  })||'';
+}
+/* 編集モーダル: ①チャート一覧（現在値selected） */
+function _fillTeChartSel(a){
+  const sel=document.getElementById('te-chart-sel');if(!sel)return;
+  const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__')&&!CHARTS[k].readonly);
+  const cur=_chartKeyOfTask(a);
+  sel.innerHTML='<option value="">チャートなし（紐付けしない）</option>'+keys.map(k=>`<option value="${k}"${k===cur?' selected':''}>${_chartLabel(k)}</option>`).join('');
+  onTeChartSel(a);
+}
+/* 編集モーダル: ②CSF一覧（テキストがあるCSF全て。編集なので空き制限なし） */
+function onTeChartSel(a){
+  const k=(document.getElementById('te-chart-sel')||{}).value||'';
+  const csfSel=document.getElementById('te-csf-sel');
+  if(!csfSel)return;
+  if(!k){csfSel.innerHTML='<option value="">（先にチャートを選択）</option>';onTeCsfSel();return;}
+  const d=CHARTS[k]||{};const edits=_chartEdits(k);
+  const curSi=(a&&a.csfIdx!=null&&!isNaN(a.csfIdx))?a.csfIdx:null;
+  let opts='<option value="">CSFを選択</option>';
+  (d.subs||[]).forEach((s,si)=>{
+    const txt=(((edits['csf-'+si]||{}).text!=null?edits['csf-'+si].text:s)||'').trim();
+    if(!txt)return;
+    opts+=`<option value="${si}"${si===curSi?' selected':''}>CSF${si+1} ${txt}</option>`;
+  });
+  csfSel.innerHTML=opts;
+  onTeCsfSel(a);
+}
+/* 編集モーダル: ③KPI一覧 */
+function onTeCsfSel(a){
+  const k=(document.getElementById('te-chart-sel')||{}).value||'';
+  const siV=(document.getElementById('te-csf-sel')||{}).value;
+  const kpiSel=document.getElementById('te-kpi-sel');if(!kpiSel)return;
+  if(!k||siV===''||siV==null){kpiSel.innerHTML='<option value="">KPIなし（CSFのみに紐付け）</option>';return;}
+  const acts=((CHARTS[k]||{}).acts||[])[+siV]||[];
+  const curAi=(a&&a.kpiIdx!=null&&!isNaN(a.kpiIdx))?a.kpiIdx:null;
+  let opts='<option value="">KPIなし（CSFのみに紐付け）</option>';
+  for(let ai=0;ai<8;ai++){const kp=acts[ai];const txt=(kp&&String(kp).trim())?String(kp).trim():'';opts+=`<option value="${ai}"${ai===curAi?' selected':''}>KPI${(+siV)+1}-${ai+1}${txt?' '+txt:'（空き）'}</option>`;}
+  kpiSel.innerHTML=opts;
+}
+function teOpenChartEditor(){
+  const k=(document.getElementById('te-chart-sel')||{}).value;
+  if(!k){alert('チャートを選択してください');return;}
+  const siV=(document.getElementById('te-csf-sel')||{}).value;
+  closeTaskEdit();
+  if(siV!==''&&siV!=null&&typeof gotoChartCsf==='function')gotoChartCsf(k,+siV);else gotoChartMgr(k);
+}
+/* 編集モーダルからのタスク削除（2段階確認） */
+function teAskDelete(){const p=document.getElementById('te-del-confirm');if(p)p.style.display='block';}
+function teCancelDelete(){const p=document.getElementById('te-del-confirm');if(p)p.style.display='none';}
+async function teDoDelete(btn){
+  if(!_editingTask)return;
+  const {arr,idx}=_editingTask;
+  const list=arr==='A'?ASSIGNMENTS:ASSIGN_HISTORY;const a=list[idx];if(!a)return;
+  if(btn){btn.disabled=true;btn.textContent='削除中…';}
+  const API=window.VexumAPI;
+  if(API&&API.ready&&a.id&&API.deleteTask){
+    const res=await API.deleteTask(a.id);
+    if(res&&res.error){alert('削除に失敗しました: '+res.error);if(btn){btn.disabled=false;btn.textContent='削除する';}return;}
+  }
+  list.splice(idx,1);
+  if(a.id)try{localStorage.removeItem(_taskKey(a));}catch(e){}
+  closeTaskEdit();
+  renderTaskTable();renderAssign();updateAssignBadge();if(typeof renderProgressDash==='function')renderProgressDash();
+  showToast('削除しました');
+}
 async function saveTaskEdit(){
   if(!_editingTask)return;
   const {arr,idx}=_editingTask;
@@ -2921,10 +2966,34 @@ async function saveTaskEdit(){
   a.pct=pct;a.comment=memo;
   a.startRaw=startRaw;a.start=startRaw?startRaw.replace(/-/g,'/'):'—';
   a.dueRaw=dueRaw;a.end=dueRaw?dueRaw.replace(/-/g,'/'):'—';
+  // 紐付け（チャート／CSF／KPI）の変更を反映
+  const prevChart=a.chart||null,prevCell=a.cell!=null?String(a.cell):null,prevKpi=a.kpiIdx!=null?a.kpiIdx:null;
+  const teK=(document.getElementById('te-chart-sel')||{}).value||'';
+  let linkChanged=false;
+  {
+    let nChart=null,nCell=null,nCsfIdx=null,nKpiIdx=null,nKgi='—';
+    if(teK&&CHARTS[teK]){
+      const d=CHARTS[teK];const edits=_chartEdits(teK);
+      const siV=(document.getElementById('te-csf-sel')||{}).value;
+      if(siV!==''&&siV!=null){
+        nCsfIdx=+siV;nCell=String(nCsfIdx);
+        nChart=d.name||(typeof _chartKgiText==='function'&&_chartKgiText(teK))||'';
+        nKgi=(((edits['csf-'+nCsfIdx]||{}).text!=null?edits['csf-'+nCsfIdx].text:(d.subs||[])[nCsfIdx])||('CSF'+(nCsfIdx+1)));
+        const kpiV=(document.getElementById('te-kpi-sel')||{}).value;
+        nKpiIdx=(kpiV===''||kpiV==null)?null:+kpiV;
+      }
+    }
+    linkChanged=(nChart||null)!==(prevChart||null)||(nCell||null)!==(prevCell||null)||(nKpiIdx!=null?nKpiIdx:null)!==(prevKpi!=null?prevKpi:null);
+    if(linkChanged){
+      a.chart=nChart;a.cell=nCell;a.csfIdx=nCsfIdx;a.kpiIdx=nKpiIdx;a.kpi=nChart?nKgi:'—';
+      a.meta=nChart?('📊 '+nChart+' ／ CSF'+(nCsfIdx+1)+': '+nKgi+(nKpiIdx!=null?' ／ KPI'+(nCsfIdx+1)+'-'+(nKpiIdx+1):'')):'チャート以外のタスク';
+    }
+  }
   const API=window.VexumAPI;
   if(API&&API.ready&&a.id){
     if(nameChanged&&API.updateTask){try{await API.updateTask(a.id,{title:name});}catch(e){}}
     if(datesChanged&&API.updateTask){try{const r=await API.updateTask(a.id,{start:startRaw,due:dueRaw});if(r&&r.error)console.warn('[VEXUM] 期間保存失敗:',r.error);}catch(e){}}
+    if(linkChanged&&API.updateTask){try{const r=await API.updateTask(a.id,{sourceChart:a.chart,sourceCell:a.cell,sourceKpi:a.kpiIdx,relatedKgi:a.chart?a.kpi:null});if(r&&r.error)console.warn('[VEXUM] 紐付け保存失敗:',r.error);}catch(e){}}
     const res=await API.logTaskTime(a.id,{hours,progressAfter:pct,comment:memo});
     if(res&&res.error){a.hours=(a.hours||0)+hours;_pendingTaskAdd(a.id,pct,a.hours);_updateSyncBadge();console.warn('[VEXUM] タスク保存失敗→再送キューへ:',res.error);}
     else if(res)a.hours=res.totalHours!=null?res.totalHours:(a.hours||0)+hours;
@@ -2976,8 +3045,9 @@ function _taskRowHtml(a,today){
   const chartChip=a.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">${a.chart}</span>`:'';
   const csfText=(a.kpi&&a.kpi!=='—')?a.kpi:'';
   const csfChip=csfText?`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px" title="${csfText}">CSF${a.csfIdx!=null?(a.csfIdx+1)+': ':''}${csfText.length>16?csfText.slice(0,16)+'…':csfText}</span>`:'';
-  const isChartTask=!!(a.chart||a.source_send_id||a.source_chart);
-  const jumpFn=isChartTask?`gotoChartFromDashTask(${JSON.stringify(a.chart||a.source_chart||'')})`:`gotoAssignFromDashTask(${ASSIGNMENTS.indexOf(a)})`;
+  // クリックでそのタスクの編集モーダルを直接開く（ASSIGN_HISTORY側は完了済みでダッシュボード一覧に出ない）
+  const ai2=ASSIGNMENTS.indexOf(a);
+  const jumpFn=ai2>=0?`openTaskEdit('A${ai2}')`:`gotoChartFromDashTask(${JSON.stringify(a.chart||'')})`;
   return `<div onclick="${jumpFn}" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='transparent'" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);border-left:2px solid transparent;cursor:pointer;transition:.12s">
     <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">${a.name}${chartChip}${csfChip}</div>
     <div style="font-size:10px;color:${late?'var(--red)':'var(--text3)'}">期限 ${a.end||'—'}${late?' ⚠ 超過':''} ／ 工数 ${a.hours!=null?a.hours:0}h</div></div>

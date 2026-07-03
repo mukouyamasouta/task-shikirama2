@@ -447,6 +447,11 @@
     if (patch.start !== undefined) up.start_date = patch.start;
     if (patch.due !== undefined) up.due_date = patch.due;
     if (patch.priority) up.priority = patch.priority;
+    // チャート紐付けの変更（タスク編集モーダルの①②③）
+    if (patch.sourceChart !== undefined) up.source_chart = patch.sourceChart;
+    if (patch.sourceCell !== undefined) up.source_cell = patch.sourceCell;
+    if (patch.sourceKpi !== undefined) up.source_kpi = patch.sourceKpi;
+    if (patch.relatedKgi !== undefined) up.related_kgi = patch.relatedKgi;
     var r = await sb.from('tasks').update(up).eq('id', id).select('id');
     if (r.error) return { error: friendlyErr(r.error.message) };
     if (!r.data || r.data.length === 0) return { error: '更新できませんでした（権限不足の可能性）' };
