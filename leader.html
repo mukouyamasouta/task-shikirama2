@@ -664,9 +664,15 @@ function applyDashFilter(){
   window._dashChartFilter=(document.getElementById('dash-f-chart')||{}).value||'';
   window._dashFromFilter=ymdValue('ld-from')||'';
   window._dashToFilter=ymdValue('ld-to')||'';
+  // 絞り込み状態を保存（リセットするまでログイン後も維持）
+  try{localStorage.setItem('vexum_filters_leader',JSON.stringify({member:window._dashMemberFilter,chart:window._dashChartFilter,from:window._dashFromFilter,to:window._dashToFilter}));}catch(e){}
   renderDashboard();
 }
-function resetDashFilter(){window._dashMemberFilter='';window._dashChartFilter='';window._dashFromFilter='';window._dashToFilter='';ymdClear('ld-from');ymdClear('ld-to');renderDashboard();}
+function resetDashFilter(){window._dashMemberFilter='';window._dashChartFilter='';window._dashFromFilter='';window._dashToFilter='';ymdClear('ld-from');ymdClear('ld-to');try{localStorage.removeItem('vexum_filters_leader');}catch(e){}renderDashboard();}
+// 保存済みの絞り込みを復元（初回描画時に_renderDashFilterBarが反映する）
+try{const _sf=JSON.parse(localStorage.getItem('vexum_filters_leader')||'null');
+  if(_sf){window._dashMemberFilter=_sf.member||'';window._dashChartFilter=_sf.chart||'';window._dashFromFilter=_sf.from||'';window._dashToFilter=_sf.to||'';}
+}catch(e){}
 function renderDashboard(){
   _renderDashFilterBar();
   // 統計カード（人物単位の人数・チャート基準の進捗。0件は「—」＝0除算で誤った%を出さない）

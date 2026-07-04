@@ -468,6 +468,15 @@
     if (!r.data || r.data.length === 0) return { error: '削除できませんでした（権限不足の可能性）' };
     return { ok: true };
   }
+  // 曼荼羅チャートを削除（本人所有のみ。RLSで保護）。返り値で削除行数を検証。
+  async function deleteChart(id) {
+    if (!sb) return { error: 'Supabase未接続' };
+    if (!id) return { error: 'チャートIDが不明です（デモデータは保存対象外）' };
+    var r = await sbRetry(function () { return sb.from('mandala_charts').delete().eq('id', id).select('id'); });
+    if (r.error) return { error: friendlyErr(r.error.message) };
+    if (!r.data || r.data.length === 0) return { error: '削除できませんでした（権限不足の可能性）' };
+    return { ok: true };
+  }
   // タスク進捗 → chart_sends（送信チャート）への逆反映
   // ・該当セル（cell_status[key]）に progress を記録
   // ・チャート全体 progress = そのチャート由来タスクの平均進捗
@@ -1887,6 +1896,7 @@
     assignTask: assignTask,
     updateTask: updateTask,
     deleteTask: deleteTask,
+    deleteChart: deleteChart,
     logTaskTime: logTaskTime,
     setTaskProgress: setTaskProgress,
     loadTaskTimeLogs: loadTaskTimeLogs,

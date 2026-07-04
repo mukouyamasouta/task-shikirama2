@@ -507,6 +507,11 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <div style="font-size:20px;font-weight:800;color:var(--amber)" id="cm-edit-count">0件</div>
     </div>
     <div style="font-size:11px;color:#059669;max-width:220px;line-height:1.5;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:8px;padding:8px 10px">✓ KGI/CSF/KPIのセルをクリックして編集すると<b>自動保存</b>され、リロードしても残ります（リーダー画面にも反映）<span id="cm-sync-badge" style="display:none;margin-top:6px;align-items:center;gap:4px;font-size:10px;font-weight:700;color:#B45309;background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:2px 8px"></span></div>
+    <button class="card-btn" id="cm-del-btn" style="background:#FEE2E2;color:var(--red);border-color:#FCA5A5" onclick="cmAskDeleteChart()">🗑 このチャートを削除</button>
+  </div>
+  <div id="cm-del-confirm" style="display:none;margin-bottom:16px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 14px">
+    <div style="font-size:12px;color:#991B1B;font-weight:700;margin-bottom:8px">このチャートを削除しますか？ KGI・CSF・KPIの内容と進捗・工数の記録がすべて削除され、元に戻せません（紐づくタスク自体は残ります）。</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="card-btn" onclick="cmCancelDeleteChart()">キャンセル</button><button class="card-btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="cmDoDeleteChart(this)">削除する</button></div>
   </div>
   <div class="card">
     <div class="card-hd">
@@ -739,6 +744,17 @@ function _epToday(){return new Date().toISOString().slice(0,10);}
 // ローカル永続化（Supabase未接続/SQL未適用でも編集が残るためのフォールバック）
 function _lsGet(key){try{return JSON.parse(localStorage.getItem(key)||'null');}catch(e){return null;}}
 function _lsSet(key,val){try{localStorage.setItem(key,JSON.stringify(val));}catch(e){}}
+/* ===== 絞り込み状態の永続化（リセットするまでログイン後も維持） ===== */
+const FILTER_LS_KEY='vexum_filters_emp';
+function _filtersLoad(){return _lsGet(FILTER_LS_KEY)||{};}
+function _filtersSave(patch){const f=_filtersLoad();Object.assign(f,patch);_lsSet(FILTER_LS_KEY,f);}
+function restoreSavedFilters(){
+  const f=_filtersLoad();
+  if(f.tm&&typeof _tmFilter!=='undefined')_tmFilter=f.tm;
+  if(f.asg&&typeof _asgFilter!=='undefined')_asgFilter=f.asg;
+  // ダッシュボードのKGI/日付はセレクト生成後に反映（renderKgiProgress内で消費）
+  if(f.dash&&(f.dash.chart&&f.dash.chart!=='all'||f.dash.from||f.dash.to))window._dashRestore={...f.dash};
+}
 // 編集者名→一意の色（個人/リーダーで共通。誰がどこを編集したか色で区別）
 function _editorColor(name){const pal=['#0D9488','#EC4899','#F59E0B','#6366F1','#10B981','#EF4444','#8B5CF6','#06B6D4'];let h=0;for(let i=0;i<(name||'').length;i++)h=(h*31+name.charCodeAt(i))%pal.length;return pal[h];}
 // 本日の作業時間＋到達進捗を記録（工数を加算）。100%なら完了処理。
@@ -793,8 +809,8 @@ function processAssignCompletion(){
 }
 /* 割り当てタブの絞り込み（タスク管理と同仕様） */
 let _asgFilter='all';
-function asgFilterStatus(v){_asgFilter=v;renderAssign();}
-function asgFilterReset(){_asgFilter='all';renderAssign();}
+function asgFilterStatus(v){_asgFilter=v;_filtersSave({asg:v});renderAssign();}
+function asgFilterReset(){_asgFilter='all';_filtersSave({asg:null});renderAssign();}
 function renderAssign(){
   const con=document.getElementById('assign-container');if(!con)return;
   // 自分で作成したタスクは表示しない（タスク管理・ダッシュボードで管理）
@@ -1074,6 +1090,8 @@ function resetReportForm(){
       <button onclick="closeKpiEdit()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
     </div>
     <div id="kpi-edit-csf" style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:4px"></div>
+    <!-- KGI編集時: チャートの開始期間・終了期間を表示 -->
+    <div id="kpi-edit-chart-period" style="display:none;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:11px;font-weight:700;color:#1D4ED8">📅 チャート期間: <span id="kpi-edit-chart-period-val">—</span></div>
     <div style="background:#F9FAFB;border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:12px;font-size:11px;color:var(--text2)">元の内容: <span id="kpi-edit-orig" style="font-weight:600;color:var(--text)"></span></div>
     <div class="fg" id="kpi-edit-text-wrap"><label class="fl" id="kpi-edit-text-label">内容（書き換え可）</label>
       <input class="fi" id="kpi-edit-text" placeholder="内容を入力…"></div>
@@ -1111,6 +1129,14 @@ function resetReportForm(){
     <div style="display:flex;gap:8px;margin-top:4px">
       <button class="f-submit" style="flex:1;background:var(--text3)" onclick="clearKpiEdit()">元に戻す</button>
       <button class="f-submit" style="flex:1" onclick="saveKpiEdit()">✓ 保存してリーダーに通知</button>
+    </div>
+    <!-- CSF編集時: 内容の削除（2段階確認） -->
+    <div id="kpi-edit-del-wrap" style="display:none;margin-top:10px;border-top:1px dashed var(--border);padding-top:10px">
+      <button class="card-btn" style="width:100%;background:#FEE2E2;color:var(--red);border-color:#FCA5A5" onclick="csfAskDelete()">🗑 このCSFの内容を削除</button>
+      <div id="kpi-edit-del-confirm" style="display:none;margin-top:8px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:10px">
+        <div style="font-size:12px;color:#991B1B;font-weight:700;margin-bottom:8px">このCSFの内容（テキスト・進捗・工数・期間）を削除しますか？ 元に戻せません。</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><button class="card-btn" onclick="csfCancelDelete()">キャンセル</button><button class="card-btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="csfDoDelete(this)">削除する</button></div>
+      </div>
     </div>
   </div>
 </div>
@@ -2188,6 +2214,10 @@ function initChartMgr(){
 
 function onCmChartChange(){
   const k=(document.getElementById('cm-chart-sel')||{}).value;
+  // 削除ボタンは自分のチャートのみ表示。チャート切替時は削除確認を閉じる
+  const db=document.getElementById('cm-del-btn');
+  if(db)db.style.display=(k&&CHARTS[k]&&!CHARTS[k].readonly)?'':'none';
+  if(typeof cmCancelDeleteChart==='function')cmCancelDeleteChart();
   if(!k||!CHARTS[k])return;
   if(!kpiOrigActs[k]){const d=CHARTS[k];kpiOrigActs[k]=(d.acts||[]).map(row=>[...(row||[])]);}
   renderCmKpiGrid(k);renderCmTasks();updateCmEditCount(k);
@@ -2341,6 +2371,21 @@ function openCellEdit(k,kind,si,ai){
     const ci=document.getElementById('kpi-edit-csfhours');if(ci)ci.value=(ov[si]!=null&&ov[si]!=='')?ov[si]:'';
     const ca=document.getElementById('kpi-edit-csfhours-auto');if(ca)ca.textContent=_csfKpiHours(k,si);
   }else if(csfhWrap){csfhWrap.style.display='none';}
+  // KGI（中心セル）のみ: チャートの開始期間・終了期間を表示
+  const cpWrap=document.getElementById('kpi-edit-chart-period');
+  if(cpWrap){
+    if(kind==='center'){
+      const sd=d.startDate||'',edd=d.endDate||'';
+      const v=document.getElementById('kpi-edit-chart-period-val');
+      if(v)v.textContent=(sd||edd)?`${sd||'—'} 〜 ${edd||'—'}`:(d.period||'未設定');
+      cpWrap.style.display='';
+    }else{cpWrap.style.display='none';}
+  }
+  // CSFのみ: 内容の削除ボタン
+  const delWrap2=document.getElementById('kpi-edit-del-wrap');
+  if(delWrap2)delWrap2.style.display=(kind==='csf')?'':'none';
+  const delC2=document.getElementById('kpi-edit-del-confirm');
+  if(delC2)delC2.style.display='none';
   // CSF/KPIのみ: 期間（開始日・終了日）。紐づくタスク優先→member_kpi_edits.period
   const perWrap=document.getElementById('kpi-edit-period-wrap');
   if(kind==='csf'||kind==='kpi'){
@@ -2379,6 +2424,54 @@ function clearKpiEdit(){
   const{k,kind,si,ai}=_editingKpi;
   if(kpiEdits[k])delete kpiEdits[k][_cellKey(kind,si,ai)];
   closeKpiEdit();onCmChartChange();
+}
+/* ===== CSF内容の削除（セル編集モーダルから・2段階確認） ===== */
+function csfAskDelete(){const p=document.getElementById('kpi-edit-del-confirm');if(p)p.style.display='block';}
+function csfCancelDelete(){const p=document.getElementById('kpi-edit-del-confirm');if(p)p.style.display='none';}
+async function csfDoDelete(btn){
+  if(!_editingKpi||_editingKpi.kind!=='csf')return;
+  const{k,si}=_editingKpi;
+  const d=CHARTS[k];if(!d)return;
+  if(btn){btn.disabled=true;btn.textContent='削除中…';}
+  // テキスト・編集記録（進捗/工数）・上書き工数・期間を削除
+  d.subs=(d.subs||[]).slice();d.subs[si]='';
+  if(kpiEdits[k]){
+    delete kpiEdits[k]['csf-'+si];
+    if(kpiEdits[k].csf_hours_override)delete kpiEdits[k].csf_hours_override[si];
+    if(kpiEdits[k].period)delete kpiEdits[k].period['csf-'+si];
+  }
+  closeKpiEdit();onCmChartChange();
+  if(typeof renderTaskTable==='function')renderTaskTable();
+  if(typeof renderProgressDash==='function')renderProgressDash();
+  await persistChart(k);
+  showToast('CSFの内容を削除しました');
+}
+/* ===== チャートの削除（チャート管理・2段階確認） ===== */
+function cmAskDeleteChart(){
+  const k=(document.getElementById('cm-chart-sel')||{}).value;
+  if(!k||!CHARTS[k]){alert('チャートを選択してください');return;}
+  if(CHARTS[k].readonly){alert('チームチャートはリーダー・幹部が管理しているため削除できません');return;}
+  const p=document.getElementById('cm-del-confirm');if(p)p.style.display='block';
+}
+function cmCancelDeleteChart(){const p=document.getElementById('cm-del-confirm');if(p)p.style.display='none';}
+async function cmDoDeleteChart(btn){
+  const k=(document.getElementById('cm-chart-sel')||{}).value;
+  const d=CHARTS[k];if(!d)return;
+  if(btn){btn.disabled=true;btn.textContent='削除中…';}
+  const API=window.VexumAPI;
+  if(API&&API.ready&&d.dbId&&API.deleteChart){
+    const res=await API.deleteChart(d.dbId);
+    if(res&&res.error){alert('削除に失敗しました: '+res.error);if(btn){btn.disabled=false;btn.textContent='削除する';}return;}
+  }
+  try{localStorage.removeItem('vexum_chart_'+(d.dbId||k));}catch(e){}
+  if(d.dbId&&typeof _pendingChartDel==='function')_pendingChartDel(d.dbId);
+  delete CHARTS[k];delete kpiEdits[k];
+  cmCancelDeleteChart();
+  if(btn){btn.disabled=false;btn.textContent='削除する';}
+  initChartMgr();
+  if(typeof renderProgressDash==='function')renderProgressDash();
+  if(typeof renderTaskTable==='function')renderTaskTable();
+  showToast('チャートを削除しました');
 }
 // セル編集を保存＝即・自動保存（ボタン不要）。内容をチャートに反映しlocalStorage＋Supabaseへ永続化
 function saveKpiEdit(){
@@ -2790,11 +2883,11 @@ updateInboxBadge();
 /* ===== タスク管理タブ（実データ描画） ===== */
 function _epShortMD(d){if(!d||d==='—')return'-';const p=String(d).split('/');return p.length===3?(+p[1])+'/'+(+p[2]):d;}
 let _tmFilter='all',_tmChartFilter='all',_tmCsfFilter='all';
-function tmFilter(st,btn){_tmFilter=st;document.querySelectorAll('#ep-task-filters .f-btn').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');renderTaskTable();}
+function tmFilter(st,btn){_tmFilter=st;_filtersSave({tm:st});document.querySelectorAll('#ep-task-filters .f-btn').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');renderTaskTable();}
 function tmFilterChart(v){_tmChartFilter=v;_tmCsfFilter='all';renderTaskTable();}
 function tmFilterCsf(v){_tmCsfFilter=v;renderTaskTable();}
-function tmFilterStatus(v){_tmFilter=v;renderTaskTable();}
-function tmFilterReset(){_tmFilter='all';_tmChartFilter='all';_tmCsfFilter='all';renderTaskTable();}
+function tmFilterStatus(v){_tmFilter=v;_filtersSave({tm:v});renderTaskTable();}
+function tmFilterReset(){_tmFilter='all';_tmChartFilter='all';_tmCsfFilter='all';_filtersSave({tm:null});renderTaskTable();}
 // タスク管理: チャートごとに「CSF（チャートのタスク）＋割当タスク」、最後に「チャート以外のタスク」
 function renderTaskTable(){
   const con=document.getElementById('task-groups');if(!con)return;
@@ -3276,6 +3369,7 @@ function _renderCsfBreakdown(tasksAll){
 }
 function onDashFilterChange(){
   const f=_getDashFilter();
+  _filtersSave({dash:{chart:f.chart,from:f.from,to:f.to}});
   const isFiltered=f.chart!=='all'||!!f.from||!!f.to;
   const badge=document.getElementById('ep-filter-badge');
   if(badge){
@@ -3292,6 +3386,8 @@ function onDashFilterChange(){
 function clearDashFilter(){
   const cs=document.getElementById('ep-kgi-filter');if(cs)cs.value='all';
   ymdClear('ep-from'); ymdClear('ep-to');
+  window._dashRestore=null;
+  _filtersSave({dash:null});
   onDashFilterChange();
 }
 /* KGI進捗カードを描画（自分の全チャートのKGI・達成率100%未満のみ） */
@@ -3309,6 +3405,15 @@ function renderKgiProgress(){
     if(chartFilter!=='all'&&keys.indexOf(chartFilter)<0)chartFilter='all';
     // チャート絞り込みは「KGI名 (開始日〜終了日)」で表示
     sel.innerHTML='<option value="all">全チャート</option>'+keys.map(k=>`<option value="${k}"${k===chartFilter?' selected':''}>${_chartLabel(k)}${CHARTS[k].readonly?'（参照のみ）':''}</option>`).join('');
+  }
+  // 保存済みの絞り込み（前回セッション）を復元。チャートは選択肢に現れた時点で反映
+  if(window._dashRestore){
+    const r=window._dashRestore;let applied=false;
+    if(r.from){ymdSet('ep-from',r.from);r.from=null;applied=true;}
+    if(r.to){ymdSet('ep-to',r.to);r.to=null;applied=true;}
+    if(r.chart&&r.chart!=='all'&&sel&&keys.indexOf(r.chart)>=0){sel.value=r.chart;chartFilter=r.chart;r.chart=null;applied=true;}
+    if(!r.from&&!r.to&&(!r.chart||r.chart==='all'))window._dashRestore=null;
+    if(applied)setTimeout(()=>{if(typeof onDashFilterChange==='function')onDashFilterChange();},0);
   }
   const f=_getDashFilter();
   const list=keys.filter(k=>{
@@ -3774,6 +3879,7 @@ function renderProgressDash(){
 }
 // 初期描画（この関数群はこのブロックで定義されるため、ここで初回描画する。
 // Supabase接続時は後続のbootstrapが実データで再描画する）
+restoreSavedFilters();  // 保存済みの絞り込みを復元（リセットするまで維持）
 renderProgressDash();
 renderTaskTable();
 </script>

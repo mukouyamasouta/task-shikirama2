@@ -1851,11 +1851,25 @@ async function initExecDashboard(){
     }
     populateDashAssignee();
   }
+  // 保存済みの絞り込みを復元（セレクトの選択肢が揃った後に反映）
+  try{const _sf=JSON.parse(localStorage.getItem('vexum_filters_exec')||'null');
+    if(_sf){
+      const t=document.getElementById('dash-team-sel');
+      if(t&&_sf.team&&[...t.options].some(o=>o.value===_sf.team)){t.value=_sf.team;populateDashAssignee();}
+      const a=document.getElementById('dash-assignee-sel');
+      if(a&&_sf.assignee&&[...a.options].some(o=>o.value===_sf.assignee))a.value=_sf.assignee;
+      if(_sf.period){_dashPeriod=_sf.period;document.querySelectorAll('#dash-period-seg .seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.period===_sf.period));const cr=document.getElementById('dash-custom-range');if(cr)cr.style.display=_sf.period==='custom'?'flex':'none';}
+      if(_sf.from)ymdSet('exec-dash-from',_sf.from);
+      if(_sf.to)ymdSet('exec-dash-to',_sf.to);
+    }
+  }catch(e){}
   await applyDashFilter();
 }
 async function applyDashFilter(){
   const API=window.VexumAPI;
   const teamUid=(document.getElementById('dash-team-sel')||{}).value||'';
+  // 絞り込み状態を保存（リセットするまでログイン後も維持）
+  try{localStorage.setItem('vexum_filters_exec',JSON.stringify({team:teamUid,assignee:(document.getElementById('dash-assignee-sel')||{}).value||'',period:_dashPeriod,from:ymdValue('exec-dash-from')||'',to:ymdValue('exec-dash-to')||''}));}catch(e){}
   if(API&&API.ready){
     const {from,to}=dashDateRange();
     try{_dashStats=await API.loadDashboardStats(teamUid||null,from,to);}catch(e){_dashStats=null;}
@@ -1868,6 +1882,7 @@ function resetDashFilter(){
   document.querySelectorAll('#dash-period-seg .seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.period==='thismonth'));
   const cr=document.getElementById('dash-custom-range');if(cr)cr.style.display='none';
   ymdClear('exec-dash-from');ymdClear('exec-dash-to');
+  try{localStorage.removeItem('vexum_filters_exec');}catch(e){}
   populateDashAssignee();
   applyDashFilter();
 }
