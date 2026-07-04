@@ -1990,6 +1990,8 @@ function vexumLogout(){
       var prevId=localStorage.getItem('vexum_last_profile_id');
       if(prevId&&currentProfileId&&prevId!==currentProfileId){
         Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id';}).forEach(function(k){localStorage.removeItem(k);});
+        // 別ユーザーに切替: スクリプトロード時に復元済みの旧ユーザーの絞り込みがメモリに残るためデフォルトへ戻す
+        window._dashMemberFilter='';window._dashChartFilter='';window._dashFromFilter='';window._dashToFilter='';
       }
       if(currentProfileId)localStorage.setItem('vexum_last_profile_id',currentProfileId);
     }catch(e){}

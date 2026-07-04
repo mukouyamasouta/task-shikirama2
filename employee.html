@@ -1090,8 +1090,6 @@ function resetReportForm(){
       <button onclick="closeKpiEdit()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
     </div>
     <div id="kpi-edit-csf" style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:4px"></div>
-    <!-- KGI編集時: チャートの開始期間・終了期間を表示 -->
-    <div id="kpi-edit-chart-period" style="display:none;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:11px;font-weight:700;color:#1D4ED8">📅 チャート期間: <span id="kpi-edit-chart-period-val">—</span></div>
     <div style="background:#F9FAFB;border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:12px;font-size:11px;color:var(--text2)">元の内容: <span id="kpi-edit-orig" style="font-weight:600;color:var(--text)"></span></div>
     <div class="fg" id="kpi-edit-text-wrap"><label class="fl" id="kpi-edit-text-label">内容（書き換え可）</label>
       <input class="fi" id="kpi-edit-text" placeholder="内容を入力…"></div>
@@ -2371,31 +2369,31 @@ function openCellEdit(k,kind,si,ai){
     const ci=document.getElementById('kpi-edit-csfhours');if(ci)ci.value=(ov[si]!=null&&ov[si]!=='')?ov[si]:'';
     const ca=document.getElementById('kpi-edit-csfhours-auto');if(ca)ca.textContent=_csfKpiHours(k,si);
   }else if(csfhWrap){csfhWrap.style.display='none';}
-  // KGI（中心セル）のみ: チャートの開始期間・終了期間を表示
-  const cpWrap=document.getElementById('kpi-edit-chart-period');
-  if(cpWrap){
-    if(kind==='center'){
-      const sd=d.startDate||'',edd=d.endDate||'';
-      const v=document.getElementById('kpi-edit-chart-period-val');
-      if(v)v.textContent=(sd||edd)?`${sd||'—'} 〜 ${edd||'—'}`:(d.period||'未設定');
-      cpWrap.style.display='';
-    }else{cpWrap.style.display='none';}
-  }
   // CSFのみ: 内容の削除ボタン
   const delWrap2=document.getElementById('kpi-edit-del-wrap');
   if(delWrap2)delWrap2.style.display=(kind==='csf')?'':'none';
   const delC2=document.getElementById('kpi-edit-del-confirm');
   if(delC2)delC2.style.display='none';
-  // CSF/KPIのみ: 期間（開始日・終了日）。紐づくタスク優先→member_kpi_edits.period
+  // 期間（開始日・終了日）。KGI=チャート期間 / CSF・KPI=紐づくタスク優先→member_kpi_edits.period
   const perWrap=document.getElementById('kpi-edit-period-wrap');
-  if(kind==='csf'||kind==='kpi'){
+  if(kind==='csf'||kind==='kpi'||kind==='center'){
     if(perWrap)perWrap.style.display='';
-    const kindLbl=document.getElementById('kpi-edit-period-kind');if(kindLbl)kindLbl.textContent=(kind==='csf'?'CSF':'KPI');
-    const per=_cellPeriod(k,kind,si,ai);
-    const ps=document.getElementById('kpi-edit-pstart');if(ps)ps.value=per.start||'';
-    const pe=document.getElementById('kpi-edit-pend');if(pe)pe.value=per.end||'';
+    const kindLbl=document.getElementById('kpi-edit-period-kind');if(kindLbl)kindLbl.textContent=(kind==='csf'?'CSF':kind==='center'?'KGI':'KPI');
+    const ps=document.getElementById('kpi-edit-pstart');
+    const pe=document.getElementById('kpi-edit-pend');
     const hint=document.getElementById('kpi-edit-period-hint');
-    if(hint)hint.textContent=per.fromTask?('紐づくタスク（'+per.taskCount+'件）の期間を更新します。'):'まだタスクが無いため、チャートに期間情報として保存します（タスク化後も引き継がれます）。';
+    if(kind==='center'){
+      // KGI=チャート全体の期間（mandala_charts.start_date/end_date）。"YYYY/MM/DD"→ISOへ変換して入力欄へ
+      const toIso=v=>v?String(v).replace(/\//g,'-'):'';
+      if(ps)ps.value=toIso(d.startDate||'');
+      if(pe)pe.value=toIso(d.endDate||'');
+      if(hint)hint.textContent='チャート全体の期間です。KGI名の横・ダッシュボード・ガントチャートに反映されます。';
+    }else{
+      const per=_cellPeriod(k,kind,si,ai);
+      if(ps)ps.value=per.start||'';
+      if(pe)pe.value=per.end||'';
+      if(hint)hint.textContent=per.fromTask?('紐づくタスク（'+per.taskCount+'件）の期間を更新します。'):'まだタスクが無いため、チャートに期間情報として保存します（タスク化後も引き継がれます）。';
+    }
   }else if(perWrap){perWrap.style.display='none';}
   document.getElementById('kpi-edit-modal').style.display='flex';
 }
@@ -2518,9 +2516,22 @@ function saveKpiEdit(){
   if(kind==='center')d.center=newText;
   else if(kind==='csf'){d.subs=(d.subs||[]).slice();d.subs[si]=newText;}
   else{d.acts=(d.acts||[]).map(r=>[...(r||[])]);if(d.acts[si])d.acts[si][ai]=newText;}
+  // KGI（中心セル）: チャート全体の期間を編集 → CHARTS + Supabase(mandala_charts.start_date/end_date)
+  if(kind==='center'){
+    const cps=(document.getElementById('kpi-edit-pstart')||{}).value||null;
+    const cpe=(document.getElementById('kpi-edit-pend')||{}).value||null;
+    if(cps&&cpe&&cpe<cps){alert('終了日は開始日以降にしてください');return;}
+    d.startDate=cps?cps.replace(/-/g,'/'):'';   // "YYYY/MM/DD" 表記で保持（_chartLabel等と揃える）
+    d.endDate=cpe?cpe.replace(/-/g,'/'):'';
+    const API0=window.VexumAPI;
+    if(API0&&API0.ready&&d.dbId&&API0.updateChart){
+      API0.updateChart(d.dbId,{start_date:cps||null,end_date:cpe||null}).then(r=>{if(r&&r.error)console.warn('[VEXUM] チャート期間の保存に失敗:',r.error);}).catch(()=>{});
+    }
+  }
   closeKpiEdit();onCmChartChange();
   if(typeof renderTaskTable==='function')renderTaskTable();  // タスク管理のチャート行も更新
-  if(typeof renderProgressDash==='function')renderProgressDash();  // ダッシュボード（統計カード・CSF内訳）も更新
+  if(typeof renderProgressDash==='function')renderProgressDash();  // ダッシュボード（統計カード・CSF内訳・KGI名横の期間）も更新
+  if(typeof renderGantt==='function'){const gt=document.getElementById('tc-gantt');if(gt&&gt.classList.contains('active'))renderGantt();}
   persistChart(k);  // 自動保存（localStorage＋Supabase）
 }
 // チャートの内容・編集を永続化（localStorage必ず＋Supabaseは可能なら、失敗時は再送キューへ）
@@ -3936,6 +3947,16 @@ function vexumLogout(){
       var prevId=localStorage.getItem('vexum_last_profile_id');
       if(prevId&&currentProfileId&&prevId!==currentProfileId){
         Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id';}).forEach(function(k){localStorage.removeItem(k);});
+        // 別ユーザーに切替: スクリプトロード時に復元済みの旧ユーザーの絞り込みがメモリに残るため、
+        // デフォルトへ戻してから（空になった）localStorageで再復元する
+        try{
+          if(typeof _tmFilter!=='undefined')_tmFilter='all';
+          if(typeof _tmChartFilter!=='undefined')_tmChartFilter='all';
+          if(typeof _tmCsfFilter!=='undefined')_tmCsfFilter='all';
+          if(typeof _asgFilter!=='undefined')_asgFilter='all';
+          window._dashRestore=null;
+          if(typeof restoreSavedFilters==='function')restoreSavedFilters();
+        }catch(e){}
       }
       if(currentProfileId)localStorage.setItem('vexum_last_profile_id',currentProfileId);
     }catch(e){}
