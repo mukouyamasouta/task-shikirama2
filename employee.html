@@ -3018,15 +3018,22 @@ function renderTaskTable(){
     .filter(r=>_taskChartMatch(r.ref,_tmChartFilter))
     .filter(r=>inDateRange((r.ref&&(r.ref.dueRaw||r.ref.startRaw))||null,_tmFromFilter||null,_tmToFilter||null));
   if(!rows.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:24px">該当するタスクはありません（「＋ 新規作成」からタスクを追加できます）</div></div>';return;}
-  // タスク1行のHTML（グループ内で共通利用）
-  const rowHtml=t=>{
+  // タスク1行のHTML。chartKey: 表示中のCHARTSキー / inCsfSection: CSFセクション内かどうか
+  const rowHtml=(t,chartKey,inCsfSection)=>{
     const st=stOf(t),sc=stMap[st]||stMap.todo;
     const col=t.pct>=100?'var(--green)':t.pct>=40?'var(--accent)':'var(--amber)';
     const editorName=t.by||(t.ref&&t.ref.editedBy)||'';
     const editor=editorName?`<span style="font-size:9px;background:${_editorColor(editorName)}22;color:${_editorColor(editorName)};padding:1px 6px;border-radius:8px;font-weight:700;margin-left:6px">✎ ${editorName}</span>`:'';
     const pcChip=`<span class="chip ${(priMap[t.pri]||priMap.md)[0]}">${(priMap[t.pri]||priMap.md)[1]}</span>`;
-    // CSF/KPIの紐付けをチップで明示。csfIdxがあれば表示（chart名が空の不整合データでも紐付けが分かるように）
-    const csfChip=t.csfIdx!=null?`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px" title="${t.kpi}">CSF${t.csfIdx+1}${t.kpiIdx!=null?' / KPI'+(t.csfIdx+1)+'-'+(t.kpiIdx+1):''}</span>`:'';
+    // CSFセクション内: KPIチップのみ(テキスト付き) / セクション外: 従来のCSF/KPIチップ
+    let csfChip='';
+    if(inCsfSection&&chartKey&&t.kpiIdx!=null&&t.csfIdx!=null){
+      const kpiTxt=(((CHARTS[chartKey]||{}).acts||[])[t.csfIdx]||[])[t.kpiIdx];
+      const kpiLabel=kpiTxt&&String(kpiTxt).trim()?String(kpiTxt).trim().slice(0,20):'';
+      csfChip=`<span style="font-size:9px;background:#EDE9FE;color:#6D28D9;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">KPI${t.csfIdx+1}-${t.kpiIdx+1}${kpiLabel?' '+kpiLabel:''}</span>`;
+    }else if(t.csfIdx!=null){
+      csfChip=`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px" title="${t.kpi}">CSF${t.csfIdx+1}${t.kpiIdx!=null?' / KPI'+(t.csfIdx+1)+'-'+(t.kpiIdx+1):''}</span>`;
+    }
     const meta=`${t.kpi} ／ 期限 ${t.end} ／ 合計 ${t.hours}h`;
     const rid=t.arr+t.idx;
     const refObj=t.ref||{};
@@ -3048,15 +3055,13 @@ function renderTaskTable(){
     </div>`;
     s+=`</div>`;return s;
   };
-  // ★チャート紐付き自作タスクは KGI(チャート)ごとにグループ、紐付き無しは「チャート以外のタスク」。
-  //   source_chart は chart名/KGIテキストの表記揺れがあるため CHARTSキーへ正規化して同一KGIを1グループに集約。
-  //   見出しは _chartLabel（「KGIテキスト（開始〜終了）」）で統一（照合不能な文字列はそのまま見出しに）。
+  // チャート紐付き → KGI別グループ。source_chart 表記揺れは CHARTSキーへ正規化
   const _resolveChartKey=cs=>{const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));return keys.find(k=>_taskChartMatch({chart:cs},k))||null;};
   const groups={},order=[],noChart=[];
   rows.forEach(r=>{
     if(r.chart){
       const rk=_resolveChartKey(r.chart);const key=rk||('raw:'+r.chart);
-      if(!groups[key]){groups[key]={rows:[],label:rk?_chartLabel(rk):r.chart};order.push(key);}
+      if(!groups[key]){groups[key]={rows:[],label:rk?_chartLabel(rk):r.chart,chartKey:rk||null};order.push(key);}
       groups[key].rows.push(r);
     }else noChart.push(r);
   });
@@ -3064,13 +3069,42 @@ function renderTaskTable(){
   order.forEach(key=>{
     const g=groups[key],grp=g.rows,totH=grp.reduce((s,t)=>s+(t.hours||0),0);
     h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">🎯 ${g.label}</div><div class="card-sub">KGI紐付けタスク ／ ${grp.length}件 ／ 合計時間 ${Math.round(totH*10)/10}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
-    grp.forEach(t=>h+=rowHtml(t));
+    if(g.chartKey&&CHARTS[g.chartKey]){
+      // CSF構造で表示: テキスト有りまたはタスク有りのCSFのみセクション表示
+      const ck=g.chartKey;
+      const csfs=_chartCsf(ck);
+      const nocsf=grp.filter(t=>t.csfIdx==null);
+      csfs.forEach(c=>{
+        const csfTasks=grp.filter(t=>t.csfIdx===c.si);
+        if(!c.text&&!csfTasks.length)return;
+        const csfH=_csfHours(ck,c.si);
+        const csfCol=_csfColor(c.pct);
+        h+=`<div style="border-bottom:2px solid #E5E7EB">`;
+        h+=`<div style="padding:8px 14px;background:#F8FAFC;display:flex;justify-content:space-between;align-items:center;gap:8px">`;
+        h+=`<div style="font-size:11px;font-weight:700;color:#374151">CSF${c.si+1}${c.text?' '+c.text:''}</div>`;
+        h+=`<div style="display:flex;gap:10px;align-items:center;font-size:10px;white-space:nowrap"><span style="color:${csfCol};font-weight:700">${c.pct}%</span><span style="color:var(--text3)">${Math.round(csfH*10)/10}h</span></div>`;
+        h+=`</div>`;
+        csfTasks.forEach(t=>h+=rowHtml(t,ck,true));
+        h+=`</div>`;
+      });
+      if(nocsf.length){
+        h+=`<div style="border-bottom:2px solid #E5E7EB">`;
+        h+=`<div style="padding:8px 14px;background:#FFFBEB;display:flex;justify-content:space-between;align-items:center">`;
+        h+=`<div style="font-size:11px;font-weight:700;color:#92400E">CSF未指定</div>`;
+        h+=`<div style="font-size:10px;color:var(--text3)">${nocsf.length}件</div>`;
+        h+=`</div>`;
+        nocsf.forEach(t=>h+=rowHtml(t,ck,false));
+        h+=`</div>`;
+      }
+    }else{
+      grp.forEach(t=>h+=rowHtml(t,null,false));
+    }
     h+=`</div></div>`;
   });
   if(noChart.length){
     const totH=noChart.reduce((s,t)=>s+(t.hours||0),0);
     h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">☰ チャート以外のタスク</div><div class="card-sub">${noChart.length}件 ／ 合計時間 ${Math.round(totH*10)/10}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
-    noChart.forEach(t=>h+=rowHtml(t));
+    noChart.forEach(t=>h+=rowHtml(t,null,false));
     h+=`</div></div>`;
   }
   con.innerHTML=h;
