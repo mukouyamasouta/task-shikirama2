@@ -2952,8 +2952,8 @@ function renderTaskTable(){
   // タスク管理タブ＝自分で作成したタスク(a.self)のみ。リーダー/幹部の割当(self:false)は「割り当て」タブ
   const own=a=>a.self===true;
   let taskRows=[
-    ...ASSIGNMENTS.map((a,i)=>({kind:'task',ref:a,arr:'A',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,pct:a.pct||0,hours:a.hours!=null?a.hours:0,done:false,late:a.status==='late'})),
-    ...ASSIGN_HISTORY.map((a,i)=>({kind:'task',ref:a,arr:'H',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,pct:100,hours:a.hours!=null?a.hours:0,done:true}))
+    ...ASSIGNMENTS.map((a,i)=>({kind:'task',ref:a,arr:'A',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,csfIdx:(a.csfIdx!=null&&!isNaN(a.csfIdx))?a.csfIdx:null,kpiIdx:(a.kpiIdx!=null&&!isNaN(a.kpiIdx))?a.kpiIdx:null,pct:a.pct||0,hours:a.hours!=null?a.hours:0,done:false,late:a.status==='late'})),
+    ...ASSIGN_HISTORY.map((a,i)=>({kind:'task',ref:a,arr:'H',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,csfIdx:(a.csfIdx!=null&&!isNaN(a.csfIdx))?a.csfIdx:null,kpiIdx:(a.kpiIdx!=null&&!isNaN(a.kpiIdx))?a.kpiIdx:null,pct:100,hours:a.hours!=null?a.hours:0,done:true}))
   ].filter(r=>own(r.ref));
   // ★本日対応すべき/遅延（di<=today かつ未完了）はダッシュボードに表示 → タスク管理からは除外（二重表示回避）
   taskRows=taskRows.filter(r=>!isTodayLate(r));
@@ -2982,6 +2982,8 @@ function renderTaskTable(){
     const editorName=t.by||(t.ref&&t.ref.editedBy)||'';
     const editor=editorName?`<span style="font-size:9px;background:${_editorColor(editorName)}22;color:${_editorColor(editorName)};padding:1px 6px;border-radius:8px;font-weight:700;margin-left:6px">✎ ${editorName}</span>`:'';
     const pcChip=`<span class="chip ${(priMap[t.pri]||priMap.md)[0]}">${(priMap[t.pri]||priMap.md)[1]}</span>`;
+    // CSF/KPIの紐付けをチップで明示。csfIdxがあれば表示（chart名が空の不整合データでも紐付けが分かるように）
+    const csfChip=t.csfIdx!=null?`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px" title="${t.kpi}">CSF${t.csfIdx+1}${t.kpiIdx!=null?' / KPI'+(t.csfIdx+1)+'-'+(t.kpiIdx+1):''}</span>`:'';
     const meta=`${t.kpi} ／ 期限 ${t.end} ／ 合計 ${t.hours}h`;
     const rid=t.arr+t.idx;
     const refObj=t.ref||{};
@@ -2990,7 +2992,7 @@ function renderTaskTable(){
     const deletable=!isChartTask;
     let s=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${editor}</div><div style="font-size:10px;color:var(--text3)">${meta}</div></div>
+        <div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${csfChip}${editor}</div><div style="font-size:10px;color:var(--text3)">${meta}</div></div>
         <div style="display:flex;gap:6px;align-items:center">${pcChip}<span class="chip ${sc[0]}">${sc[1]}</span><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${t.pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${t.pct}%</div></div></div>
       </div>`;
     let acts='';
