@@ -3048,13 +3048,22 @@ function renderTaskTable(){
     </div>`;
     s+=`</div>`;return s;
   };
-  // ★チャート紐付き自作タスクは KGI(chart)ごとにグループ、紐付き無しは「チャート以外のタスク」
+  // ★チャート紐付き自作タスクは KGI(チャート)ごとにグループ、紐付き無しは「チャート以外のタスク」。
+  //   source_chart は chart名/KGIテキストの表記揺れがあるため CHARTSキーへ正規化して同一KGIを1グループに集約。
+  //   見出しは _chartLabel（「KGIテキスト（開始〜終了）」）で統一（照合不能な文字列はそのまま見出しに）。
+  const _resolveChartKey=cs=>{const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));return keys.find(k=>_taskChartMatch({chart:cs},k))||null;};
   const groups={},order=[],noChart=[];
-  rows.forEach(r=>{if(r.chart){if(!groups[r.chart]){groups[r.chart]=[];order.push(r.chart);}groups[r.chart].push(r);}else noChart.push(r);});
+  rows.forEach(r=>{
+    if(r.chart){
+      const rk=_resolveChartKey(r.chart);const key=rk||('raw:'+r.chart);
+      if(!groups[key]){groups[key]={rows:[],label:rk?_chartLabel(rk):r.chart};order.push(key);}
+      groups[key].rows.push(r);
+    }else noChart.push(r);
+  });
   let h='';
-  order.forEach(cs=>{
-    const grp=groups[cs];const totH=grp.reduce((s,t)=>s+(t.hours||0),0);
-    h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">🎯 ${cs}</div><div class="card-sub">KGI紐付けタスク ／ ${grp.length}件 ／ 合計時間 ${Math.round(totH*10)/10}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
+  order.forEach(key=>{
+    const g=groups[key],grp=g.rows,totH=grp.reduce((s,t)=>s+(t.hours||0),0);
+    h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">🎯 ${g.label}</div><div class="card-sub">KGI紐付けタスク ／ ${grp.length}件 ／ 合計時間 ${Math.round(totH*10)/10}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
     grp.forEach(t=>h+=rowHtml(t));
     h+=`</div></div>`;
   });
