@@ -208,7 +208,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="sb-item" onclick="swTab('tasks',this)"><span class="sb-icon">☰</span>タスク管理<span class="sb-badge" id="tasks-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('chartmgr',this);initChartMgr()"><span class="sb-icon">🗂</span>チャート管理</button>
     <button class="sb-item" onclick="swTab('gantt',this);renderGantt()"><span class="sb-icon">📅</span>ガントチャート</button>
-    <button class="sb-item" onclick="swTab('inbox',this);renderInbox()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="inbox-badge" style="display:none">0</span></button>
+    <button class="sb-item" onclick="swTab('inbox',this);openInboxTab()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="inbox-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('assign',this)"><span class="sb-icon">📌</span>割り当て<span class="sb-badge" id="assign-badge">3</span></button>
     <button class="sb-item" onclick="swTab('reviews',this);renderEval();refreshSelfEvalStatusCard()"><span class="sb-icon">★</span>評価管理</button>
     <button class="sb-item" onclick="swTab('report',this)"><span class="sb-icon">📝</span>日報</button>
@@ -924,13 +924,13 @@ function _prepStore(rec){
   const p=rec.date.split('-');prepYear=+p[0];prepMonth=+p[1]-1;
   renderPReportCalendar();showPReportDetail(rec.date);
 }
-// 始業：今日の計画を保存（通知なし）
+// 始業：今日の計画を保存し、リーダーへ一度共有（同日は重複通知しない）
 async function reportSaveMorning(){
   const rec=_prepGather();
   if(!rec.date){alert('日付を入力してください');return;}
   const API=window.VexumAPI;
   if(API&&API.ready){
-    const res=await API.saveDailyReport(Object.assign({},rec,{submit:false}));
+    const res=await API.saveDailyReport(Object.assign({},rec,{submit:false,notifyStart:true}));
     if(res&&res.error){alert('保存に失敗しました: '+res.error);return;}
   }
   _prepStore(rec);
@@ -2108,7 +2108,7 @@ const PREPORTS=[
   {date:'2025-05-28',hours:'8.5h',done:'顧客ヒアリング資料完了。リピート顧客2社へフォロー。',plan:'新規アポ獲得の架電。',issue:'特になし。',cond:'good'},
   {date:'2025-05-29',hours:'8.0h',done:'訪問3件・提案書作成。',plan:'競合比較表を更新予定。',issue:'受注率が伸び悩んでいる。',cond:'normal'}
 ];
-let prepYear=2025,prepMonth=4,prepSel='';
+const _prepNow=new Date();let prepYear=_prepNow.getFullYear(),prepMonth=_prepNow.getMonth(),prepSel='';
 function prepByDate(date){return PREPORTS.find(r=>r.date===date);}
 function changePReportMonth(d){prepMonth+=d;if(prepMonth<0){prepMonth=11;prepYear--;}else if(prepMonth>11){prepMonth=0;prepYear++;}prepSel='';document.getElementById('prep-detail').innerHTML='';renderPReportCalendar();}
 function renderPReportCalendar(){
@@ -2804,17 +2804,60 @@ const INBOX=(()=>{ // デモ用: Supabase接続時は実データで置換
     sent_by_name:'木村 雅人（幹部）',sent_at:'2025-06-01',status:'sent',progress:0,cell_status:{},edited_by:{}}];
 })();
 let _ibCur=null,_ibCell=null;
+let MYNOTIFS=[];  // 従業員本人宛て通知（タスク割当・評価受領など。Supabase notifications）
 function ibMyName(){const e=document.getElementById('sb-uname');const n=e?e.textContent.trim():'';return (n&&n!=='（読み込み中）')?n:'本人';}
 function updateInboxBadge(){
   const b=document.getElementById('inbox-badge');if(!b)return;
-  const n=INBOX.filter(s=>s.status!=='done').length;
+  const n=INBOX.filter(s=>s.status!=='done').length+MYNOTIFS.filter(x=>!x.read).length;
   b.textContent=n;b.style.display=n?'':'none';
 }
+/* 受信ボックスタブを開く：通知を既読化してから描画 */
+function openInboxTab(){
+  const unread=MYNOTIFS.filter(x=>!x.read);
+  if(unread.length){
+    const ids=unread.map(x=>x.id).filter(Boolean);
+    unread.forEach(x=>x.read=true);
+    const API=window.VexumAPI;
+    if(API&&API.ready&&ids.length&&API.markNotificationsRead)API.markNotificationsRead(ids).catch(()=>{});
+  }
+  renderInbox();updateInboxBadge();
+}
+/* 本人宛て通知を取得して受信ボックス・バッジへ反映 */
+function loadMyNotifs(){
+  const API=window.VexumAPI;
+  if(!(API&&API.ready&&API.loadMyNotifications))return;
+  API.loadMyNotifications().then(rows=>{MYNOTIFS=Array.isArray(rows)?rows:[];renderInbox();updateInboxBadge();}).catch(()=>{});
+}
+// 通知種別 → 表示ラベル・遷移先タブ
+const _NOTIF_META={task_assigned:['📌 タスク割当','var(--accent)','tasks'],evaluation_received:['⭐ 評価が届きました','var(--amber)','reviews'],report_started:['📝 始業共有','var(--text3)',null],report_submitted:['📝 日報提出','var(--text3)',null],task_done:['✅ タスク完了','var(--green)',null],chart_edit:['🧿 チャート更新','var(--accent)',null]};
+function ntfGoto(tab){if(tab&&typeof gotoTab==='function')gotoTab(tab);}
 function renderInbox(){
   const con=document.getElementById('inbox-list');if(!con)return;
-  if(!INBOX.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">受信したチャートはありません。幹部・統括が送信すると、ここに表示されます。</div></div>';return;}
-  const st={sent:['s-todo','未着手'],in_progress:['s-wip','記入中'],done:['s-done','完了']};
   let h='';
+  // ① リーダー/幹部からの通知（タスク割当・評価受領など）
+  if(MYNOTIFS.length){
+    h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">🔔 お知らせ</div><div class="card-sub">リーダー・幹部からのタスク割当・評価など（${MYNOTIFS.filter(x=>!x.read).length}件 未読）</div></div></div><div class="card-body" style="padding:0">`;
+    MYNOTIFS.forEach(x=>{
+      const m=_NOTIF_META[x.type]||[x.title||'お知らせ','var(--text3)',null];
+      const when=(x.created_at||'').slice(0,10);
+      const clickable=!!m[2];
+      h+=`<div ${clickable?`onclick="ntfGoto('${m[2]}')" style="cursor:pointer"`:''} style="padding:11px 14px;border-bottom:1px solid #F3F4F6;${x.read?'':'background:#F0F9FF'}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:${m[1]}">${m[0]}${x.read?'':' <span style="font-size:8px;background:var(--red);color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px">未読</span>'}</div>
+          <div style="font-size:11px;color:var(--text)">${x.body||''}</div>
+          <div style="font-size:10px;color:var(--text3)">${x.actor_name?x.actor_name+' ／ ':''}${when}</div></div>
+          ${clickable?'<span style="font-size:10px;color:var(--accent);font-weight:700;flex-shrink:0">開く →</span>':''}
+        </div></div>`;
+    });
+    h+=`</div></div>`;
+  }
+  // ② 受信チャート（記入待ち）
+  if(!INBOX.length){
+    if(!MYNOTIFS.length)con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">受信したお知らせ・チャートはありません。リーダー・幹部からタスク割当や評価、チャート送信があると、ここに表示されます。</div></div>';
+    else con.innerHTML=h;
+    return;
+  }
+  const st={sent:['s-todo','未着手'],in_progress:['s-wip','記入中'],done:['s-done','完了']};
   INBOX.forEach(s=>{
     const sc=st[s.status]||st.sent;
     const edits=Object.keys(s.cell_status||{}).length;
@@ -4085,9 +4128,11 @@ function vexumLogout(){
     if(typeof updateInboxBadge==='function') updateInboxBadge();
     if(window.VexumUI)VexumUI.refresh();
   }).catch(function(){});
-  // リアルタイム反映: リーダーの振り分け・チャート更新を自動で再描画
+  // 本人宛て通知（タスク割当・評価受領など）を取得して受信ボックス・バッジへ反映
+  if(typeof loadMyNotifs==='function')loadMyNotifs();
+  // リアルタイム反映: リーダーの振り分け・チャート更新・通知を自動で再描画
   if(API.subscribeLive){
-    API.subscribeLive(['tasks','chart_sends'],function(){
+    API.subscribeLive(['tasks','chart_sends','notifications'],function(){
       API.loadPersonalData(window._actingEmpId||undefined).then(function(d){
         if(!d)return;
         repl(CHARTS,d.CHARTS);repl(FEEDBACK,d.FEEDBACK);
@@ -4106,6 +4151,7 @@ function vexumLogout(){
         if(typeof updateInboxBadge==='function')updateInboxBadge();
         if(window.VexumUI)VexumUI.refresh();
       }).catch(function(){});
+      if(typeof loadMyNotifs==='function')loadMyNotifs();
     });
   }
 })();

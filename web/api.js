@@ -431,6 +431,16 @@
       r = await sb.from('tasks').insert(row).select().single();
     }
     if (r.error) return { error: friendlyErr(r.error.message) };
+    // ★割り当てられた本人へ通知（リーダー/幹部→従業員）。自作タスク(assigneePid未指定=本人)は通知しない
+    try {
+      if (o.assigneePid && me && o.assigneePid !== me.id) {
+        await sb.from('notifications').insert({
+          to_user_id: o.assigneePid, to_team_id: o.teamUuid || null, type: 'task_assigned',
+          title: 'タスクが割り当てられました', body: '「' + (o.title || 'タスク') + '」',
+          actor_id: me ? me.id : null, actor_name: me ? me.full_name : '', ref_id: (r.data && r.data.id) || null
+        });
+      }
+    } catch (e) {}
     return { data: r.data };
   }
   // タスクの進捗・状態・コメントを更新（個人画面の保存系）
@@ -619,6 +629,34 @@
     } catch (e) {}
   }
 
+  // 始業（今日の計画）保存をリーダーへ通知。同一本人・同日は重複させない（始業を複数回保存しても1回）
+  async function notifyReportStarted(reportId, dateStr) {
+    if (!sb) return;
+    var me = await currentProfile(); if (!me) return;
+    var leaderId = null, teamId = null;
+    var tm = await sb.from('team_members').select('team_id').eq('profile_id', me.id).maybeSingle();
+    if (tm.data) { teamId = tm.data.team_id; var tr = await sb.from('teams').select('leader_id').eq('id', teamId).maybeSingle(); leaderId = tr.data && tr.data.leader_id; }
+    if (!leaderId) return;
+    try {
+      var ex = await sb.from('notifications').select('id').eq('actor_id', me.id).eq('type', 'report_started').ilike('body', '%' + (dateStr || '') + '%').limit(1);
+      if (ex.data && ex.data.length) return; // 同日の始業通知は既に送信済み
+    } catch (e) {}
+    try {
+      await sb.from('notifications').insert({
+        to_user_id: leaderId, to_team_id: teamId, type: 'report_started',
+        title: '始業報告', body: (dateStr || '') + ' の始業（今日の計画）が共有されました',
+        actor_id: me.id, actor_name: me.full_name, ref_id: reportId || null
+      });
+    } catch (e) {}
+  }
+  // 従業員本人宛ての通知を取得（受信ボックス用。to_user_id=自分 で単純絞り込み）
+  async function loadMyNotifications() {
+    if (!sb) return [];
+    var me = await currentProfile(); if (!me) return [];
+    var r = await sb.from('notifications').select('*').eq('to_user_id', me.id).order('created_at', { ascending: false }).limit(50);
+    if (r.error) { err('myNotifications', r.error); return []; }
+    return r.data || [];
+  }
   // 自分/自チーム宛ての通知を取得（リーダー画面の🔔・受信用）
   async function loadNotifications() {
     if (!sb) return [];
@@ -690,6 +728,8 @@
     }
     if (r.error) return { error: friendlyErr(r.error.message) };
     if (o.submit) { try { await notifyReportSubmitted(r.data && r.data.id, o.date); } catch (e) {} }
+    // 始業保存（submitでない初回共有）でも一度リーダーへ通知
+    else if (o.notifyStart) { try { await notifyReportStarted(r.data && r.data.id, o.date); } catch (e) {} }
     return { ok: true };
   }
   // 日報を削除（本人の指定日）
@@ -861,6 +901,16 @@
     if (o.chartId) row.chart_id = o.chartId;
     var r = await sb.from('evaluations').insert(row);
     if (r.error) return { error: friendlyErr(r.error.message) };
+    // ★評価対象者へ通知（リーダー/幹部→従業員）
+    try {
+      if (o.targetPid && me && o.targetPid !== me.id) {
+        await sb.from('notifications').insert({
+          to_user_id: o.targetPid, to_team_id: null, type: 'evaluation_received',
+          title: '評価が届きました', body: (o.period ? o.period + ' の' : '') + '評価が登録されました',
+          actor_id: me ? me.id : null, actor_name: me ? me.full_name : '', ref_id: o.chartId || null
+        });
+      }
+    } catch (e) {}
     return { ok: true };
   }
   // メンバーの個人曼荼羅チャートを upsert（リーダーが記入＝タスク割当）
@@ -1902,6 +1952,7 @@
     loadTaskTimeLogs: loadTaskTimeLogs,
     loadMemberTimeLogs: loadMemberTimeLogs,
     loadNotifications: loadNotifications,
+    loadMyNotifications: loadMyNotifications,
     markNotificationsRead: markNotificationsRead,
     saveDailyReport: saveDailyReport,
     deleteDailyReport: deleteDailyReport,
