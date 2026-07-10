@@ -750,8 +750,16 @@ function _filtersLoad(){return _lsGet(FILTER_LS_KEY)||{};}
 function _filtersSave(patch){const f=_filtersLoad();Object.assign(f,patch);_lsSet(FILTER_LS_KEY,f);}
 function restoreSavedFilters(){
   const f=_filtersLoad();
+  // タスク管理: ステータス／チャート(KGI)／日付範囲
   if(f.tm&&typeof _tmFilter!=='undefined')_tmFilter=f.tm;
+  if(f.tmChart&&typeof _tmChartFilter!=='undefined')_tmChartFilter=f.tmChart;
+  if(typeof _tmFromFilter!=='undefined')_tmFromFilter=f.tmFrom||'';
+  if(typeof _tmToFilter!=='undefined')_tmToFilter=f.tmTo||'';
+  // 割り当て: ステータス／チャート(KGI)／日付範囲
   if(f.asg&&typeof _asgFilter!=='undefined')_asgFilter=f.asg;
+  if(f.asgChart&&typeof _asgChartFilter!=='undefined')_asgChartFilter=f.asgChart;
+  if(typeof _asgFromFilter!=='undefined')_asgFromFilter=f.asgFrom||'';
+  if(typeof _asgToFilter!=='undefined')_asgToFilter=f.asgTo||'';
   // ダッシュボードのKGI/日付はセレクト生成後に反映（renderKgiProgress内で消費）
   if(f.dash&&(f.dash.chart&&f.dash.chart!=='all'||f.dash.from||f.dash.to))window._dashRestore={...f.dash};
 }
@@ -807,10 +815,12 @@ function processAssignCompletion(){
   if(moved){updateAssignBadge();renderAssign();}
   return moved;
 }
-/* 割り当てタブの絞り込み（タスク管理と同仕様） */
-let _asgFilter='all';
+/* 割り当てタブの絞り込み（タスク管理と同仕様: ステータス＋チャート(KGI)＋日付範囲） */
+let _asgFilter='all',_asgChartFilter='all',_asgFromFilter='',_asgToFilter='';
 function asgFilterStatus(v){_asgFilter=v;_filtersSave({asg:v});renderAssign();}
-function asgFilterReset(){_asgFilter='all';_filtersSave({asg:null});renderAssign();}
+function asgFilterChart(v){_asgChartFilter=v||'all';_filtersSave({asgChart:_asgChartFilter});renderAssign();}
+function asgFilterDate(){_asgFromFilter=ymdValue('asg-from')||'';_asgToFilter=ymdValue('asg-to')||'';_filtersSave({asgFrom:_asgFromFilter,asgTo:_asgToFilter});renderAssign();}
+function asgFilterReset(){_asgFilter='all';_asgChartFilter='all';_asgFromFilter='';_asgToFilter='';ymdClear('asg-from');ymdClear('asg-to');_filtersSave({asg:null,asgChart:null,asgFrom:null,asgTo:null});renderAssign();}
 function renderAssign(){
   const con=document.getElementById('assign-container');if(!con)return;
   // 自分で作成したタスクは表示しない（タスク管理・ダッシュボードで管理）
@@ -818,15 +828,19 @@ function renderAssign(){
   let h='';
   if(assignView==='current'){
     const list=ASSIGNMENTS.map((a,i)=>({a,i})).filter(x=>!x.a.self);
-    // 絞り込みバー: [全ステータス ▼] [リセット]
+    // 絞り込みバー: ステータス＋チャート(KGI)＋開始日/期限（タスク管理と同形式）
     const statusOpts=[['all','全ステータス'],['todo','未着手'],['wip','進行中'],['late','遅延']]
       .map(([k,l])=>`<option value="${k}"${k===_asgFilter?' selected':''}>${l}</option>`).join('');
-    h+=`<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <select class="fs" onchange="asgFilterStatus(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto">${statusOpts}</select>
-      <button class="f-btn" onclick="asgFilterReset()">リセット</button></div>`;
-    const rows=list.filter(x=>_asgFilter==='all'||asgOf(x.a)===_asgFilter);
+    h+=`<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+      <select class="fs" onchange="asgFilterStatus(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto">${statusOpts}</select>`
+      +_chartDateFilterBar('asg',_asgChartFilter,'asg-from','asg-to')
+      +`<button class="f-btn" onclick="asgFilterReset()">リセット</button></div>`;
+    const rows=list.filter(x=>_asgFilter==='all'||asgOf(x.a)===_asgFilter)
+      .filter(x=>_taskChartMatch(x.a,_asgChartFilter))
+      .filter(x=>inDateRange(x.a.dueRaw||x.a.startRaw||null,_asgFromFilter||null,_asgToFilter||null));
     if(!rows.length){
-      con.innerHTML=h+'<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">'+(list.length?'該当する割り当てはありません':'現在の割り当てはありません。完了したタスクは「🕘 過去の履歴」で確認できます。')+'</div></div>';return;
+      con.innerHTML=h+'<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">'+(list.length?'該当する割り当てはありません':'現在の割り当てはありません。完了したタスクは「🕘 過去の履歴」で確認できます。')+'</div></div>';
+      _mountDateFilter('asg-from','asg-to',_asgFromFilter,_asgToFilter,asgFilterDate);return;
     }
     const totAll=rows.reduce((s,x)=>s+(x.a.hours!=null?x.a.hours:0),0);
     h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">📌 割り当てられたタスク</div><div class="card-sub">${rows.length}件 ／ 合計時間 ${Math.round(totAll*10)/10}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
@@ -871,6 +885,8 @@ function renderAssign(){
     h+=`</div></div>`;
   }
   con.innerHTML=h;
+  // 割り当てタブ(現在)のときのみYMDセレクトを差し込み・復元（履歴表示時はwrap不在でno-op）
+  _mountDateFilter('asg-from','asg-to',_asgFromFilter,_asgToFilter,asgFilterDate);
 }
 // "HH:MM"→分。差を時間(小数1桁)で返す
 function _hm2min(s){if(!s||!/^\d{1,2}:\d{2}$/.test(s))return null;const[h,m]=s.split(':').map(Number);return h*60+m;}
@@ -2893,73 +2909,114 @@ updateInboxBadge();
 
 /* ===== タスク管理タブ（実データ描画） ===== */
 function _epShortMD(d){if(!d||d==='—')return'-';const p=String(d).split('/');return p.length===3?(+p[1])+'/'+(+p[2]):d;}
-let _tmFilter='all',_tmChartFilter='all',_tmCsfFilter='all';
-function tmFilter(st,btn){_tmFilter=st;_filtersSave({tm:st});document.querySelectorAll('#ep-task-filters .f-btn').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');renderTaskTable();}
-function tmFilterChart(v){_tmChartFilter=v;_tmCsfFilter='all';renderTaskTable();}
-function tmFilterCsf(v){_tmCsfFilter=v;renderTaskTable();}
+let _tmFilter='all',_tmChartFilter='all',_tmCsfFilter='all',_tmFromFilter='',_tmToFilter='';
 function tmFilterStatus(v){_tmFilter=v;_filtersSave({tm:v});renderTaskTable();}
-function tmFilterReset(){_tmFilter='all';_tmChartFilter='all';_tmCsfFilter='all';_filtersSave({tm:null});renderTaskTable();}
-// タスク管理: チャートごとに「CSF（チャートのタスク）＋割当タスク」、最後に「チャート以外のタスク」
+function tmFilterChart(v){_tmChartFilter=v||'all';_filtersSave({tmChart:_tmChartFilter});renderTaskTable();}
+function tmFilterDate(){_tmFromFilter=ymdValue('tm-from')||'';_tmToFilter=ymdValue('tm-to')||'';_filtersSave({tmFrom:_tmFromFilter,tmTo:_tmToFilter});renderTaskTable();}
+function tmFilterReset(){_tmFilter='all';_tmChartFilter='all';_tmFromFilter='';_tmToFilter='';ymdClear('tm-from');ymdClear('tm-to');_filtersSave({tm:null,tmChart:null,tmFrom:null,tmTo:null});renderTaskTable();}
+/* タスクのチャート(KGI)一致判定（ダッシュボードの_dashFilteredTasksと同ロジック） */
+function _taskChartMatch(a,chartKey){
+  if(!chartKey||chartKey==='all')return true;
+  const cData=CHARTS[chartKey]||{};
+  const kgiText=(typeof _chartKgiText==='function'?_chartKgiText(chartKey):'')||cData.center||'';
+  const chartName=cData.name||'';const aChart=String(a.chart||'');
+  return !!((chartName&&aChart===chartName)||(kgiText&&aChart===kgiText)||(chartName&&aChart.includes(chartName))||(kgiText&&aChart.includes(kgiText)));
+}
+/* KGIチャート絞り込みselectのoptions（ダッシュボードと同じ_chartLabel表示） */
+function _chartFilterOptions(sel){
+  const keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
+  return `<option value="all"${(sel==='all'||!sel)?' selected':''}>全チャート</option>`+keys.map(k=>`<option value="${k}"${k===sel?' selected':''}>${_chartLabel(k)}</option>`).join('');
+}
+/* チャート(KGI)＋日付範囲の絞り込みバーHTML（タスク管理・割り当て共通）。onchangeプレフィックスで振り分け */
+function _chartDateFilterBar(prefix,chartSel,fromPrefix,toPrefix){
+  return `<select class="fs" onchange="${prefix}FilterChart(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto;max-width:230px">${_chartFilterOptions(chartSel)}</select>`
+    +`<span style="display:inline-flex;align-items:center;gap:4px"><span style="font-size:10px;font-weight:700;color:var(--text3)">開始</span><span id="${fromPrefix}-wrap"></span><span style="font-size:11px;color:var(--text3)">〜</span><span style="font-size:10px;font-weight:700;color:var(--text3)">期限</span><span id="${toPrefix}-wrap"></span></span>`;
+}
+/* 絞り込みバー生成後にYMDセレクトを差し込み、保存値を復元し、onchangeを付与する */
+function _mountDateFilter(fromPrefix,toPrefix,fromVal,toVal,onChangeFn){
+  const fw=document.getElementById(fromPrefix+'-wrap');if(fw&&!fw.children.length)fw.innerHTML=ymdHtml(fromPrefix);
+  const tw=document.getElementById(toPrefix+'-wrap');if(tw&&!tw.children.length)tw.innerHTML=ymdHtml(toPrefix);
+  ymdSet(fromPrefix,fromVal||'');ymdSet(toPrefix,toVal||'');
+  [fromPrefix,toPrefix].forEach(p=>['-y','-m','-d'].forEach(sfx=>{const e=document.getElementById(p+sfx);if(e)e.onchange=onChangeFn;}));
+}
+// タスク管理: 自作タスクを KGI(チャート)ごとにグループ表示＋「チャート以外のタスク」。本日/遅延はダッシュボードへ委譲
 function renderTaskTable(){
   const con=document.getElementById('task-groups');if(!con)return;
   const priMap={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低'],urgent:['s-hi','緊急']};
   const stMap={wip:['s-wip','進行中'],done:['s-done','完了'],late:['s-late','遅延'],todo:['s-todo','未着手']};
   const stOf=t=>t.done||t.pct>=100?'done':t.pct>0?'wip':(t.late?'late':'todo');
-  // タスク作成画面で作成したチャート外タスクのみ表示
-  // （チャート紐付きタスクはダッシュボード、割当タスクは「割り当て」タブで管理）
-  const own=a=>a.self&&!a.chart&&!a.sendId;
-  const taskRows=[
+  const today=_epToday();
+  // ダッシュボードと同一の期限判定（di）。本日以前かつ未完了＝「本日対応すべき/遅延」→ ダッシュボードで表示
+  const di=r=>{const a=r.ref||{};return a.dueRaw||(r.end&&/\d{4}\/\d{1,2}\/\d{1,2}/.test(r.end)?r.end.replace(/\//g,'-'):null);};
+  const isTodayLate=r=>{const d=di(r);return !!(d&&d<=today&&(r.pct||0)<100);};
+  // タスク管理タブ＝自分で作成したタスク(a.self)のみ。リーダー/幹部の割当(self:false)は「割り当て」タブ
+  const own=a=>a.self===true;
+  let taskRows=[
     ...ASSIGNMENTS.map((a,i)=>({kind:'task',ref:a,arr:'A',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,pct:a.pct||0,hours:a.hours!=null?a.hours:0,done:false,late:a.status==='late'})),
     ...ASSIGN_HISTORY.map((a,i)=>({kind:'task',ref:a,arr:'H',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,pct:100,hours:a.hours!=null?a.hours:0,done:true}))
   ].filter(r=>own(r.ref));
-  // サイドバー「タスク管理」バッジ＝このタブに表示される未完了タスク件数
-  (function(){const b=document.getElementById('tasks-badge');if(!b)return;const open=ASSIGNMENTS.filter(own).length;b.textContent=open;b.style.display=open?'':'none';})();
-  const match=t=>_tmFilter==='all'||stOf(t)===_tmFilter;
-  // 絞り込みバー: [全ステータス ▼] [リセット]（チャート/CSF絞り込みはダッシュボードへ移行）
-  const f=document.getElementById('ep-task-filters');
-  if(f){
+  // ★本日対応すべき/遅延（di<=today かつ未完了）はダッシュボードに表示 → タスク管理からは除外（二重表示回避）
+  taskRows=taskRows.filter(r=>!isTodayLate(r));
+  // サイドバー「タスク管理」バッジ＝このタブの未完了件数（除外後・絞り込み前）
+  (function(){const b=document.getElementById('tasks-badge');if(!b)return;const open=taskRows.filter(r=>!r.done&&r.pct<100).length;b.textContent=open;b.style.display=open?'':'none';})();
+  // 絞り込みバー: ステータス＋チャート(KGI)＋開始日/期限（ダッシュボードと同形式）
+  const fbar=document.getElementById('ep-task-filters');
+  if(fbar){
     const statusOpts=[['all','全ステータス'],['todo','未着手'],['wip','進行中'],['done','完了'],['late','遅延']]
       .map(([k,l])=>`<option value="${k}"${k===_tmFilter?' selected':''}>${l}</option>`).join('');
-    f.innerHTML=`<select class="fs" onchange="tmFilterStatus(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto">${statusOpts}</select>
-      <button class="f-btn" onclick="tmFilterReset()">リセット</button>`;
+    fbar.innerHTML=`<select class="fs" onchange="tmFilterStatus(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto">${statusOpts}</select>`
+      +_chartDateFilterBar('tm',_tmChartFilter,'tm-from','tm-to')
+      +`<button class="f-btn" onclick="tmFilterReset()">リセット</button>`;
+    _mountDateFilter('tm-from','tm-to',_tmFromFilter,_tmToFilter,tmFilterDate);
   }
-  const rows=taskRows.filter(match);
+  // 絞り込み適用（ステータス／チャート(KGI)／日付範囲を併用）
+  const match=t=>_tmFilter==='all'||stOf(t)===_tmFilter;
+  const rows=taskRows.filter(match)
+    .filter(r=>_taskChartMatch(r.ref,_tmChartFilter))
+    .filter(r=>inDateRange((r.ref&&(r.ref.dueRaw||r.ref.startRaw))||null,_tmFromFilter||null,_tmToFilter||null));
   if(!rows.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:24px">該当するタスクはありません（「＋ 新規作成」からタスクを追加できます）</div></div>';return;}
-  let h='';
-  {
-    const totH=rows.reduce((s,t)=>s+(t.hours||0),0);
-    h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">☰ 作成したタスク</div><div class="card-sub">${rows.length}件 ／ 合計時間 ${Math.round(totH*10)/10}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
-    rows.forEach(t=>{
-      const st=stOf(t),sc=stMap[st]||stMap.todo;
-      const col=t.pct>=100?'var(--green)':t.pct>=40?'var(--accent)':'var(--amber)';
-      const editorName=t.by||(t.ref&&t.ref.editedBy)||'';
-      const editor=editorName?`<span style="font-size:9px;background:${_editorColor(editorName)}22;color:${_editorColor(editorName)};padding:1px 6px;border-radius:8px;font-weight:700;margin-left:6px">✎ ${editorName}</span>`:'';
-      const tagCsf=t.kind==='csf'?'<span style="font-size:8px;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:6px;font-weight:700;margin-left:6px">CSF</span>':'';
-      const pcChip=t.kind==='task'?`<span class="chip ${(priMap[t.pri]||priMap.md)[0]}">${(priMap[t.pri]||priMap.md)[1]}</span>`:'';
-      const meta=t.kind==='csf'?`チャートのCSF ／ 合計 ${t.hours}h`:`${t.kpi} ／ 期限 ${t.end} ／ 合計 ${t.hours}h`;
-      const rid=t.kind==='csf'?('C_'+t.chartKey+'_'+t.si):(t.arr+t.idx);
-      const refObj=t.ref||{};
-      // チャート紐付き（source_chart / source_send_id あり）は削除不可。チャート外タスクのみ削除可
-      const isChartTask=!!(t.chart||refObj.chart||refObj.sendId);
-      const deletable=t.kind==='task'&&!isChartTask;
-      h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-          <div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${tagCsf}${editor}</div><div style="font-size:10px;color:var(--text3)">${meta}</div></div>
-          <div style="display:flex;gap:6px;align-items:center">${pcChip}<span class="chip ${sc[0]}">${sc[1]}</span><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${t.pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${t.pct}%</div></div></div>
-        </div>`;
-      let acts='';
-      if(!t.done){
-        if(t.kind==='csf')acts+=`<button class="card-btn" style="background:var(--amber);color:#fff;border-color:var(--amber)" onclick="openCellEdit('${t.chartKey}','csf',${t.si})">✏ 進捗・作業時間を記入</button>`;
-        else acts+=`<button class="card-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="openTaskEdit('${rid}')">✏ 進捗・作業時間を記入</button>`;
-      }
-      if(deletable)acts+=`<button class="card-btn" style="background:#FEE2E2;color:var(--red);border-color:#FCA5A5" onclick="tmAskDelete('${rid}')">🗑 削除</button>`;
-      if(acts)h+=`<div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">${acts}</div>`;
-      if(deletable)h+=`<div id="tmdel-${rid}" style="display:none;margin-top:8px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:10px">
-        <div style="font-size:12px;color:#991B1B;font-weight:700;margin-bottom:8px">このタスクを削除しますか？</div>
-        <div style="display:flex;gap:8px;justify-content:flex-end"><button class="card-btn" onclick="tmCancelDelete('${rid}')">キャンセル</button><button class="card-btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="tmDoDelete('${rid}',this)">削除する</button></div>
+  // タスク1行のHTML（グループ内で共通利用）
+  const rowHtml=t=>{
+    const st=stOf(t),sc=stMap[st]||stMap.todo;
+    const col=t.pct>=100?'var(--green)':t.pct>=40?'var(--accent)':'var(--amber)';
+    const editorName=t.by||(t.ref&&t.ref.editedBy)||'';
+    const editor=editorName?`<span style="font-size:9px;background:${_editorColor(editorName)}22;color:${_editorColor(editorName)};padding:1px 6px;border-radius:8px;font-weight:700;margin-left:6px">✎ ${editorName}</span>`:'';
+    const pcChip=`<span class="chip ${(priMap[t.pri]||priMap.md)[0]}">${(priMap[t.pri]||priMap.md)[1]}</span>`;
+    const meta=`${t.kpi} ／ 期限 ${t.end} ／ 合計 ${t.hours}h`;
+    const rid=t.arr+t.idx;
+    const refObj=t.ref||{};
+    // チャート紐付き（source_chart / source_send_id あり）は削除不可。チャート外タスクのみ削除可
+    const isChartTask=!!(t.chart||refObj.chart||refObj.sendId);
+    const deletable=!isChartTask;
+    let s=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${editor}</div><div style="font-size:10px;color:var(--text3)">${meta}</div></div>
+        <div style="display:flex;gap:6px;align-items:center">${pcChip}<span class="chip ${sc[0]}">${sc[1]}</span><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${t.pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${t.pct}%</div></div></div>
       </div>`;
-      h+=`</div>`;
-    });
+    let acts='';
+    if(!t.done)acts+=`<button class="card-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="openTaskEdit('${rid}')">✏ 進捗・作業時間を記入</button>`;
+    if(deletable)acts+=`<button class="card-btn" style="background:#FEE2E2;color:var(--red);border-color:#FCA5A5" onclick="tmAskDelete('${rid}')">🗑 削除</button>`;
+    if(acts)s+=`<div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">${acts}</div>`;
+    if(deletable)s+=`<div id="tmdel-${rid}" style="display:none;margin-top:8px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:10px">
+      <div style="font-size:12px;color:#991B1B;font-weight:700;margin-bottom:8px">このタスクを削除しますか？</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end"><button class="card-btn" onclick="tmCancelDelete('${rid}')">キャンセル</button><button class="card-btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="tmDoDelete('${rid}',this)">削除する</button></div>
+    </div>`;
+    s+=`</div>`;return s;
+  };
+  // ★チャート紐付き自作タスクは KGI(chart)ごとにグループ、紐付き無しは「チャート以外のタスク」
+  const groups={},order=[],noChart=[];
+  rows.forEach(r=>{if(r.chart){if(!groups[r.chart]){groups[r.chart]=[];order.push(r.chart);}groups[r.chart].push(r);}else noChart.push(r);});
+  let h='';
+  order.forEach(cs=>{
+    const grp=groups[cs];const totH=grp.reduce((s,t)=>s+(t.hours||0),0);
+    h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">🎯 ${cs}</div><div class="card-sub">KGI紐付けタスク ／ ${grp.length}件 ／ 合計時間 ${Math.round(totH*10)/10}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
+    grp.forEach(t=>h+=rowHtml(t));
+    h+=`</div></div>`;
+  });
+  if(noChart.length){
+    const totH=noChart.reduce((s,t)=>s+(t.hours||0),0);
+    h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">☰ チャート以外のタスク</div><div class="card-sub">${noChart.length}件 ／ 合計時間 ${Math.round(totH*10)/10}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
+    noChart.forEach(t=>h+=rowHtml(t));
     h+=`</div></div>`;
   }
   con.innerHTML=h;
@@ -3953,7 +4010,12 @@ function vexumLogout(){
           if(typeof _tmFilter!=='undefined')_tmFilter='all';
           if(typeof _tmChartFilter!=='undefined')_tmChartFilter='all';
           if(typeof _tmCsfFilter!=='undefined')_tmCsfFilter='all';
+          if(typeof _tmFromFilter!=='undefined')_tmFromFilter='';
+          if(typeof _tmToFilter!=='undefined')_tmToFilter='';
           if(typeof _asgFilter!=='undefined')_asgFilter='all';
+          if(typeof _asgChartFilter!=='undefined')_asgChartFilter='all';
+          if(typeof _asgFromFilter!=='undefined')_asgFromFilter='';
+          if(typeof _asgToFilter!=='undefined')_asgToFilter='';
           window._dashRestore=null;
           if(typeof restoreSavedFilters==='function')restoreSavedFilters();
         }catch(e){}
