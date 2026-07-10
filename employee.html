@@ -831,16 +831,19 @@ function renderAssign(){
     // 絞り込みバー: ステータス＋チャート(KGI)＋開始日/期限（タスク管理と同形式）
     const statusOpts=[['all','全ステータス'],['todo','未着手'],['wip','進行中'],['late','遅延']]
       .map(([k,l])=>`<option value="${k}"${k===_asgFilter?' selected':''}>${l}</option>`).join('');
+    // _chartDateFilterBar等は後続の<script>ブロックで定義されるため、初期描画（ブロック読込順）では
+    // まだ存在しないことがある。typeofガードで初回はステータスのみ表示し、後続の再描画で完全表示になる
+    const hasBar=typeof _chartDateFilterBar==='function';
     h+=`<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <select class="fs" onchange="asgFilterStatus(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto">${statusOpts}</select>`
-      +_chartDateFilterBar('asg',_asgChartFilter,'asg-from','asg-to')
+      +(hasBar?_chartDateFilterBar('asg',_asgChartFilter,'asg-from','asg-to'):'')
       +`<button class="f-btn" onclick="asgFilterReset()">リセット</button></div>`;
     const rows=list.filter(x=>_asgFilter==='all'||asgOf(x.a)===_asgFilter)
-      .filter(x=>_taskChartMatch(x.a,_asgChartFilter))
+      .filter(x=>typeof _taskChartMatch!=='function'||_taskChartMatch(x.a,_asgChartFilter))
       .filter(x=>inDateRange(x.a.dueRaw||x.a.startRaw||null,_asgFromFilter||null,_asgToFilter||null));
     if(!rows.length){
       con.innerHTML=h+'<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">'+(list.length?'該当する割り当てはありません':'現在の割り当てはありません。完了したタスクは「🕘 過去の履歴」で確認できます。')+'</div></div>';
-      _mountDateFilter('asg-from','asg-to',_asgFromFilter,_asgToFilter,asgFilterDate);return;
+      if(typeof _mountDateFilter==='function')_mountDateFilter('asg-from','asg-to',_asgFromFilter,_asgToFilter,asgFilterDate);return;
     }
     const totAll=rows.reduce((s,x)=>s+(x.a.hours!=null?x.a.hours:0),0);
     h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">📌 割り当てられたタスク</div><div class="card-sub">${rows.length}件 ／ 合計時間 ${Math.round(totAll*10)/10}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
@@ -886,7 +889,7 @@ function renderAssign(){
   }
   con.innerHTML=h;
   // 割り当てタブ(現在)のときのみYMDセレクトを差し込み・復元（履歴表示時はwrap不在でno-op）
-  _mountDateFilter('asg-from','asg-to',_asgFromFilter,_asgToFilter,asgFilterDate);
+  if(typeof _mountDateFilter==='function')_mountDateFilter('asg-from','asg-to',_asgFromFilter,_asgToFilter,asgFilterDate);
 }
 // "HH:MM"→分。差を時間(小数1桁)で返す
 function _hm2min(s){if(!s||!/^\d{1,2}:\d{2}$/.test(s))return null;const[h,m]=s.split(':').map(Number);return h*60+m;}
@@ -3087,7 +3090,8 @@ function renderTaskTable(){
       const nocsf=grp.filter(t=>t.csfIdx==null);
       csfs.forEach(c=>{
         const csfTasks=grp.filter(t=>t.csfIdx===c.si);
-        if(!c.text&&!csfTasks.length)return;
+        // 全CSF（1〜8）を表示し、未入力のCSFにも「✏ 記入」からテキスト・進捗・工数を記入できるようにする
+        const empty=!c.text&&!csfTasks.length;
         const csfH=_csfHours(ck,c.si);
         const csfCol=_csfColor(c.pct);
         // CSF期間（タスク優先→メモ。あれば見出し右に表示）
@@ -3096,8 +3100,8 @@ function renderTaskTable(){
         const editBtn=isRo?'': `<button class="card-btn" style="font-size:10px;padding:3px 8px" onclick="openCellEdit('${ck}','csf',${c.si})">✏ 記入</button>`;
         h+=`<div style="border-bottom:2px solid #E5E7EB">`;
         h+=`<div style="padding:8px 14px;background:#F8FAFC;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">`;
-        h+=`<div style="font-size:11px;font-weight:700;color:#374151;display:flex;align-items:center;flex-wrap:wrap;gap:2px">CSF${c.si+1}${c.text?' '+c.text:''}${perStr}</div>`;
-        h+=`<div style="display:flex;gap:8px;align-items:center;font-size:10px;white-space:nowrap"><span style="color:${csfCol};font-weight:700">${c.pct}%</span><span style="color:var(--text3)">${Math.round(csfH*10)/10}h</span>${editBtn}</div>`;
+        h+=`<div style="font-size:11px;font-weight:700;color:${empty?'var(--text3)':'#374151'};display:flex;align-items:center;flex-wrap:wrap;gap:2px">CSF${c.si+1}${c.text?' '+c.text:' <span style="font-weight:600;color:var(--text3)">（未入力）</span>'}${perStr}</div>`;
+        h+=`<div style="display:flex;gap:8px;align-items:center;font-size:10px;white-space:nowrap">${empty?'':`<span style="color:${csfCol};font-weight:700">${c.pct}%</span><span style="color:var(--text3)">${Math.round(csfH*10)/10}h</span>`}${editBtn}</div>`;
         h+=`</div>`;
         csfTasks.forEach(t=>h+=rowHtml(t,ck,true));
         h+=`</div>`;
