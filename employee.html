@@ -4091,7 +4091,7 @@ function vexumLogout(){
         if(!a||!a.roles||!a.roles.length){ try{API.sb.auth.signOut();}catch(e){} }
         location.replace((a&&a.dest)||'./index.html'); return;
       }
-      if(typeof _updateSwitchBtn==='function')_updateSwitchBtn();
+      if(typeof _updateSwitchBtn==='function')_updateSwitchBtn(a&&a.roles);
       _bootLoad(acting?_linkedEmp:null);
     });
   });
@@ -4161,7 +4161,7 @@ function vexumLogout(){
 /* ===== リーダー⇄従業員 紐付け・切り替え ===== */
 function _isLinked(){return !!localStorage.getItem('vexum_linked_employee_id');}
 function switchToLeader(){localStorage.setItem('vexum_current_role','leader');window.location.href='leader.html';}
-function _updateSwitchBtn(){var b=document.getElementById('sb-switch-btn');if(b)b.style.display=_isLinked()?'':'none';}
+function _updateSwitchBtn(roles){var b=document.getElementById('sb-switch-btn');if(!b)return;var hasLeaderRole=Array.isArray(roles)&&roles.indexOf('leader')>=0;b.style.display=(_isLinked()||hasLeaderRole)?'':'none';}
 /* ===== プロフィール編集（サイドバー氏名クリック・3画面共通） ===== */
 function openProfileEdit(){
   var n=(document.getElementById('sb-uname')||{}).textContent||'';
