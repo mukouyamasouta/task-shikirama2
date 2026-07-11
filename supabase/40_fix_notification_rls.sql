@@ -3,7 +3,7 @@
 -- 通知システムの診断・RLSポリシー再確認・データ整合チェック
 -- ========================================================
 
--- 1. notifications RLSポリシーを明示的に再適用（ntf_write が確実に存在することを保証）
+-- 1. notifications RLSポリシーを明示的に再適用
 alter table notifications enable row level security;
 
 drop policy if exists "ntf_read"        on notifications;
@@ -34,18 +34,21 @@ from pg_policies
 where tablename = 'notifications'
 order by policyname;
 
--- 3. チーム設定の診断: leader_id が未設定のチームを検出
+-- 3. チーム設定の診断: leader_id が未設定のチームを検出 ← これが空ならleaderIdがnullになり通知が届かない
 select
   t.id as team_id,
   t.name as team_name,
   t.leader_id,
+  lp.full_name as leader_name,
   count(tm.profile_id) as member_count
 from teams t
+left join profiles lp on lp.id = t.leader_id
 left join team_members tm on tm.team_id = t.id
-group by t.id, t.name, t.leader_id
+group by t.id, t.name, t.leader_id, lp.full_name
 order by t.name;
 
 -- 4. team_members に存在するがチームが leader_id 未設定のメンバーを特定
+-- ★ここにメンバーが出てくると、そのメンバーからの通知がリーダーに届かない
 select
   p.full_name,
   p.role,
@@ -61,6 +64,7 @@ where p.role = 'member'
 order by p.full_name;
 
 -- 5. 直近の notifications 件数確認
+-- ★件数が0件なら、insert自体が全く実行されていない（コードが呼ばれていない or leaderId=null）
 select type, count(*) as cnt, max(created_at) as latest
 from notifications
 group by type
@@ -79,3 +83,20 @@ from notifications n
 left join profiles p on p.id = n.to_user_id
 order by n.created_at desc
 limit 20;
+
+-- 7. 各メンバーのチーム・リーダー解決パス（通知ルーティングの全体像）
+-- notifyReportStarted等が使うクエリを再現して、正しくleaderIdが取得できるか確認
+select
+  p.full_name as member_name,
+  p.id as member_profile_id,
+  tm.team_id,
+  t.name as team_name,
+  t.leader_id,
+  lp.full_name as resolved_leader_name
+from profiles p
+join team_members tm on tm.profile_id = p.id
+join teams t on t.id = tm.team_id
+left join profiles lp on lp.id = t.leader_id
+where p.role = 'member'
+  and p.is_active is not false
+order by p.full_name;

@@ -467,6 +467,9 @@
     if (!r.data || r.data.length === 0) return { error: '更新できませんでした（権限不足の可能性）' };
     // 受信チャート由来のタスクなら、チャート（chart_sends）の該当セルと全体進捗へ自動反映
     try { await propagateTaskToSend(id); } catch (e) {}
+    // 完了時にリーダーへ通知（setTaskProgress経由でないupdateTask完了パスでも通知を発火）
+    var done = (up.progress != null && up.progress >= 100) || up.status === 'done';
+    if (done) { try { await notifyTaskDone(id); } catch (e) {} }
     return { ok: true };
   }
   // タスクを削除（本人のタスクのみ。RLSで保護）。返り値で削除行数を検証。
@@ -2009,6 +2012,27 @@
     loadAllDailyReports: loadAllDailyReports,
     loadDashboardStats: loadDashboardStats,
     TEAM_KEY: TEAM_KEY,
-    MEMBER_KEY: MEMBER_KEY
+    MEMBER_KEY: MEMBER_KEY,
+    // ブラウザコンソールから呼べる通知診断ユーティリティ
+    // 使い方: await VexumAPI.diagNotify() をブラウザコンソールで実行
+    diagNotify: async function() {
+      if (!sb) { console.error('[VEXUM diag] Supabase未接続'); return; }
+      var me = await currentProfile();
+      console.group('[VEXUM diagNotify]');
+      console.log('currentProfile:', me ? { id: me.id, name: me.full_name, role: me.role } : null);
+      if (!me) { console.groupEnd(); return; }
+      var tm = await sb.from('team_members').select('team_id,role_in_team').eq('profile_id', me.id);
+      console.log('team_members:', tm.data, tm.error);
+      var teamId = tm.data && tm.data[0] && tm.data[0].team_id;
+      if (teamId) {
+        var t = await sb.from('teams').select('id,name,leader_id').eq('id', teamId);
+        console.log('team:', t.data, t.error);
+      }
+      var nc = await sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(10);
+      console.log('notifications(最新10件):', nc.data, nc.error);
+      var nm = await sb.from('notifications').select('*').eq('to_user_id', me.id).order('created_at', { ascending: false }).limit(10);
+      console.log('notifications(本人宛):', nm.data, nm.error);
+      console.groupEnd();
+    }
   };
 })();
