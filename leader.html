@@ -1736,7 +1736,7 @@ function renderLeaderNotifs(){
   const ns=window._leaderNotifs||[];
   const cnt=document.getElementById('inbox-notif-count');if(cnt)cnt.textContent=ns.length?ns.length+'件':'';
   if(!ns.length){con.innerHTML='<div style="padding:14px;text-align:center;color:var(--text3);font-size:12px">まだ通知はありません</div>';return;}
-  const meta={task_done:['✅','#D1FAE5','var(--green)','assign'],report_submitted:['📓','#EDE9FE','#7C3AED','report'],task_late:['⚠','#FEE2E2','var(--red)','assign'],chart_edit:['✏','#FEF3C7','#D97706','dashboard']};
+  const meta={task_done:['✅','#D1FAE5','var(--green)','assign'],report_submitted:['📓','#EDE9FE','#7C3AED','report'],report_started:['🌅','#FFF7ED','#C2410C','report'],task_assigned:['📋','#DBEAFE','#1D4ED8','assign'],task_late:['⚠','#FEE2E2','var(--red)','assign'],chart_edit:['✏','#FEF3C7','#D97706','dashboard'],evaluation_received:['⭐','#FDF4FF','#7E22CE','dashboard']};
   con.innerHTML=ns.slice(0,30).map(n=>{
     const mt=meta[n.type]||['🔔','#F3F4F6','var(--text3)','dashboard'];
     return `<div onclick="gotoTab('${mt[3]}')" style="display:flex;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='#FAFCFC'" onmouseout="this.style.background=''">
@@ -1945,14 +1945,13 @@ window.vxNotifSource=function(){
   const out=[];
   // メンバーからの通知（完了/遅延/日報提出）= notifications テーブル由来（最優先で表示）
   if(Array.isArray(window._leaderNotifs)){
+    const ntfMeta={task_done:['✅','#D1FAE5','var(--green)','assign'],report_submitted:['📓','#EDE9FE','#7C3AED','report'],report_started:['🌅','#FFF7ED','#C2410C','report'],task_assigned:['📋','#DBEAFE','#1D4ED8','assign'],task_late:['⚠','#FEE2E2','var(--red)','assign'],chart_edit:['✏','#FEF3C7','#D97706','dashboard'],evaluation_received:['⭐','#FDF4FF','#7E22CE','dashboard']};
     window._leaderNotifs.slice(0,8).forEach(n=>{
-      const ic=n.type==='task_done'?'✅':n.type==='report_submitted'?'📓':n.type==='chart_edit'?'✏':'⚠';
-      const bg=n.type==='task_done'?'#D1FAE5':n.type==='report_submitted'?'#EDE9FE':n.type==='chart_edit'?'#FEF3C7':'#FEE2E2';
-      const col=n.type==='task_done'?'var(--green)':n.type==='report_submitted'?'#7C3AED':n.type==='chart_edit'?'#D97706':'var(--red)';
-      out.push({icon:ic,bg:bg,color:col,
+      const mt=ntfMeta[n.type]||['🔔','#F3F4F6','var(--text3)','dashboard'];
+      out.push({icon:mt[0],bg:mt[1],color:mt[2],
         text:(n.actor_name?n.actor_name+'：':'')+(n.body||n.title||'通知'),
         time:(n.created_at||'').slice(0,16).replace('T',' '),
-        tab:n.type==='report_submitted'?'report':n.type==='chart_edit'?'dashboard':'assign'});
+        tab:mt[3]});
     });
   }
   if(typeof INBOX!=='undefined'&&Array.isArray(INBOX)){

@@ -440,7 +440,7 @@
           actor_id: me ? me.id : null, actor_name: me ? me.full_name : '', ref_id: (r.data && r.data.id) || null
         });
       }
-    } catch (e) {}
+    } catch (e) { console.warn('[VEXUM notify] notifications insert失敗 (task_assigned):', e); }
     return { data: r.data };
   }
   // タスクの進捗・状態・コメントを更新（個人画面の保存系）
@@ -586,68 +586,76 @@
     return { ok: true };
   }
 
+  // チームリーダーIDを取得するユーティリティ（maybeSingle問題を修正: 複数チーム所属でも最初の1件を使用）
+  async function _getLeaderForProfile(profileId) {
+    var tm = await sb.from('team_members').select('team_id').eq('profile_id', profileId).limit(1);
+    var tmRow = tm.data && tm.data[0];
+    if (!tmRow) { console.warn('[VEXUM notify] team_members に profile_id=' + profileId + ' の行がありません。チーム設定を確認してください。'); return { leaderId: null, teamId: null }; }
+    var tr = await sb.from('teams').select('leader_id').eq('id', tmRow.team_id).limit(1);
+    var trRow = tr.data && tr.data[0];
+    var leaderId = trRow && trRow.leader_id;
+    if (!leaderId) console.warn('[VEXUM notify] teams.leader_id が未設定です (team_id=' + tmRow.team_id + ')。チームにリーダーを設定してください。');
+    return { leaderId: leaderId || null, teamId: tmRow.team_id };
+  }
+
   // タスク完了時、担当チームのリーダーへ完了通知
   async function notifyTaskDone(taskId) {
     if (!sb) return;
-    var t = await sb.from('tasks').select('id,title,assignee_id,team_id,total_hours').eq('id', taskId).maybeSingle();
-    if (!t.data) return;
+    var t = await sb.from('tasks').select('id,title,assignee_id,team_id,total_hours').eq('id', taskId).limit(1);
+    var tRow = t.data && t.data[0]; if (!tRow) return;
     var me = await currentProfile();
-    var leaderId = null, teamId = t.data.team_id;
+    var leaderId = null, teamId = tRow.team_id;
     if (teamId) {
-      var tr = await sb.from('teams').select('leader_id').eq('id', teamId).maybeSingle();
-      leaderId = tr.data && tr.data.leader_id;
+      var tr = await sb.from('teams').select('leader_id').eq('id', teamId).limit(1);
+      var trRow = tr.data && tr.data[0]; leaderId = trRow && trRow.leader_id;
     }
     if (!leaderId && me) {
-      var tm = await sb.from('team_members').select('team_id').eq('profile_id', me.id).maybeSingle();
-      if (tm.data) { var tr2 = await sb.from('teams').select('leader_id').eq('id', tm.data.team_id).maybeSingle(); leaderId = tr2.data && tr2.data.leader_id; teamId = tm.data.team_id; }
+      var ldr = await _getLeaderForProfile(me.id);
+      if (ldr.leaderId) { leaderId = ldr.leaderId; teamId = ldr.teamId; }
     }
-    if (!leaderId) return;
-    var hrs = (t.data.total_hours != null) ? (' / 合計 ' + t.data.total_hours + 'h') : '';
+    if (!leaderId) { console.warn('[VEXUM notify] notifyTaskDone スキップ: leaderId が取得できませんでした (taskId=' + taskId + ')'); return; }
+    var hrs = (tRow.total_hours != null) ? (' / 合計 ' + tRow.total_hours + 'h') : '';
     try {
       await sb.from('notifications').insert({
         to_user_id: leaderId, to_team_id: teamId || null, type: 'task_done',
-        title: 'タスク完了', body: '「' + t.data.title + '」が完了しました' + hrs,
+        title: 'タスク完了', body: '「' + tRow.title + '」が完了しました' + hrs,
         actor_id: me ? me.id : null, actor_name: me ? me.full_name : '', ref_id: taskId
       });
-    } catch (e) {}
+    } catch (e) { console.warn('[VEXUM notify] notifications insert失敗 (task_done):', e); }
   }
 
   // 日報提出をリーダーへ通知
   async function notifyReportSubmitted(reportId, dateStr) {
     if (!sb) return;
     var me = await currentProfile(); if (!me) return;
-    var leaderId = null, teamId = null;
-    var tm = await sb.from('team_members').select('team_id').eq('profile_id', me.id).maybeSingle();
-    if (tm.data) { teamId = tm.data.team_id; var tr = await sb.from('teams').select('leader_id').eq('id', teamId).maybeSingle(); leaderId = tr.data && tr.data.leader_id; }
-    if (!leaderId) return;
+    var ldr = await _getLeaderForProfile(me.id);
+    if (!ldr.leaderId) return;
     try {
       await sb.from('notifications').insert({
-        to_user_id: leaderId, to_team_id: teamId, type: 'report_submitted',
+        to_user_id: ldr.leaderId, to_team_id: ldr.teamId, type: 'report_submitted',
         title: '日報提出', body: (dateStr || '') + ' の日報が提出されました',
         actor_id: me.id, actor_name: me.full_name, ref_id: reportId || null
       });
-    } catch (e) {}
+    } catch (e) { console.warn('[VEXUM notify] notifications insert失敗 (report_submitted):', e); }
   }
 
   // 始業（今日の計画）保存をリーダーへ通知。同一本人・同日は重複させない（始業を複数回保存しても1回）
   async function notifyReportStarted(reportId, dateStr) {
     if (!sb) return;
     var me = await currentProfile(); if (!me) return;
-    var leaderId = null, teamId = null;
-    var tm = await sb.from('team_members').select('team_id').eq('profile_id', me.id).maybeSingle();
-    if (tm.data) { teamId = tm.data.team_id; var tr = await sb.from('teams').select('leader_id').eq('id', teamId).maybeSingle(); leaderId = tr.data && tr.data.leader_id; }
-    if (!leaderId) return;
+    var ldr = await _getLeaderForProfile(me.id);
+    if (!ldr.leaderId) return;
     try {
       var ex = await sb.from('notifications').select('id').eq('actor_id', me.id).eq('type', 'report_started').ilike('body', '%' + (dateStr || '') + '%').limit(1);
       if (ex.data && ex.data.length) return; // 同日の始業通知は既に送信済み
-    } catch (e) {}
+    } catch (e) { console.warn('[VEXUM notify] 重複チェック失敗 (report_started):', e); }
     try {
       await sb.from('notifications').insert({
-        to_user_id: leaderId, to_team_id: teamId, type: 'report_started',
+        to_user_id: ldr.leaderId, to_team_id: ldr.teamId, type: 'report_started',
         title: '始業報告', body: (dateStr || '') + ' の始業（今日の計画）が共有されました',
         actor_id: me.id, actor_name: me.full_name, ref_id: reportId || null
       });
-    } catch (e) {}
+    } catch (e) { console.warn('[VEXUM notify] notifications insert失敗 (report_started):', e); }
   }
   // 従業員本人宛ての通知を取得（受信ボックス用。to_user_id=自分 で単純絞り込み）
   async function loadMyNotifications() {
@@ -858,17 +866,15 @@
   async function notifyLeaderChartEdit(summary) {
     if (!sb) return;
     var me = await currentProfile(); if (!me) return;
-    var leaderId = null, teamId = null;
-    var tm = await sb.from('team_members').select('team_id').eq('profile_id', me.id).maybeSingle();
-    if (tm.data) { teamId = tm.data.team_id; var tr = await sb.from('teams').select('leader_id').eq('id', teamId).maybeSingle(); leaderId = tr.data && tr.data.leader_id; }
-    if (!leaderId || leaderId === me.id) return;  // リーダー本人なら通知不要
+    var ldr = await _getLeaderForProfile(me.id);
+    if (!ldr.leaderId || ldr.leaderId === me.id) return; // リーダー本人なら通知不要
     try {
       await sb.from('notifications').insert({
-        to_user_id: leaderId, to_team_id: teamId, type: 'chart_edit',
+        to_user_id: ldr.leaderId, to_team_id: ldr.teamId, type: 'chart_edit',
         title: 'チャート更新', body: (summary || 'メンバーが曼荼羅チャートを更新しました'),
         actor_id: me.id, actor_name: me.full_name
       });
-    } catch (e) {}
+    } catch (e) { console.warn('[VEXUM notify] notifications insert失敗 (chart_edit):', e); }
   }
 
   // 特定メンバーが持つ全曼荼羅チャート（評価対象選択用）
@@ -910,7 +916,7 @@
           actor_id: me ? me.id : null, actor_name: me ? me.full_name : '', ref_id: o.chartId || null
         });
       }
-    } catch (e) {}
+    } catch (e) { console.warn('[VEXUM notify] notifications insert失敗 (evaluation_received):', e); }
     return { ok: true };
   }
   // メンバーの個人曼荼羅チャートを upsert（リーダーが記入＝タスク割当）
