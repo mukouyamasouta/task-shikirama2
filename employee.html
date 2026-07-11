@@ -2996,12 +2996,11 @@ function renderTaskTable(){
     const editor=editorName?`<span style="font-size:9px;background:${_editorColor(editorName)}22;color:${_editorColor(editorName)};padding:1px 6px;border-radius:8px;font-weight:700;margin-left:6px">✎ ${editorName}</span>`:'';
     const pcChip=`<span class="chip ${(priMap[t.pri]||priMap.md)[0]}">${(priMap[t.pri]||priMap.md)[1]}</span>`;
     // CSFセクション内: KPIチップ(テキスト付き)+KPI記入ボタン / セクション外: 従来のCSF/KPIチップ
-    let csfChip='',kpiEditBtn='';
+    let csfChip='';
     if(inCsfSection&&chartKey&&t.kpiIdx!=null&&t.csfIdx!=null){
       const kpiTxt=(((CHARTS[chartKey]||{}).acts||[])[t.csfIdx]||[])[t.kpiIdx];
       const kpiLabel=kpiTxt&&String(kpiTxt).trim()?String(kpiTxt).trim().slice(0,20):'';
       csfChip=`<span style="font-size:9px;background:#EDE9FE;color:#6D28D9;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">KPI${t.csfIdx+1}-${t.kpiIdx+1}${kpiLabel?' '+kpiLabel:''}</span>`;
-      if(!(CHARTS[chartKey]||{}).readonly)kpiEditBtn=`<button class="card-btn" style="font-size:10px;padding:3px 8px" onclick="openCellEdit('${chartKey}','kpi',${t.csfIdx},${t.kpiIdx})">✏ KPI記入</button>`;
     }else if(t.csfIdx!=null){
       csfChip=`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px" title="${t.kpi}">CSF${t.csfIdx+1}${t.kpiIdx!=null?' / KPI'+(t.csfIdx+1)+'-'+(t.kpiIdx+1):''}</span>`;
     }
@@ -3011,17 +3010,15 @@ function renderTaskTable(){
     // チャート紐付き（source_chart / source_send_id あり）は削除不可。チャート外タスクのみ削除可
     const isChartTask=!!(t.chart||refObj.chart||refObj.sendId);
     const deletable=!isChartTask;
-    let s=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6">
+    let s=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6;cursor:pointer" onclick="openTaskEdit('${rid}')" onmouseover="this.style.background='#F9FAFB'" onmouseout="this.style.background=''">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
         <div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${csfChip}${db}${editor}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ 合計 ${t.hours}h</div></div>
         <div style="display:flex;gap:6px;align-items:center">${pcChip}<span class="chip ${sc[0]}">${sc[1]}</span><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${t.pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${t.pct}%</div></div></div>
       </div>`;
     let acts='';
-    if(!t.done)acts+=`<button class="card-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="openTaskEdit('${rid}')">✏ 進捗・作業時間を記入</button>`;
-    if(kpiEditBtn)acts+=kpiEditBtn;
-    if(deletable)acts+=`<button class="card-btn" style="background:#FEE2E2;color:var(--red);border-color:#FCA5A5" onclick="tmAskDelete('${rid}')">🗑 削除</button>`;
+    if(deletable)acts+=`<button class="card-btn" style="background:#FEE2E2;color:var(--red);border-color:#FCA5A5" onclick="event.stopPropagation();tmAskDelete('${rid}')">🗑 削除</button>`;
     if(acts)s+=`<div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">${acts}</div>`;
-    if(deletable)s+=`<div id="tmdel-${rid}" style="display:none;margin-top:8px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:10px">
+    if(deletable)s+=`<div id="tmdel-${rid}" style="display:none;margin-top:8px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:10px" onclick="event.stopPropagation()">
       <div style="font-size:12px;color:#991B1B;font-weight:700;margin-bottom:8px">このタスクを削除しますか？</div>
       <div style="display:flex;gap:8px;justify-content:flex-end"><button class="card-btn" onclick="tmCancelDelete('${rid}')">キャンセル</button><button class="card-btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="tmDoDelete('${rid}',this)">削除する</button></div>
     </div>`;
