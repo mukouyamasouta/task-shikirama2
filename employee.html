@@ -574,7 +574,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div>
       <div class="card" style="margin-bottom:14px">
         <div class="card-hd">
-          <div><div class="card-title">過去の日報</div><div class="card-sub" id="prep-cal-sub">提出履歴をカレンダーで管理</div></div>
+          <div><div class="card-title"></div><div class="card-sub" id="prep-cal-sub">提出履歴をカレンダーで管理</div></div>
           <div style="display:flex;align-items:center;gap:8px">
             <button class="card-btn" onclick="changePReportMonth(-1)">‹</button>
             <span style="font-size:12px;font-weight:700;min-width:88px;text-align:center" id="prep-cal-month"></span>
@@ -838,8 +838,8 @@ function renderAssign(){
       .map(([k,l])=>`<option value="${k}"${k===_asgFilter?' selected':''}>${l}</option>`).join('');
     // _chartDateFilterBar等は後続の<script>ブロックで定義されるため、初期描画（ブロック読込順）では
     // まだ存在しないことがある。typeofガードで初回はステータスのみ表示し、後続の再描画で完全表示になる
-    // ユニークな割り当て元セレクト選択肢（ASSIGNMENTS内の実データから動的生成）
-    const asgAssignerOpts=(()=>{const m=new Map();list.forEach(({a})=>{if(a.assignerId&&!m.has(a.assignerId))m.set(a.assignerId,(a.assignerRole||'上長')+' · '+(a.assignerName||''));});return[`<option value="all"${_asgAssignerFilter==='all'?' selected':''}>全員</option>`,...Array.from(m.entries()).map(([id,l])=>`<option value="${id}"${_asgAssignerFilter===id?' selected':''}>${l}</option>`)].join('');})();
+    // ユニークな割り当て元セレクト選択肢（現在+完了済み全データから動的生成）
+    const asgAssignerOpts=(()=>{const m=new Map();const allAsg=[...ASSIGNMENTS,...(typeof ASSIGN_HISTORY!=='undefined'?ASSIGN_HISTORY:[])];allAsg.forEach(a=>{if(a.assignerId&&!a.self&&!m.has(a.assignerId))m.set(a.assignerId,(a.assignerRole||'上長')+' · '+(a.assignerName||''));});return[`<option value="all"${_asgAssignerFilter==='all'?' selected':''}>全員</option>`,...Array.from(m.entries()).map(([id,l])=>`<option value="${id}"${_asgAssignerFilter===id?' selected':''}>${l}</option>`)].join('');})();
     h+=`<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <select class="fs" onchange="asgFilterStatus(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto">${statusOpts}</select>`
       +`<select class="fs" onchange="asgFilterAssigner(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto;max-width:200px">${asgAssignerOpts}</select>`
