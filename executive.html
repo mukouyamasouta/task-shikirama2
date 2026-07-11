@@ -1658,7 +1658,7 @@ async function submitExecAssign(){
   const m=EXEC_OV.MEMBERS[id];
   const o={title:name,kpi:val('task-asg-kpi')||'—',assigneePid:pid,teamUuid:(m&&m.teamUuid)||null,
     start:fmtDate('task-asg-start'),due:fmtDate('task-asg-due'),priority:document.getElementById('task-asg-pri').value,
-    plannedHours:parseFloat(val('task-asg-planhours'))||null};
+    plannedHours:parseFloat(val('task-asg-planhours'))||null,source:'executive'};
   if(API&&API.ready){
     const res=await API.assignTask(o);
     if(res&&res.error){alert('割当失敗: '+res.error);return;}
