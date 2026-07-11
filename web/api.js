@@ -8,7 +8,7 @@
   var ready = !!(cfg.url && cfg.anonKey && !/YOUR-/.test(cfg.url) && window.supabase);
   var sb = ready ? window.supabase.createClient(cfg.url, cfg.anonKey) : null;
 
-  // 固定UUID → 画面側の短縮キー（02_seed_core.sql と一致）
+  // 固定UUID → 画面側の短縮キー（supabase/REBUILD.sql のシードデータと一致）
   var TEAM_KEY = {
     'b0000000-0000-4000-8000-0000000000a1': 'A',
     'b0000000-0000-4000-8000-0000000000a2': 'B',
