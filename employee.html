@@ -3078,18 +3078,13 @@ function renderTaskTable(){
         const csfBarCol=c.pct>=100?'var(--green)':c.pct>=40?'var(--accent)':'var(--amber)';
         const csfChipHtml=`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">CSF${c.si+1}</span>`;
         const csfTitle=c.text||'';
-        // CSF行: rowHtmlと同じカードデザイン（タイトル/CSFチップ/期限バッジ/ステータスチップ/進捗バー/緑ボタン）
-        // B) 背景色: 期限が今日から7日以内（超過含む）かつ未完了 → 白(緊急), それ以外 → 薄緑(余裕あり/未設定)
-        const csfDiffDays=csfEnd?Math.ceil((new Date(csfEnd)-new Date(today))/(1000*60*60*24)):null;
-        const csfBg=(csfEnd&&csfDiffDays<=7&&c.pct<100)?'#fff':'#F0FDF4';
         h+=`<div id="task-csf-${ck}-${c.si}" style="border-top:2px solid #E5E7EB">`;
-        h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6;background:${csfBg}">`;
+        h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6;background:#fff;cursor:pointer" onclick="openCellEdit('${ck}','csf',${c.si})">`;
         h+=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">`;
         h+=`<div style="min-width:0"><div style="font-size:12px;font-weight:600">${csfTitle||'<span style="color:var(--text3)">（未入力）</span>'}${csfChipHtml}${csfDB}</div>`;
         h+=`<div style="font-size:10px;color:var(--text3)">CSF${c.si+1}${csfTitle?' '+csfTitle:''} ／ 合計 ${Math.round(csfH*10)/10}h</div></div>`;
         h+=`<div style="display:flex;gap:6px;align-items:center"><span class="chip ${csfSc[0]}">${csfSc[1]}</span><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${c.pct}%;background:${csfBarCol}"></div></div><div class="pp" style="font-size:10px;color:${csfBarCol}">${c.pct}%</div></div></div>`;
         h+=`</div>`;
-        if(!isRo)h+=`<div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end"><button class="card-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="openCellEdit('${ck}','csf',${c.si})">✏ 進捗・作業時間を記入</button></div>`;
         h+=`</div>`;
         // KPI一覧: 入力済みスロットのみ表示。全空なら「＋ KPI追加」ボタン1つ。readonlyは非表示
         if(!isRo){
@@ -3101,14 +3096,13 @@ function renderTaskTable(){
             filledKpis.forEach(({ai,kTxt})=>{
               const kTasks=csfTasks.filter(t=>t.kpiIdx===ai);
               const kH=Math.round(kTasks.reduce((s,t)=>s+(t.hours||0),0)*10)/10;
-              h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #F3F4F6;gap:8px">`;
+              h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #F3F4F6;gap:8px;cursor:pointer" onclick="openCellEdit('${ck}','kpi',${c.si},${ai})">`;
               h+=`<div style="font-size:10px;color:#374151;min-width:0"><span style="font-size:9px;background:#EDE9FE;color:#6D28D9;padding:1px 5px;border-radius:6px;font-weight:700;margin-right:5px">KPI${c.si+1}-${ai+1}</span>${kTxt}${kTasks.length?`<span style="font-size:9px;color:var(--text3);margin-left:5px">${kTasks.length}件 ${kH}h</span>`:''}</div>`;
-              h+=`<button class="card-btn" style="font-size:9px;padding:2px 7px;white-space:nowrap" onclick="openCellEdit('${ck}','kpi',${c.si},${ai})">✏ KPI記入</button>`;
               h+=`</div>`;
             });
             h+=`</div>`;
           }else{
-            h+=`<div style="padding:6px 14px 6px 28px;background:#F9FAFB;border-bottom:1px solid #E5E7EB"><button class="card-btn" style="font-size:10px;padding:3px 10px" onclick="openCellEdit('${ck}','kpi',${c.si},0)">＋ KPI追加</button></div>`;
+            h+=`<div style="padding:6px 14px 6px 28px;background:#F9FAFB;border-bottom:1px solid #E5E7EB;cursor:pointer" onclick="openCellEdit('${ck}','kpi',${c.si},0)"><span style="font-size:10px;color:var(--accent);font-weight:700">＋ KPI追加</span></div>`;
           }
         }
         csfTasks.forEach(t=>h+=rowHtml(t,ck,true));
