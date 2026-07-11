@@ -2239,13 +2239,15 @@ function saveMemberEvalExec(id,name){
   // （null のまま保存するとチャート絞り込みビューに評価が出ない）
   let chartId=(window._execChartChoice&&window._execChartChoice[id])||null;
   if(!chartId){const cc=(window._execChartsCache&&window._execChartsCache[id])||[];if(cc.length)chartId=cc[0].id;}
+  // 評価期間は保存日から自動算出（旧: '2025 Q2' 固定のデモ実装の名残を是正）
+  const _pd=new Date();const period=_pd.getFullYear()+' Q'+(Math.floor(_pd.getMonth()/3)+1);
   if(API&&API.ready&&m&&m.pid){
-    API.saveEvaluation({targetPid:m.pid,evaluatorRole:'executive',period:'2025 Q2',kgi:e.kgi.stars,kgiComment:e.kgi.comment||'',csf:e.csf.map(function(c){return {stars:c.stars,comment:c.comment};}),chartId})
+    API.saveEvaluation({targetPid:m.pid,evaluatorRole:'executive',period,kgi:e.kgi.stars,kgiComment:e.kgi.comment||'',csf:e.csf.map(function(c){return {stars:c.stars,comment:c.comment};}),chartId})
       .then(function(res){if(res&&res.error)console.warn('eval deliver:',res.error);if(typeof injectEvalRefs==='function')injectEvalRefs(id,m.pid);});
-    API.saveEvalRecord({evaluateePid:m.pid,evaluateeName:name,period:'2025 Q2',kgi:e.kgi.stars,csf:avg,task:0,comment:e.kgi.comment||''});
+    API.saveEvalRecord({evaluateePid:m.pid,evaluateeName:name,period,kgi:e.kgi.stars,csf:avg,task:0,comment:e.kgi.comment||''});
   }
   // 履歴に即時反映
-  const rec={name,evaluator:(document.getElementById('sb-uname')||{}).textContent||'幹部',period:'2025 Q2',kgi:e.kgi.stars,csf:avg,task:0,comment:e.kgi.comment||'',status:'done'};
+  const rec={name,evaluator:(document.getElementById('sb-uname')||{}).textContent||'幹部',period,kgi:e.kgi.stars,csf:avg,task:0,comment:e.kgi.comment||'',status:'done'};
   const idx=EVAL_HISTORY.findIndex(r=>r.name===name&&r.period===rec.period);
   if(idx>=0)EVAL_HISTORY[idx]=rec;else EVAL_HISTORY.unshift(rec);
   renderEvalHistory();
