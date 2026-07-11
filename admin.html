@@ -1289,13 +1289,18 @@ function vexumLogout(){
 }
 (function(){
   var API=window.VexumAPI; if(!API||!API.ready) return;
-  // ロールガード: この画面は admin 専用。他ロールは自分の画面へ（1アカウント=1ロール=1画面）
-  var DEST={admin:'./admin.html',executive:'./executive.html',leader:'./leader.html',member:'./employee.html'};
-  API.currentProfile().then(function(p){
-    if(!p){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); return; }
-    if(p.role!=='admin'){ location.replace(DEST[p.role]||'./index.html'); return; }
-    var un=document.getElementById('sb-uname'); if(un)un.textContent=p.full_name;
-    var ue=document.getElementById('sb-uemail'); if(ue)ue.textContent=p.email;
+  // ロールガード: この画面は admin 専用。他3画面と同じ checkRoleAccess で
+  // DB上のロールを毎回再確認する（権限剥奪の即時反映・全ロール喪失時はサインアウト）
+  API.checkRoleAccess('admin').then(function(a){
+    if(!a||!a.ok){
+      if(!a||!a.roles||!a.roles.length){ try{API.sb.auth.signOut();}catch(e){} }
+      location.replace((a&&a.dest)||'./index.html'); return;
+    }
+    API.currentProfile().then(function(p){
+      if(!p)return;
+      var un=document.getElementById('sb-uname'); if(un)un.textContent=p.full_name;
+      var ue=document.getElementById('sb-uemail'); if(ue)ue.textContent=p.email;
+    });
   });
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   API.loadTokatsuData().then(function(d){
