@@ -834,6 +834,7 @@ function renderAssign(){
     h+=`<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <select class="fs" onchange="asgFilterStatus(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto">${statusOpts}</select>`
       +(hasBar?_chartDateFilterBar('asg',_asgChartFilter,'asg-from','asg-to'):'')
+      +(hasBar?`<button class="f-btn active" onclick="asgFilterDate()">絞り込む</button>`:'')
       +`<button class="f-btn" onclick="asgFilterReset()">リセット</button></div>`;
     const rows=list.filter(x=>_asgFilter==='all'||asgOf(x.a)===_asgFilter)
       .filter(x=>typeof _taskChartMatch!=='function'||_taskChartMatch(x.a,_asgChartFilter))
@@ -2969,6 +2970,7 @@ function renderTaskTable(){
     const _vt=`<div style="display:flex;gap:4px;margin-left:auto"><button class="f-btn${!_taskViewGantt?' active':''}" onclick="setTaskView('list')" title="リスト表示">📋 リスト</button><button class="f-btn${_taskViewGantt?' active':''}" onclick="setTaskView('gantt')" title="ガント表示">📅 ガント</button></div>`;
     fbar.innerHTML=`<select class="fs" onchange="tmFilterStatus(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto">${statusOpts}</select>`
       +_chartDateFilterBar('tm',_tmChartFilter,'tm-from','tm-to')
+      +`<button class="f-btn active" onclick="tmFilterDate()">絞り込む</button>`
       +`<button class="f-btn" onclick="tmFilterReset()">リセット</button>`+_vt;
     _mountDateFilter('tm-from','tm-to',_tmFromFilter,_tmToFilter,tmFilterDate,_tmFromPart,_tmToPart);
   }
