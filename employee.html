@@ -775,7 +775,7 @@ async function asgSaveData(i,btn){
   const old=btn.textContent;btn.textContent=`✓ 記録しました（+${hours}h／合計${a.hours}h）`;btn.style.background='var(--green)';
   // 作業時間の変更を CSF/KGI 合計（ダッシュボード・チャート・ガント）へ即反映
   if(typeof renderProgressDash==='function')renderProgressDash();
-  if(typeof renderGantt==='function'&&document.getElementById('tc-gantt')&&document.getElementById('tc-gantt').classList.contains('active'))renderGantt();
+  if(typeof renderGantt==='function'&&_taskViewGantt)renderGantt();
   setTimeout(()=>{btn.textContent=old;btn.style.background='var(--accent)';renderAssign();if(typeof renderTaskTable==='function')renderTaskTable();},1500);
   if(a.pct>=100){setTimeout(()=>processAssignCompletion(),1600);}
 }
@@ -2497,7 +2497,7 @@ function saveKpiEdit(){
   closeKpiEdit();onCmChartChange();
   if(typeof renderTaskTable==='function')renderTaskTable();  // タスク管理のチャート行も更新
   if(typeof renderProgressDash==='function')renderProgressDash();  // ダッシュボード（統計カード・CSF内訳・KGI名横の期間）も更新
-  if(typeof renderGantt==='function'){const gt=document.getElementById('tc-gantt');if(gt&&gt.classList.contains('active'))renderGantt();}
+  if(typeof renderGantt==='function'&&_taskViewGantt)renderGantt();
   persistChart(k);  // 自動保存（localStorage＋Supabase）
 }
 // チャートの内容・編集を永続化（localStorage必ず＋Supabaseは可能なら、失敗時は再送キューへ）
