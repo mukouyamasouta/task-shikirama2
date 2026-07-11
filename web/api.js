@@ -661,23 +661,34 @@
     } catch (e) { console.warn('[VEXUM notify] notifications insert失敗 (report_started):', e); }
   }
   // 従業員本人宛ての通知を取得（受信ボックス用。to_user_id=自分 で単純絞り込み）
+  // マルチロール対応: auth_user_id が同じ全profileのIDで絞る（member/leader で別UUID になる場合を吸収）
+  async function _getAllMyProfileIds(me) {
+    var u = await sb.auth.getUser();
+    var uid = u && u.data && u.data.user && u.data.user.id;
+    if (!uid) return [me.id];
+    try {
+      var r = await sb.from('profiles').select('id').eq('auth_user_id', uid);
+      if (r.data && r.data.length) return r.data.map(function (p) { return p.id; });
+    } catch (e) { console.warn('[VEXUM] allProfiles取得失敗', e); }
+    return [me.id];
+  }
   async function loadMyNotifications() {
     if (!sb) return [];
     var me = await currentProfile(); if (!me) return [];
-    var r = await sb.from('notifications').select('*').eq('to_user_id', me.id).order('created_at', { ascending: false }).limit(50);
+    var pids = await _getAllMyProfileIds(me);
+    var r = await sb.from('notifications').select('*').in('to_user_id', pids).order('created_at', { ascending: false }).limit(50);
     if (r.error) { err('myNotifications', r.error); return []; }
     return r.data || [];
   }
   // 自分/自チーム宛ての通知を取得（リーダー画面の🔔・受信用）
+  // マルチロール対応: teams.leader_id が member UUID で登録されていても全UUID で検索
   async function loadNotifications() {
     if (!sb) return [];
     var me = await currentProfile(); if (!me) return [];
+    var pids = await _getAllMyProfileIds(me);
     var teamIds = [];
-    try { var t = await sb.from('teams').select('id').eq('leader_id', me.id); teamIds = (t.data || []).map(function (x) { return x.id; }); } catch (e) {}
-    // サーバー側で本人宛て（to_user_id）＋自分が率いるチーム宛て（to_team_id）に絞る。
-    // 以前は全件取得→limit(50)→クライアント絞りで、システム全体の通知が多いと
-    // 本人宛てが50件の枠から漏れてゼロ件になることがあった。
-    var orParts = ['to_user_id.eq.' + me.id];
+    try { var t = await sb.from('teams').select('id').in('leader_id', pids); teamIds = (t.data || []).map(function (x) { return x.id; }); } catch (e) { console.warn('[VEXUM notify] teams取得失敗', e); }
+    var orParts = pids.map(function (pid) { return 'to_user_id.eq.' + pid; });
     if (teamIds.length) orParts.push('to_team_id.in.(' + teamIds.join(',') + ')');
     var r = await sb.from('notifications').select('*').or(orParts.join(',')).order('created_at', { ascending: false }).limit(50);
     if (r.error) { err('notifications', r.error); return []; }
@@ -2021,17 +2032,23 @@
       console.group('[VEXUM diagNotify]');
       console.log('currentProfile:', me ? { id: me.id, name: me.full_name, role: me.role } : null);
       if (!me) { console.groupEnd(); return; }
+      // マルチロール: 同じ auth_user の全 profile ID を表示
+      var allPids = await _getAllMyProfileIds(me);
+      console.log('allMyProfileIds:', allPids);
       var tm = await sb.from('team_members').select('team_id,role_in_team').eq('profile_id', me.id);
-      console.log('team_members:', tm.data, tm.error);
+      console.log('team_members(currentProfile):', tm.data, tm.error);
       var teamId = tm.data && tm.data[0] && tm.data[0].team_id;
       if (teamId) {
         var t = await sb.from('teams').select('id,name,leader_id').eq('id', teamId);
         console.log('team:', t.data, t.error);
       }
+      // teams.leader_id IN allPids で自分がリーダーのチームを検索（マルチロール対応）
+      var myTeams = await sb.from('teams').select('id,name,leader_id').in('leader_id', allPids);
+      console.log('teams where leader_id in allPids:', myTeams.data, myTeams.error);
       var nc = await sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(10);
       console.log('notifications(最新10件):', nc.data, nc.error);
-      var nm = await sb.from('notifications').select('*').eq('to_user_id', me.id).order('created_at', { ascending: false }).limit(10);
-      console.log('notifications(本人宛):', nm.data, nm.error);
+      var nm = await sb.from('notifications').select('*').in('to_user_id', allPids).order('created_at', { ascending: false }).limit(10);
+      console.log('notifications(全ロール宛):', nm.data, nm.error);
       console.groupEnd();
     }
   };
