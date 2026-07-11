@@ -3020,7 +3020,6 @@ function renderTaskTable(){
   const rows=taskRows.filter(match)
     .filter(r=>_taskChartMatch(r.ref,_tmChartFilter))
     .filter(r=>inDateRange((r.ref&&(r.ref.dueRaw||r.ref.startRaw))||null,_tmFromFilter||null,_tmToFilter||null));
-  if(!rows.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:24px">該当するタスクはありません（「＋ 新規作成」からタスクを追加できます）</div></div>';return;}
   // 期限バッジ: 今日からの残日数で色分け（赤≤3日, アンバー≤7日, グレーそれ以外/未設定）
   const dueBadge=t=>{
     const d=di(t);
@@ -3079,6 +3078,13 @@ function renderTaskTable(){
       groups[key].rows.push(r);
     }else noChart.push(r);
   });
+  // A) ユーザーの全チャート（__除外・readonly除外）をタスク0件でもKGIカード表示
+  //    チャート絞り込み中（_tmChartFilter!=='all'）は対象チャートのみ追加
+  Object.keys(CHARTS)
+    .filter(k=>!k.startsWith('__')&&!CHARTS[k].readonly&&(_tmChartFilter==='all'||k===_tmChartFilter))
+    .forEach(k=>{if(!groups[k]){groups[k]={rows:[],label:_chartLabel(k),chartKey:k};order.push(k);}});
+  // チャートも無くタスクもなければ空メッセージ
+  if(!order.length&&!noChart.length){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:24px">該当するタスクはありません（「＋ 新規作成」からタスクを追加できます）</div></div>';return;}
   let h='';
   order.forEach(key=>{
     const g=groups[key],grp=g.rows,totH=grp.reduce((s,t)=>s+(t.hours||0),0);
@@ -3109,8 +3115,10 @@ function renderTaskTable(){
         const csfChipHtml=`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">CSF${c.si+1}</span>`;
         const csfTitle=c.text||'';
         // CSF行: rowHtmlと同じカードデザイン（タイトル/CSFチップ/期限バッジ/ステータスチップ/進捗バー/緑ボタン）
+        // B) 背景色: CSF期限が今日以前かつ未完了 → 白(緊急), それ以外 → 薄緑(余裕あり/未設定)
+        const csfBg=(csfEnd&&csfEnd<=today&&c.pct<100)?'#fff':'#F0FDF4';
         h+=`<div style="border-top:2px solid #E5E7EB">`;
-        h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6;background:#F0FDF4">`;
+        h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6;background:${csfBg}">`;
         h+=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">`;
         h+=`<div style="min-width:0"><div style="font-size:12px;font-weight:600">${csfTitle||'<span style="color:var(--text3)">（未入力）</span>'}${csfChipHtml}${csfDB}</div>`;
         h+=`<div style="font-size:10px;color:var(--text3)">CSF${c.si+1}${csfTitle?' '+csfTitle:''} ／ 合計 ${Math.round(csfH*10)/10}h</div></div>`;
