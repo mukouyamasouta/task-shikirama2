@@ -2795,8 +2795,40 @@ function loadMyNotifs(){
   API.loadMyNotifications().then(rows=>{MYNOTIFS=Array.isArray(rows)?rows:[];renderInbox();updateInboxBadge();}).catch(()=>{});
 }
 // 通知種別 → 表示ラベル・遷移先タブ
-const _NOTIF_META={task_assigned:['📌 タスク割当','var(--accent)','tasks'],evaluation_received:['⭐ 評価が届きました','var(--amber)','reviews'],report_started:['📝 始業共有','var(--text3)',null],report_submitted:['📝 日報提出','var(--text3)',null],task_done:['✅ タスク完了','var(--green)',null],chart_edit:['🧿 チャート更新','var(--accent)',null]};
-function ntfGoto(tab){if(tab&&typeof gotoTab==='function')gotoTab(tab);}
+const _NOTIF_META={task_assigned:['📌 タスク割当','var(--accent)','assign'],evaluation_received:['⭐ 評価が届きました','var(--amber)','reviews'],report_started:['📝 始業共有','var(--text3)',null],report_submitted:['📝 日報提出','var(--text3)',null],task_done:['✅ タスク完了','var(--green)',null],chart_edit:['🧿 チャート更新','var(--accent)',null]};
+function ntfGoto(tab,refId,type,notifId){
+  // 個別既読化
+  if(notifId){
+    const nx=(typeof MYNOTIFS!=='undefined'?MYNOTIFS:[]).find(n=>String(n.id)===String(notifId));
+    if(nx&&!nx.read){nx.read=true;const API=window.VexumAPI;if(API&&API.ready&&API.markNotificationsRead)API.markNotificationsRead([notifId]).catch(()=>{});if(typeof updateInboxBadge==='function')updateInboxBadge();}
+  }
+  if(!tab&&type!=='task_assigned'&&type!=='evaluation_received')return;
+  if(typeof gotoTab!=='function')return;
+  if(type==='task_assigned'){
+    gotoTab('assign');
+    if(refId){
+      let rid=null;
+      const asgArr=typeof ASSIGNMENTS!=='undefined'?ASSIGNMENTS:[];
+      const hstArr=typeof ASSIGN_HISTORY!=='undefined'?ASSIGN_HISTORY:[];
+      for(let i=0;i<asgArr.length;i++){if(asgArr[i].id&&String(asgArr[i].id)===String(refId)){rid='A'+i;break;}}
+      if(!rid){for(let i=0;i<hstArr.length;i++){if(hstArr[i].id&&String(hstArr[i].id)===String(refId)){rid='H'+i;break;}}}
+      if(rid&&typeof openTaskEdit==='function')setTimeout(()=>openTaskEdit(rid),300);
+    }
+  }else if(type==='evaluation_received'){
+    gotoTab('reviews');
+    if(refId){
+      const charts=typeof CHARTS!=='undefined'?CHARTS:{};
+      const k=Object.keys(charts).find(k=>(charts[k]||{}).dbId&&String(charts[k].dbId)===String(refId));
+      if(k){
+        const sel=document.getElementById('eval-chart-sel');
+        if(sel){sel.value=k;if(typeof onEvalChartChange==='function')setTimeout(()=>onEvalChartChange(),300);}
+        else if(typeof evalChartKey!=='undefined'){evalChartKey=k;if(typeof renderEval==='function')setTimeout(()=>renderEval(),300);}
+      }
+    }
+  }else{
+    gotoTab(tab);
+  }
+}
 function renderInbox(){
   const con=document.getElementById('inbox-list');if(!con)return;
   let h='';
@@ -2807,7 +2839,7 @@ function renderInbox(){
       const m=_NOTIF_META[x.type]||[x.title||'お知らせ','var(--text3)',null];
       const when=(x.created_at||'').slice(0,10);
       const clickable=!!m[2];
-      h+=`<div ${clickable?`onclick="ntfGoto('${m[2]}')" style="cursor:pointer"`:''} style="padding:11px 14px;border-bottom:1px solid #F3F4F6;${x.read?'':'background:#F0F9FF'}">
+      h+=`<div ${clickable?`onclick="ntfGoto('${m[2]}','${x.ref_id||''}','${x.type}','${x.id||''}')" style="cursor:pointer"`:''} style="padding:11px 14px;border-bottom:1px solid #F3F4F6;${x.read?'':'background:#F0F9FF'}">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
           <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:${m[1]}">${m[0]}${x.read?'':' <span style="font-size:8px;background:var(--red);color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px">未読</span>'}</div>
           <div style="font-size:11px;color:var(--text)">${x.body||''}</div>
