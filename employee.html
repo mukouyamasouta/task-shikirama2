@@ -3093,15 +3093,30 @@ function renderTaskTable(){
         // 全CSF（1〜8）を表示し、未入力のCSFにも「✏ 記入」からテキスト・進捗・工数を記入できるようにする
         const empty=!c.text&&!csfTasks.length;
         const csfH=_csfHours(ck,c.si);
-        const csfCol=_csfColor(c.pct);
-        // CSF期間（タスク優先→メモ。あれば見出し右に表示）
+        // CSF期間の終了日でdueBadge同ロジックのバッジ生成
         const csfPer=_cellPeriod(ck,'csf',c.si,null);
-        const perStr=(csfPer.start||csfPer.end)?`<span style="font-size:9px;color:var(--text3);margin-left:8px">📅 ${csfPer.start||''}${csfPer.end?'〜'+csfPer.end:''}</span>`:'';
-        const editBtn=isRo?'': `<button class="card-btn" style="font-size:10px;padding:3px 8px" onclick="openCellEdit('${ck}','csf',${c.si})">✏ 記入</button>`;
-        h+=`<div style="border-bottom:2px solid #E5E7EB">`;
-        h+=`<div style="padding:8px 14px;background:#F8FAFC;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">`;
-        h+=`<div style="font-size:11px;font-weight:700;color:${empty?'var(--text3)':'#374151'};display:flex;align-items:center;flex-wrap:wrap;gap:2px">CSF${c.si+1}${c.text?' '+c.text:' <span style="font-weight:600;color:var(--text3)">（未入力）</span>'}${perStr}</div>`;
-        h+=`<div style="display:flex;gap:8px;align-items:center;font-size:10px;white-space:nowrap">${empty?'':`<span style="color:${csfCol};font-weight:700">${c.pct}%</span><span style="color:var(--text3)">${Math.round(csfH*10)/10}h</span>`}${editBtn}</div>`;
+        const csfEnd=csfPer.end||'';
+        const csfDB=(()=>{
+          if(!csfEnd)return '<span style="font-size:9px;background:#F3F4F6;color:#9CA3AF;padding:2px 6px;border-radius:6px;margin-left:6px">期限未設定</span>';
+          const diff=Math.ceil((new Date(csfEnd)-new Date(today))/(1000*60*60*24));
+          const dc=diff<=3?'#DC2626':diff<=7?'#D97706':'#6B7280';
+          const dbg=diff<=3?'#FEE2E2':diff<=7?'#FEF3C7':'#F3F4F6';
+          return `<span style="font-size:9px;background:${dbg};color:${dc};padding:2px 6px;border-radius:6px;font-weight:700;margin-left:6px;white-space:nowrap">📅 ${+csfEnd.slice(5,7)}/${+csfEnd.slice(8,10)}まで</span>`;
+        })();
+        const csfSt=c.pct>=100?'done':c.pct>0?'wip':'todo';
+        const csfSc=stMap[csfSt]||stMap.todo;
+        const csfBarCol=c.pct>=100?'var(--green)':c.pct>=40?'var(--accent)':'var(--amber)';
+        const csfChipHtml=`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">CSF${c.si+1}</span>`;
+        const csfTitle=c.text||'';
+        // CSF行: rowHtmlと同じカードデザイン（タイトル/CSFチップ/期限バッジ/ステータスチップ/進捗バー/緑ボタン）
+        h+=`<div style="border-top:2px solid #E5E7EB">`;
+        h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6;background:#F0FDF4">`;
+        h+=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">`;
+        h+=`<div style="min-width:0"><div style="font-size:12px;font-weight:600">${csfTitle||'<span style="color:var(--text3)">（未入力）</span>'}${csfChipHtml}${csfDB}</div>`;
+        h+=`<div style="font-size:10px;color:var(--text3)">CSF${c.si+1}${csfTitle?' '+csfTitle:''} ／ 合計 ${Math.round(csfH*10)/10}h</div></div>`;
+        h+=`<div style="display:flex;gap:6px;align-items:center"><span class="chip ${csfSc[0]}">${csfSc[1]}</span><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${c.pct}%;background:${csfBarCol}"></div></div><div class="pp" style="font-size:10px;color:${csfBarCol}">${c.pct}%</div></div></div>`;
+        h+=`</div>`;
+        if(!isRo)h+=`<div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end"><button class="card-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="openCellEdit('${ck}','csf',${c.si})">✏ 進捗・作業時間を記入</button></div>`;
         h+=`</div>`;
         csfTasks.forEach(t=>h+=rowHtml(t,ck,true));
         h+=`</div>`;
