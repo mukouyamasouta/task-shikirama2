@@ -3619,9 +3619,14 @@ function renderKgiProgress(){
       csfHtml=`<div style="margin-top:10px;border-top:1px dashed var(--border);padding-top:6px">`
         +`<div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.06em;margin-bottom:2px">CSF一覧（このKGIの配下）</div>`
         +csfs.map(c=>{const cc=_csfColor(c.pct);const ch=_csfHours(x.k,c.si);
+          const today2=_epToday();
+          const per=(typeof _cellPeriod==='function')?_cellPeriod(x.k,'csf',c.si):{start:'',end:''};
+          const overdue=per.end&&per.end<today2&&c.pct<100;
+          const perTag=(per.start||per.end)?`<span style="font-size:9px;color:${overdue?'var(--red)':'var(--text3)'};font-weight:${overdue?'700':'600'};flex-shrink:0">📅 ${(per.start||'').replace(/-/g,'/')||'—'}〜${(per.end||'').replace(/-/g,'/')||'—'}${overdue?' ⚠超過':''}</span>`:'';
           return `<div onclick="event.stopPropagation();gotoChartCsfEdit('${x.k}',${c.si})" style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;border-radius:6px" onmouseover="this.style.background='#FAFAFA'" onmouseout="this.style.background=''">
             <span style="font-size:9px;color:var(--accent);font-weight:700;flex-shrink:0;min-width:30px">CSF${c.si+1}</span>
             <span style="font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.text}">${c.text}</span>
+            ${perTag}
             ${ch>0?`<span style="font-size:9px;color:var(--text3);font-weight:700;flex-shrink:0">合計 ${ch}h</span>`:''}
             <div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${c.pct}%;background:${cc}"></div></div><div class="pp" style="color:${cc}">${c.pct}%</div></div>
           </div>`;}).join('')
