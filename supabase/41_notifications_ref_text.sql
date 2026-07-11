@@ -1,0 +1,15 @@
+-- =====================================================================
+-- 41_notifications_ref_text.sql — notifications.ref_id を uuid → text に変更
+--
+-- 背景: evaluation_received 通知は ref_id に mandala_charts.id（text型。
+-- 実データは 'user_<uuid>_<timestamp>' 形式）を渡すが、ref_id が uuid 型の
+-- ため insert が 22P02 で失敗し、チャート紐付き評価の通知が一切届かなかった。
+-- （本番データ確認済み: evaluations 5件に対し evaluation_received 通知 0件）
+--
+-- api.js 側は失敗時に ref_id 無しで再送するフォールバックを実装済みのため、
+-- 本マイグレーション未適用でも通知自体は届く。適用すると通知クリックでの
+-- チャート直接ジャンプ（employee.html ntfGoto）も機能するようになる。
+--
+-- 実行: Supabase SQL エディタで1回実行
+-- =====================================================================
+alter table notifications alter column ref_id type text using ref_id::text;
