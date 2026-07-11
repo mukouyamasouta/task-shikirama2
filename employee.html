@@ -3115,8 +3115,9 @@ function renderTaskTable(){
         const csfChipHtml=`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">CSF${c.si+1}</span>`;
         const csfTitle=c.text||'';
         // CSF行: rowHtmlと同じカードデザイン（タイトル/CSFチップ/期限バッジ/ステータスチップ/進捗バー/緑ボタン）
-        // B) 背景色: CSF期限が今日以前かつ未完了 → 白(緊急), それ以外 → 薄緑(余裕あり/未設定)
-        const csfBg=(csfEnd&&csfEnd<=today&&c.pct<100)?'#fff':'#F0FDF4';
+        // B) 背景色: 期限が今日から7日以内（超過含む）かつ未完了 → 白(緊急), それ以外 → 薄緑(余裕あり/未設定)
+        const csfDiffDays=csfEnd?Math.ceil((new Date(csfEnd)-new Date(today))/(1000*60*60*24)):null;
+        const csfBg=(csfEnd&&csfDiffDays<=7&&c.pct<100)?'#fff':'#F0FDF4';
         h+=`<div style="border-top:2px solid #E5E7EB">`;
         h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6;background:${csfBg}">`;
         h+=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">`;
