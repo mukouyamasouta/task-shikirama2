@@ -922,13 +922,23 @@
     var r = await sb.from('evaluations').insert(row);
     if (r.error) return { error: friendlyErr(r.error.message) };
     // ★評価対象者へ通知（リーダー/幹部→従業員）
+    // 注意: notifications.ref_id は uuid 型（41_notifications_ref_text.sql 適用前）。
+    // mandala_charts.id は text（'user_<uuid>_<ts>' 等）で uuid として不正なため、
+    // そのまま insert すると 22P02 で通知ごと失われる。失敗時は ref_id 無しで再送し、
+    // 通知自体は必ず届くようにする（マイグレーション適用後は1回目で成功する）。
     try {
       if (o.targetPid && me && o.targetPid !== me.id) {
-        await sb.from('notifications').insert({
+        var ntfRow = {
           to_user_id: o.targetPid, to_team_id: null, type: 'evaluation_received',
           title: '評価が届きました', body: (o.period ? o.period + ' の' : '') + '評価が登録されました',
           actor_id: me ? me.id : null, actor_name: me ? me.full_name : '', ref_id: o.chartId || null
-        });
+        };
+        var nr = await sb.from('notifications').insert(ntfRow);
+        if (nr.error && ntfRow.ref_id != null) {
+          ntfRow.ref_id = null;
+          nr = await sb.from('notifications').insert(ntfRow);
+        }
+        if (nr.error) console.warn('[VEXUM notify] notifications insert失敗 (evaluation_received):', nr.error.message);
       }
     } catch (e) { console.warn('[VEXUM notify] notifications insert失敗 (evaluation_received):', e); }
     return { ok: true };
@@ -1004,11 +1014,17 @@
     });
 
     var FEEDBACK = {};
+    // 実データのチャートID（'user_<uuid>_<ts>' 等）→ CHARTSキー の対応表。
+    // シードIDパターンに一致しない評価もチャート別に正しく振り分ける
+    var chartKeyByDbId = {};
+    Object.keys(CHARTS).forEach(function (k) { var d = CHARTS[k]; if (d && d.dbId) chartKeyByDbId[d.dbId] = k; });
     raw.evaluations.forEach(function (ev) {
-      var ck = ev.chart_id === 'user_' + memberKey ? 'self_q3'
+      var ck = (ev.chart_id && chartKeyByDbId[ev.chart_id])
+             ? chartKeyByDbId[ev.chart_id]
+             : ev.chart_id === 'user_' + memberKey ? 'self_q3'
              : ev.chart_id === 'user_' + memberKey + '_q2' ? 'self_q2'
              : ev.chart_id === 'team_' + teamLetter ? 'team_' + teamLetter
-             : (ev.target_user_id === uid ? 'self_q3' : null);  // 本人宛て評価は self_q3 に集約
+             : (ev.target_user_id === uid ? 'self_q3' : null);  // チャート特定不能の本人宛て評価は self_q3 に集約
       if (!ck) return;
       if (!FEEDBACK[ck]) FEEDBACK[ck] = { period: ev.period, evals: [] };
       var evp = prof[ev.evaluator_id] || {};
