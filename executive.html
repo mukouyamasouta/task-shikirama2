@@ -2492,6 +2492,7 @@ initExecDashboard();
 <script src="./web/api.js"></script>
 <script src="./web/ui.js"></script>
 <script>
+/* ===== ブート/Supabase接続（通知ソース設定） ===== */
 window.VEXUM_PAGE_ROLE='executive';  // 複数ロール時に currentProfile が幹部profileを選ぶ
 /* 🔔 幹部の通知: 送信チャートの記入・進捗更新（送信先の反応） */
 window.vxNotifSource=function(){
@@ -2510,6 +2511,7 @@ window.vxNotifSource=function(){
 };
 </script>
 <script>
+/* ===== ログアウト・アクセス検証（幹部ロール確認） ===== */
 function vexumLogout(){
   var API=window.VexumAPI;
   var done=function(){ location.replace('./index.html'); };

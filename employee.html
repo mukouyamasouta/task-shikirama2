@@ -712,7 +712,7 @@ function filterTasks(s,btn){
   btn.classList.add('active');
   document.querySelectorAll('.task-row').forEach(r=>r.style.display=(s==='all'||r.dataset.status===s)?'':'none');
 }
-/* 割り当て（現在／過去の履歴）
+/* ===== 割り当てタブ（現在／過去の履歴・進捗記入・完了処理） =====
  * 以下はSupabase未接続時のみ表示されるデモ・フォールバックデータ。
  * Supabase接続時はbootstrap（本ファイル末尾）でAPI.loadPersonalData()の
  * 結果（tasksテーブル: assignee=本人）に置き換わり、以後はこの配列を
@@ -899,6 +899,7 @@ function renderAssign(){
   // 割り当てタブ(現在)のときのみYMDセレクトを差し込み・復元（履歴表示時はwrap不在でno-op）
   if(typeof _mountDateFilter==='function')_mountDateFilter('asg-from','asg-to',_asgFromFilter,_asgToFilter,asgFilterDate,_asgFromPart,_asgToPart);
 }
+/* ===== 日報タブ（始業・終業フォーム: 時刻計算・保存・提出・削除） ===== */
 // "HH:MM"→分。差を時間(小数1桁)で返す
 function _hm2min(s){if(!s||!/^\d{1,2}:\d{2}$/.test(s))return null;const[h,m]=s.split(':').map(Number);return h*60+m;}
 function _workHours(inT,outT){const a=_hm2min(inT),b=_hm2min(outT);if(a==null||b==null)return null;let d=b-a;if(d<0)d+=24*60;return Math.round(d/60*10)/10;}
@@ -3983,6 +3984,7 @@ renderTaskTable();
 <script src="./web/api.js"></script>
 <script src="./web/ui.js"></script>
 <script>
+/* ===== ブート/Supabase接続（認証検証・実データロード・通知ソース・ログアウト） ===== */
 window.VEXUM_PAGE_ROLE='member';  // 複数ロール時に currentProfile が従業員profileを選ぶ
 /* 🔔 個人の通知: 受信チャート（記入待ち）・割当タスク・受信した評価 */
 window.vxNotifSource=function(){

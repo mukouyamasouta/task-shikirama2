@@ -470,6 +470,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 </div><!-- /main -->
 
 <script>
+/* ===== タブ切替・共通フィルタ ===== */
 const TITLES={progress:['進捗ダッシュボード','統合管理コンソール / 進捗'],tasks:['タスク管理','統合管理コンソール / タスク'],goals:['目標管理 KGI/KPI','統合管理コンソール / 目標'],reviews:['評価管理','統合管理コンソール / 評価'],create:['新規作成','統合管理コンソール / 新規作成'],team:['チームダッシュボード','管理者メニュー / チームDB'],users:['アカウント管理','管理者メニュー / アカウント'],assign:['タスク割当','管理者メニュー / タスク割当'],evalin:['メンバー評価入力','管理者メニュー / 評価入力'],evalrec:['評価記録','管理者メニュー / 評価記録'],'mandala-send':['曼荼羅チャート送信','曼荼羅チャート / チャート送信'],'mandala-list':['曼荼羅チャート一覧・評価','曼荼羅チャート / 一覧・評価']};
 function swTab(id,btn){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
@@ -1278,6 +1279,7 @@ async function adDeleteUser(btn){
 <script src="./web/api.js"></script>
 <script src="./web/ui.js"></script>
 <script>
+/* ===== ブート/Supabase接続（認証検証・ログアウト） ===== */
 window.VEXUM_PAGE_ROLE='admin';  // 複数ロール時に currentProfile が管理者profileを選ぶ
 function vexumLogout(){
   var API=window.VexumAPI;
