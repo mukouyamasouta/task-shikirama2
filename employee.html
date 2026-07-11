@@ -1471,7 +1471,8 @@ async function refreshSelfEvalStatusCard(){
   const API=window.VexumAPI;if(!(API&&API.ready)){card.style.display='none';return;}
   const k=evalChartKey;const c=CHARTS[k];
   if(!c){card.style.display='none';return;}
-  const dbId=c.dbId||(k==='self_q3'?'user_nakamura':k==='self_q2'?'user_nakamura_q2':k);
+  const dbId=evalDbId(k,c);
+  if(!dbId){card.style.display='none';return;}
   try{
     const ex=await API.loadMySelfEval(dbId);
     if(!ex){card.style.display='block';card.style.background='#F3F4F6';card.style.borderColor='#9CA3AF';card.style.color='var(--text2)';card.innerHTML=`📝 このチャートの自己評価は<b>未入力</b>です。「自己評価を入力」ボタンから保存できます。`;return;}
@@ -1502,12 +1503,13 @@ function openSelfEval(){
     const opts=[];
     Object.entries(CHARTS).forEach(([k,c])=>{
       if(k.startsWith('__'))return;
-      const dbId=c.dbId||(k==='self_q3'?'user_nakamura':k==='self_q2'?'user_nakamura_q2':k);
+      const dbId=evalDbId(k,c);
+      if(!dbId)return;
       opts.push(`<option value="${dbId}">${_chartLabel(k)}</option>`);
     });
     csel.innerHTML=opts.join('')||'<option value="">— チャートなし —</option>';
     const curK=(typeof evalChartKey!=='undefined')?evalChartKey:(typeof curChartKey!=='undefined'?curChartKey:'self_q3');
-    const curC=CHARTS[curK];const curId=curC&&(curC.dbId||(curK==='self_q3'?'user_nakamura':curK==='self_q2'?'user_nakamura_q2':curK));
+    const curC=CHARTS[curK];const curId=curC&&evalDbId(curK,curC);
     if(curId)csel.value=curId;
   }
   renderSeStars();renderSeCsf();updateSeStatusBar();
@@ -1558,7 +1560,7 @@ function renderSeCsf(){
   // 選択中の対象チャート（#se-chart の value=dbId）から CSF ラベルを取得（旧: 未定義 curChartKey で常に self_q3 になっていた）
   const cid=(document.getElementById('se-chart')||{}).value||null;
   let c=null;
-  Object.keys(CHARTS).forEach(k=>{if(c||k.startsWith('__'))return;const cc=CHARTS[k];const dbId=cc.dbId||(k==='self_q3'?'user_nakamura':k==='self_q2'?'user_nakamura_q2':k);if(cid&&dbId===cid)c=cc;});
+  Object.keys(CHARTS).forEach(k=>{if(c||k.startsWith('__'))return;const cc=CHARTS[k];const dbId=evalDbId(k,cc);if(cid&&dbId&&dbId===cid)c=cc;});
   if(!c)c=CHARTS[evalChartKey]||CHARTS['self_q3']||null;
   const subs=(c&&c.subs)||['CSF1','CSF2','CSF3','CSF4','CSF5','CSF6','CSF7','CSF8'];
   let h='';
@@ -1594,7 +1596,14 @@ async function submitSelfEval(isSubmit){
 }
 
 let _evalDataCache={};   // chartKey -> {kgi,kgiComment,csf:[{stars,comment}],submitted} | null
-function evalDbId(k,d){return (d&&d.dbId)||(k==='self_q3'?'user_nakamura':k==='self_q2'?'user_nakamura_q2':k);}
+// チャートキー→DB上のチャートID。実データ接続時はデモID（user_nakamura等）へ
+// フォールバックしない（他人のシードチャートへ評価が誤保存されるのを防ぐ）。dbId不明なら null。
+function evalDbId(k,d){
+  if(d&&d.dbId)return d.dbId;
+  const API=window.VexumAPI;
+  if(API&&API.ready)return null;
+  return k==='self_q3'?'user_nakamura':k==='self_q2'?'user_nakamura_q2':k;
+}
 // 評価タブのチャート選択肢を実データ（CHARTS）から再構築（ハードコードのデモ氏名を除去）
 function populateEvalChartSel(){
   const sel=document.getElementById('eval-chart-sel');if(!sel)return;
