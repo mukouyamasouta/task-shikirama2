@@ -761,7 +761,7 @@ function restoreSavedFilters(){
   if(typeof _tmToFilter!=='undefined')_tmToFilter=f.tmTo||'';
   // 割り当て: ステータス／チャート(KGI)／日付範囲
   if(f.asg&&typeof _asgFilter!=='undefined')_asgFilter=f.asg;
-  if(f.asgChart&&typeof _asgChartFilter!=='undefined')_asgChartFilter=f.asgChart;
+  if(f.asgAssigner&&typeof _asgAssignerFilter!=='undefined')_asgAssignerFilter=f.asgAssigner;
   if(typeof _asgFromFilter!=='undefined')_asgFromFilter=f.asgFrom||'';
   if(typeof _asgToFilter!=='undefined')_asgToFilter=f.asgTo||'';
   // ダッシュボードのKGI/日付はセレクト生成後に反映（renderKgiProgress内で消費）
@@ -820,16 +820,16 @@ function processAssignCompletion(){
   return moved;
 }
 /* 割り当てタブの絞り込み（タスク管理と同仕様: ステータス＋チャート(KGI)＋日付範囲） */
-let _asgFilter='all',_asgChartFilter='all',_asgFromFilter='',_asgToFilter='';
+let _asgFilter='all',_asgAssignerFilter='all',_asgFromFilter='',_asgToFilter='';
 let _asgFromPart=null,_asgToPart=null;
 function asgFilterStatus(v){_asgFilter=v;_filtersSave({asg:v});renderAssign();}
-function asgFilterChart(v){_asgChartFilter=v||'all';_filtersSave({asgChart:_asgChartFilter});renderAssign();}
+function asgFilterAssigner(v){_asgAssignerFilter=v||'all';_filtersSave({asgAssigner:_asgAssignerFilter});renderAssign();}
 function asgFilterDate(){_asgFromPart=_ymdGetPart('asg-from');_asgToPart=_ymdGetPart('asg-to');_asgFromFilter=ymdValue('asg-from')||'';_asgToFilter=ymdValue('asg-to')||'';_filtersSave({asgFrom:_asgFromFilter,asgTo:_asgToFilter});renderAssign();}
-function asgFilterReset(){_asgFilter='all';_asgChartFilter='all';_asgFromFilter='';_asgToFilter='';_asgFromPart=null;_asgToPart=null;ymdClear('asg-from');ymdClear('asg-to');_filtersSave({asg:null,asgChart:null,asgFrom:null,asgTo:null});renderAssign();}
+function asgFilterReset(){_asgFilter='all';_asgAssignerFilter='all';_asgFromFilter='';_asgToFilter='';_asgFromPart=null;_asgToPart=null;ymdClear('asg-from');ymdClear('asg-to');_filtersSave({asg:null,asgAssigner:null,asgFrom:null,asgTo:null});renderAssign();}
 function renderAssign(){
   const con=document.getElementById('assign-container');if(!con)return;
   // 自分で作成したタスクは表示しない（タスク管理・ダッシュボードで管理）
-  const asgOf=a=>a.pct>=100?'done':a.pct>0?'wip':((a.dueRaw&&a.dueRaw<_epToday())||a.status==='late'?'late':'todo');
+  const asgOf=a=>{if(a.pct>=100)return 'done';const isLate=(a.dueRaw&&a.dueRaw<_epToday())||a.status==='late';if(isLate)return 'late';return a.pct>0?'wip':'todo';};
   let h='';
   if(assignView==='current'){
     const list=ASSIGNMENTS.map((a,i)=>({a,i})).filter(x=>!x.a.self);
@@ -838,14 +838,16 @@ function renderAssign(){
       .map(([k,l])=>`<option value="${k}"${k===_asgFilter?' selected':''}>${l}</option>`).join('');
     // _chartDateFilterBar等は後続の<script>ブロックで定義されるため、初期描画（ブロック読込順）では
     // まだ存在しないことがある。typeofガードで初回はステータスのみ表示し、後続の再描画で完全表示になる
-    const hasBar=typeof _chartDateFilterBar==='function';
+    // ユニークな割り当て元セレクト選択肢（ASSIGNMENTS内の実データから動的生成）
+    const asgAssignerOpts=(()=>{const m=new Map();list.forEach(({a})=>{if(a.assignerId&&!m.has(a.assignerId))m.set(a.assignerId,(a.assignerRole||'上長')+' · '+(a.assignerName||''));});return[`<option value="all"${_asgAssignerFilter==='all'?' selected':''}>全員</option>`,...Array.from(m.entries()).map(([id,l])=>`<option value="${id}"${_asgAssignerFilter===id?' selected':''}>${l}</option>`)].join('');})();
     h+=`<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <select class="fs" onchange="asgFilterStatus(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto">${statusOpts}</select>`
-      +(hasBar?_chartDateFilterBar('asg',_asgChartFilter,'asg-from','asg-to'):'')
-      +(hasBar?`<button class="f-btn active" onclick="asgFilterDate()">絞り込む</button>`:'')
+      +`<select class="fs" onchange="asgFilterAssigner(this.value)" style="font-size:11px;padding:6px 10px;font-weight:600;width:auto;max-width:200px">${asgAssignerOpts}</select>`
+      +`<span style="display:inline-flex;align-items:center;gap:4px"><span style="font-size:10px;font-weight:700;color:var(--text3)">開始</span><span id="asg-from-wrap"></span><span style="font-size:11px;color:var(--text3)">〜</span><span style="font-size:10px;font-weight:700;color:var(--text3)">期限</span><span id="asg-to-wrap"></span></span>`
+      +`<button class="f-btn active" onclick="asgFilterDate()">絞り込む</button>`
       +`<button class="f-btn" onclick="asgFilterReset()">リセット</button></div>`;
     const rows=list.filter(x=>_asgFilter==='all'||asgOf(x.a)===_asgFilter)
-      .filter(x=>typeof _taskChartMatch!=='function'||_taskChartMatch(x.a,_asgChartFilter))
+      .filter(x=>_asgAssignerFilter==='all'||x.a.assignerId===_asgAssignerFilter)
       .filter(x=>inDateRange(x.a.dueRaw||x.a.startRaw||null,_asgFromFilter||null,_asgToFilter||null));
     if(!rows.length){
       con.innerHTML=h+'<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">'+(list.length?'該当する割り当てはありません':'現在の割り当てはありません。完了したタスクは「🕘 過去の履歴」で確認できます。')+'</div></div>';
@@ -2987,7 +2989,7 @@ function renderTaskTable(){
   const con=document.getElementById('task-groups');if(!con)return;
   const priMap={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低'],urgent:['s-hi','緊急']};
   const stMap={wip:['s-wip','進行中'],done:['s-done','完了'],late:['s-late','遅延'],todo:['s-todo','未着手']};
-  const stOf=t=>t.done||t.pct>=100?'done':t.pct>0?'wip':(t.late?'late':'todo');
+  const stOf=t=>{if(t.done||t.pct>=100)return 'done';if(t.late)return 'late';return t.pct>0?'wip':'todo';};
   const today=_epToday();
   // ダッシュボードと同一の期限判定（di）。本日以前かつ未完了＝「本日対応すべき/遅延」→ ダッシュボードで表示
   const di=r=>{const a=r.ref||{};return a.dueRaw||(r.end&&/\d{4}\/\d{1,2}\/\d{1,2}/.test(r.end)?r.end.replace(/\//g,'-'):null);};
@@ -4036,7 +4038,7 @@ function vexumLogout(){
           if(typeof _tmFromFilter!=='undefined')_tmFromFilter='';
           if(typeof _tmToFilter!=='undefined')_tmToFilter='';
           if(typeof _asgFilter!=='undefined')_asgFilter='all';
-          if(typeof _asgChartFilter!=='undefined')_asgChartFilter='all';
+          if(typeof _asgAssignerFilter!=='undefined')_asgAssignerFilter='all';
           if(typeof _asgFromFilter!=='undefined')_asgFromFilter='';
           if(typeof _asgToFilter!=='undefined')_asgToFilter='';
           window._dashRestore=null;
