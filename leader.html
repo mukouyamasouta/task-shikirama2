@@ -611,6 +611,15 @@ function showToast(id){const t=document.getElementById(id);if(!t)return;t.style.
 function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
 function fmtDate(id){const v=val(id);if(!v)return'-';const p=v.split('-');return p.length===3?`${+p[1]}/${+p[2]}`:v;}
 function statusChip(s){return {wip:['s-wip','進行中'],done:['s-done','完了'],late:['s-late','遅延'],todo:['s-todo','未着手']}[s]||['s-todo','未着手'];}
+// 実効ステータス: 期限超過かつ未完了は進捗があっても「遅延」（従業員画面のasgOf/stOfと同一基準）
+function effStatus(t){
+  const pct=t.pct!=null?t.pct:(t.progress||0);
+  if(t.status==='done'||pct>=100)return 'done';
+  const today=new Date().toISOString().slice(0,10);
+  if(t.status==='late'||(t.dueRaw&&t.dueRaw<today))return 'late';
+  return t.status||'todo';
+}
+
 function priChip(p){return {hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低']}[p]||['s-md','中'];}
 function rateColor(p){return p>=80?'var(--green)':p>=60?'var(--amber)':'var(--red)';}
 function starStr(n){const f=Math.round(n);let s='';for(let i=1;i<=5;i++)s+=i<=f?'★':'☆';return s;}
@@ -817,7 +826,7 @@ function mdRenderTasks(chartId){
   const el=document.getElementById('md-task-list');if(!el)return;
   if(!tasks.length){el.innerHTML=`<div style="padding:14px;color:var(--text3);font-size:12px">${chartId?'このチャートに紐づくタスクはありません':'チャートに紐づくタスクはありません'}</div>`;return;}
   let h='';
-  tasks.forEach(t=>{const sch=statusChip(t.status),pc=priChip(t.pri);const pct=t.pct!=null?t.pct:0;
+  tasks.forEach(t=>{const sch=statusChip(effStatus(t)),pc=priChip(t.pri);const pct=t.pct!=null?t.pct:0;
     const col=pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)';
     const chartChip=t.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${t.chart}</span>`:'';
     h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${chartChip}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${t.hours?' ／ '+t.hours+'h':''}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sch[0]}">${sch[1]}</span></div></div>`;});
@@ -1093,7 +1102,7 @@ function renderAssignedTasks(){
     if(fSt)tasks=tasks.filter(t=>(t.status||'todo')===fSt);
     h+=`<div style="padding:10px 16px;background:#FAFCFC;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);display:flex;align-items:center;gap:8px"><span class="tdot" style="background:${m.color}"></span>${m.name} <span style="font-weight:400;color:var(--text3)">（${tasks.length}件）</span></div>`;
     if(!tasks.length)h+=`<div style="padding:10px 16px;font-size:11px;color:var(--text3)">該当なし</div>`;
-    tasks.forEach(t=>{const sc=statusChip(t.status),pc=priChip(t.pri);shown++;
+    tasks.forEach(t=>{const sc=statusChip(effStatus(t)),pc=priChip(t.pri);shown++;
       const chartChip=t.chart?`<span style="font-size:9px;background:#EDE9FE;color:#7C3AED;padding:1px 7px;border-radius:8px;font-weight:700">📊 ${t.chart}</span>`:'';
       const pct=t.pct!=null?t.pct:0;
       const hrs=t.pct!=null&&t.hours!=null?` ／ ${t.hours}h`:'';
@@ -1198,7 +1207,7 @@ function renderEvalPeriodTasks(){
   const doneN=inPeriod.filter(t=>t.status==='done'||((t.pct||0)>=100)).length;
   document.getElementById('evalp-total').textContent='合計 '+(Math.round(totalH*10)/10)+'h ／ 完了 '+doneN+'/'+inPeriod.length;
   if(!inPeriod.length){con.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">この期間の割当タスクはありません</div>';return;}
-  con.innerHTML=inPeriod.map(t=>{const sc=statusChip(t.status),pct=t.pct!=null?t.pct:0;return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-bottom:1px solid var(--border)"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}</div><div style="font-size:10px;color:var(--text3)">${t.kpi}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><span style="font-size:12px;font-weight:700;color:var(--accent)">${t.hours||0}h</span><span style="font-size:10px">${pct}%</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;}).join('');
+  con.innerHTML=inPeriod.map(t=>{const sc=statusChip(effStatus(t)),pct=t.pct!=null?t.pct:0;return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-bottom:1px solid var(--border)"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}</div><div style="font-size:10px;color:var(--text3)">${t.kpi}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><span style="font-size:12px;font-weight:700;color:var(--accent)">${t.hours||0}h</span><span style="font-size:10px">${pct}%</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;}).join('');
 }
 async function renderMemberEval(){
   const sel=document.getElementById('evalin-member');if(!sel)return;const id=sel.value;if(!id)return;

@@ -1595,6 +1595,15 @@ function val(id){const e=document.getElementById(id);return e?e.value.trim():'';
 function fmtDate(id){const v=val(id);if(!v)return null;return v;}
 function fmtDateDisp(id){const v=val(id);if(!v)return'-';const p=v.split('-');return p.length===3?`${+p[1]}/${+p[2]}`:v;}
 function statusChip(s){return {wip:['s-wip','進行中'],done:['s-done','完了'],late:['s-late','遅延'],todo:['s-todo','未着手']}[s]||['s-todo','未着手'];}
+// 実効ステータス: 期限超過かつ未完了は進捗があっても「遅延」（従業員画面のasgOf/stOfと同一基準）
+function effStatus(t){
+  const pct=t.pct!=null?t.pct:(t.progress||0);
+  if(t.status==='done'||pct>=100)return 'done';
+  const today=new Date().toISOString().slice(0,10);
+  if(t.status==='late'||(t.dueRaw&&t.dueRaw<today))return 'late';
+  return t.status||'todo';
+}
+
 function priChip(p){return {hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低']}[p]||['s-md','中'];}
 async function initExecTasks(){
   const API=window.VexumAPI;
@@ -1660,7 +1669,7 @@ function renderExecTasks(){
     if(dateFiltered)tasks=tasks.filter(t=>inDateRange(t.dueRaw||t.startRaw,fromD,toD));
     h+=`<div style="padding:10px 16px;background:#FAFCFC;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);display:flex;align-items:center;gap:8px"><span class="tdot" style="background:${m.color||'#9CA3AF'}"></span>${m.name} <span style="font-weight:400;color:var(--text3)">（${m.team||'未所属'} ／ ${tasks.length}件）</span></div>`;
     if(!tasks.length)h+=`<div style="padding:10px 16px;font-size:11px;color:var(--text3)">該当なし</div>`;
-    tasks.forEach(t=>{const sc=statusChip(t.status),pc=priChip(t.pri);shown++;
+    tasks.forEach(t=>{const sc=statusChip(effStatus(t)),pc=priChip(t.pri);shown++;
       const pct=t.pct!=null?t.pct:0;
       const hrs=t.hours!=null?` ／ ${t.hours}h`:'';
       h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${hrs}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${pct}%;background:${pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)'}"></div></div><div class="pp" style="font-size:10px">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
@@ -1947,7 +1956,7 @@ async function openExecMemberDash(id){
   h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd" style="gap:10px;flex-wrap:wrap"><div><div class="card-title">🧿 曼荼羅チャート</div><div class="card-sub">${charts.length>1?'プルダウンでチャートを切り替え':'メンバーの曼荼羅チャート'}</div></div><button class="card-btn" id="exmd-mnd-toggle" onclick="toggleExecMnd()">▶ 曼荼羅チャートを見る</button></div><div class="card-body" id="exmd-mnd-body" style="display:none"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">${mndSel}</div><div id="exmd-mnd-wrap" style="overflow-x:auto"></div></div></div>`;
   h+=`<div class="card"><div class="card-hd"><div class="card-title">チャート由来タスクの状況</div><div class="card-sub">合計工数 ${Math.round(totalH*10)/10}h</div></div><div class="card-body" style="padding:0">`;
   if(!tasks.length)h+=`<div style="padding:14px;color:var(--text3);font-size:12px">チャートに紐づくタスクがありません</div>`;
-  tasks.forEach(t=>{const sc=statusChip(t.status),pc=priChip(t.pri);const pct=t.pct!=null?t.pct:0;
+  tasks.forEach(t=>{const sc=statusChip(effStatus(t)),pc=priChip(t.pri);const pct=t.pct!=null?t.pct:0;
     const col=pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)';
     const chartChip=t.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${t.chart}</span>`:'';
     h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${chartChip}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${t.hours?' ／ '+t.hours+'h':''}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
