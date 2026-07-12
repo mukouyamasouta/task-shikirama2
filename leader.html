@@ -676,16 +676,19 @@ function _renderDashFilterBar(){
   const ltw=document.getElementById('ld-to-ymd');if(ltw&&!ltw.children.length)ltw.innerHTML=ymdHtml('ld-to','');
   ymdSet('ld-from',window._dashFromFilter||'');ymdSet('ld-to',window._dashToFilter||'');
 }
+/* 絞り込み状態の永続化（従業員画面と同パターン: マージ保存・リセットでクリア） */
+function _lfLoad(){try{return JSON.parse(localStorage.getItem('vexum_filters_leader')||'{}')||{};}catch(e){return{};}}
+function _lfSave(patch){const f=_lfLoad();Object.assign(f,patch);try{localStorage.setItem('vexum_filters_leader',JSON.stringify(f));}catch(e){}}
 function applyDashFilter(){
   window._dashMemberFilter=(document.getElementById('dash-f-member')||{}).value||'';
   window._dashChartFilter=(document.getElementById('dash-f-chart')||{}).value||'';
   window._dashFromFilter=ymdValue('ld-from')||'';
   window._dashToFilter=ymdValue('ld-to')||'';
   // 絞り込み状態を保存（リセットするまでログイン後も維持）
-  try{localStorage.setItem('vexum_filters_leader',JSON.stringify({member:window._dashMemberFilter,chart:window._dashChartFilter,from:window._dashFromFilter,to:window._dashToFilter}));}catch(e){}
+  _lfSave({member:window._dashMemberFilter,chart:window._dashChartFilter,from:window._dashFromFilter,to:window._dashToFilter});
   renderDashboard();
 }
-function resetDashFilter(){window._dashMemberFilter='';window._dashChartFilter='';window._dashFromFilter='';window._dashToFilter='';ymdClear('ld-from');ymdClear('ld-to');try{localStorage.removeItem('vexum_filters_leader');}catch(e){}renderDashboard();}
+function resetDashFilter(){window._dashMemberFilter='';window._dashChartFilter='';window._dashFromFilter='';window._dashToFilter='';ymdClear('ld-from');ymdClear('ld-to');_lfSave({member:'',chart:'',from:'',to:''});renderDashboard();}
 // 保存済みの絞り込みを復元（初回描画時に_renderDashFilterBarが反映する）
 try{const _sf=JSON.parse(localStorage.getItem('vexum_filters_leader')||'null');
   if(_sf){window._dashMemberFilter=_sf.member||'';window._dashChartFilter=_sf.chart||'';window._dashFromFilter=_sf.from||'';window._dashToFilter=_sf.to||'';}
@@ -1094,8 +1097,11 @@ function renderAssignedTasks(){
     mf.innerHTML='<option value="">全メンバー</option>'+ids.map(id=>`<option value="${id}">${MEMBERS[id].name}</option>`).join('');
     if(ids.indexOf(cur)>=0)mf.value=cur; mf.dataset.n=String(ids.length);
   }
+  // 保存済み絞り込みの復元（初回のみ）→ 現在値を保存
+  if(!window._asgfRestored){window._asgfRestored=true;const f=_lfLoad();const ss=document.getElementById('asgf-status');if(f.asgMember&&mf&&ids.indexOf(f.asgMember)>=0)mf.value=f.asgMember;if(f.asgStatus&&ss)ss.value=f.asgStatus;}
   const fMem=(mf||{}).value||'';
   const fSt=(document.getElementById('asgf-status')||{}).value||'';
+  _lfSave({asgMember:fMem,asgStatus:fSt});
   let h='',shown=0;
   ids.filter(id=>!fMem||id===fMem).forEach(id=>{
     const m=MEMBERS[id];let tasks=MEMBER_TASKS[id]||[];
@@ -1310,10 +1316,11 @@ function renderEvalRec(){
   EVAL_IDS.forEach(id=>{if(MEMBERS[id])names[MEMBERS[id].name]=1;});
   EVAL_RECORDS.forEach(r=>{names[r.name]=1;});
   const list=Object.keys(names);
+  if(!_evalRecSel){const f=_lfLoad();if(f.evalrecSel&&list.indexOf(f.evalrecSel)>=0)_evalRecSel=f.evalrecSel;}
   if(!_evalRecSel&&list.length)_evalRecSel=list[0];
   con.innerHTML=`<div style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
     <label class="fl" style="margin:0">メンバーを選択</label>
-    <select class="fs" style="width:auto;min-width:200px" onchange="_evalRecSel=this.value;renderEvalRec()">
+    <select class="fs" style="width:auto;min-width:200px" onchange="_evalRecSel=this.value;_lfSave({evalrecSel:this.value});renderEvalRec()">
       ${list.map(n=>`<option value="${n}" ${n===_evalRecSel?'selected':''}>${n}</option>`).join('')}
     </select>
     <label class="fl" style="margin:0">チャート期間（開始〜終了）</label>
@@ -1344,7 +1351,9 @@ async function _evalRecDetail(){
     // チャート期間の日付範囲YMDセレクトを初回生成
     const rfw=document.getElementById('evalrec-from-ymd');if(rfw&&!rfw.children.length)rfw.innerHTML=ymdHtml('evalrec-from','');
     const rtw=document.getElementById('evalrec-to-ymd');if(rtw&&!rtw.children.length)rtw.innerHTML=ymdHtml('evalrec-to','');
+    if(!window._evalrecYmdRestored){window._evalrecYmdRestored=true;const f=_lfLoad();if(f.evalrecFrom)ymdSet('evalrec-from',f.evalrecFrom);if(f.evalrecTo)ymdSet('evalrec-to',f.evalrecTo);}
     const _rf=ymdValue('evalrec-from')||'',_rt=ymdValue('evalrec-to')||'';
+    _lfSave({evalrecFrom:_rf,evalrecTo:_rt});
     evs=evs.filter(ev=>{
       const c=ev.chartId&&chartMap[ev.chartId];
       if(_rf||_rt){
@@ -1401,6 +1410,7 @@ let _repSelDate='';
 function repList(id){return REPORTS[id]||[];}
 function repByDate(id,date){return repList(id).find(r=>r.date===date);}
 function renderReports(){
+  if(!_repMember){const f=_lfLoad();if(f.repMember&&MEMBERS[f.repMember])_repMember=f.repMember;}
   if(!_repMember||!MEMBERS[_repMember])_repMember=EVAL_IDS[0];
   renderReportMembers();
   renderReportCalendar();
@@ -1418,7 +1428,7 @@ function renderReportMembers(){
   </div>`;
   con.innerHTML=h;
 }
-function selectReportMember(id){_repMember=id;_repSelDate='';renderReportMembers();renderReportCalendar();document.getElementById('report-detail').innerHTML='';}
+function selectReportMember(id){_repMember=id;_lfSave({repMember:id});_repSelDate='';renderReportMembers();renderReportCalendar();document.getElementById('report-detail').innerHTML='';}
 
 /* ===== 提出物（日報・工数履歴）— 自チームのメンバー別/期間で確認 ===== */
 let _subLogsCache={};
@@ -1430,9 +1440,11 @@ async function renderSubmissions(){
     sel.innerHTML=ids.map(id=>`<option value="${id}">${MEMBERS[id].name}（${MEMBERS[id].role}）</option>`).join('');
     sel.dataset.n=String(ids.length);
   }
+  if(!window._subRestored){window._subRestored=true;const f=_lfLoad();const vv=document.getElementById('sub-view');if(f.subMember&&ids.indexOf(f.subMember)>=0)sel.value=f.subMember;if(f.subView&&vv)vv.value=f.subView;if(f.subFrom)ymdSet('sub-from',f.subFrom);if(f.subTo)ymdSet('sub-to',f.subTo);}
   const mid=sel.value||ids[0];if(sel&&!sel.value&&ids[0])sel.value=ids[0];
   const m=MEMBERS[mid]; if(!m)return;
   const view=(document.getElementById('sub-view')||{}).value||'both';
+  _lfSave({subMember:mid,subView:view,subFrom:ymdValue('sub-from')||'',subTo:ymdValue('sub-to')||''});
   const API=window.VexumAPI;
   // 工数ログ取得（接続時のみ）
   let logs=[];
