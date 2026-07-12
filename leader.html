@@ -2121,7 +2121,7 @@ function openProfileEdit(){
 }
 /* ===== リーダー⇄従業員 紐付け・切り替え ===== */
 function _isLinked(){return !!localStorage.getItem('vexum_linked_employee_id');}
-function _saveLink(empId){localStorage.setItem('vexum_linked_employee_id',empId||'');var me=window._meProfile||{};localStorage.setItem('vexum_linked_leader_id',(me&&me.id)||'');}
+function _saveLink(empId){localStorage.setItem('vexum_linked_employee_id',empId||'');}
 function switchToEmployee(){localStorage.setItem('vexum_current_role','employee');window.location.href='employee.html';}
 function _updateSwitchBtn(){var b=document.getElementById('sb-switch-btn');if(b)b.style.display=_isLinked()?'':'none';}
 async function _refreshLinkSection(){

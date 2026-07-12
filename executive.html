@@ -775,30 +775,6 @@ function rateColor(r){return r>=80?'var(--green)':r>=60?'var(--accent)':r>=40?'v
 
 /* ========== アカウント管理 ========== */
 let _pendingDel='';   // 2段階削除の保留キー
-function memRowHTML(key,m,col){
-  const ini=(m.name||'?').charAt(0);
-  const isLeader=m.role==='リーダー';
-  const badgeCls=(m.roleEnum==='admin'||m.roleEnum==='executive'||isLeader)?'b-leader':'b-member';
-  let actions;
-  if(_pendingDel===key){
-    actions=`<div style="display:flex;gap:6px;align-items:center;margin-left:8px">
-      <span style="font-size:10px;color:var(--red);font-weight:700">削除しますか？</span>
-      <button class="card-btn" style="background:var(--red);color:#fff" onclick="confirmDeleteMember('${key}')">削除する</button>
-      <button class="card-btn" onclick="cancelDeleteMember()">取消</button>
-    </div>`;
-  }else{
-    actions=`<button class="card-btn" style="margin-left:8px" onclick="openAccEdit('${key}')">✎ 編集</button>
-      <button class="card-btn" style="margin-left:6px;background:#FEE2E2;color:var(--red)" onclick="askDeleteMember('${key}')">🗑 削除</button>`;
-  }
-  return `<div class="mem-row">
-    <div class="mem-avatar" style="background:${col}">${ini}</div>
-    <div style="flex:1;min-width:0">
-      <div class="mem-name">${m.name} <span class="badge ${badgeCls}">${m.role}</span></div>
-      <div class="mem-meta">${m.email}</div>
-    </div>
-    ${actions}
-  </div>`;
-}
 // 同一メールの複数ロールを1人=1行にまとめ、役職バッジを並べて表示
 function _groupByEmail(keys){
   const groups={},order=[];
@@ -990,16 +966,6 @@ function togglePanel(id){
   if(el)el.style.display=el.style.display==='none'?'block':'none';
 }
 /* パスワード再発行 */
-async function resetMemberPw(key){
-  const m=MEMBERS[key];if(!m){return;}
-  if(!m.email||m.email==='—'){showToast('メールアドレスが未設定です');return;}
-  const API=window.VexumAPI;
-  if(!(API&&API.ready)){showToast('Supabase未接続');return;}
-  const res=await API.resetPassword(m.email);
-  if(res&&res.error){showToast('再発行失敗: '+res.error);return;}
-  showIssued(m.email,res.password);
-  showToast(`${m.name} のパスワードを再発行しました ✓`);
-}
 /* 2段階削除 */
 function askDeleteMember(key){_pendingDel=key;renderAccount();}
 function cancelDeleteMember(){_pendingDel='';renderAccount();}
@@ -2137,7 +2103,6 @@ function setStar(id,n){
   const row=document.getElementById('stars-'+id);
   if(row)row.innerHTML=starHTML(id,r.stars);
 }
-function saveCmt(id,val){getRat(id).comment=val;}
 
 /* ========== チーム評価（KGI・CSFまで） ========== */
 function renderTeamEval(){
