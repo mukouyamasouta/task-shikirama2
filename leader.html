@@ -1284,7 +1284,7 @@ function renderEvalinMnd(){
 }
 function saveMemberEval(){
   const id=document.getElementById('evalin-member').value;
-  const _ef=ymdValue('evalin-from')||'',_et=ymdValue('evalin-to')||'';const period=(_ef||_et)?((_ef||'')+'〜'+(_et||'')):'';
+  const _ef=ymdValue('evalin-from')||'',_et=ymdValue('evalin-to')||'';const _pd=new Date();const period=(_ef||_et)?((_ef||'')+'〜'+(_et||'')):(_pd.getFullYear()+' Q'+(Math.floor(_pd.getMonth()/3)+1));  // 期間未入力時は幹部画面と同じ'YYYY Qn'を自動算出
   const API0=window.VexumAPI;
   if(API0&&API0.ready&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pidOf(id))){
     alert('データ読み込み中です。少し待ってから再度お試しください。');return;
@@ -1976,12 +1976,21 @@ window.vxNotifSource=function(){
   // メンバーからの通知（完了/遅延/日報提出）= notifications テーブル由来（最優先で表示）
   if(Array.isArray(window._leaderNotifs)){
     const ntfMeta={task_done:['✅','#D1FAE5','var(--green)','assign'],report_submitted:['📓','#EDE9FE','#7C3AED','report'],report_started:['🌅','#FFF7ED','#C2410C','report'],task_assigned:['📋','#DBEAFE','#1D4ED8','assign'],task_late:['⚠','#FEE2E2','var(--red)','assign'],chart_edit:['✏','#FEF3C7','#D97706','dashboard'],evaluation_received:['⭐','#FDF4FF','#7E22CE','dashboard']};
+    // 通知クリックで該当メンバーの画面へ直接遷移（従業員画面のntfGoto相当）
+    const keyByPid=id=>{if(!id)return null;const ks=Object.keys(MEMBERS||{});return ks.find(k=>(MEMBERS[k]||{}).pid===id)||null;};
     window._leaderNotifs.slice(0,8).forEach(n=>{
       const mt=ntfMeta[n.type]||['🔔','#F3F4F6','var(--text3)','dashboard'];
+      const tab=mt[3];const mk=keyByPid(n.actor_id);
       out.push({icon:mt[0],bg:mt[1],color:mt[2],
         text:(n.actor_name?n.actor_name+'：':'')+(n.body||n.title||'通知'),
         time:(n.created_at||'').slice(0,16).replace('T',' '),
-        tab:mt[3]});
+        tab:tab,
+        onClick:function(){
+          if(typeof gotoTab==='function')gotoTab(tab);
+          if(!mk)return;
+          if(tab==='report'&&typeof selectReportMember==='function')setTimeout(()=>selectReportMember(mk),150);
+          else if(tab==='assign'){const mf=document.getElementById('asgf-member');if(mf){mf.value=mk;if(typeof renderAssignedTasks==='function')setTimeout(()=>renderAssignedTasks(),150);}}
+        }});
     });
   }
   if(typeof INBOX!=='undefined'&&Array.isArray(INBOX)){

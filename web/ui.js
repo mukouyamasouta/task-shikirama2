@@ -118,7 +118,8 @@
       el.addEventListener('click', function () {
         var it = list[+el.getAttribute('data-i')];
         close();
-        if (it && it.tab) goTab(it.tab);
+        if (it && typeof it.onClick === 'function') { try { it.onClick(); } catch (e) {} }
+        else if (it && it.tab) goTab(it.tab);
       });
     });
   }

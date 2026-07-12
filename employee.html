@@ -2851,7 +2851,7 @@ function renderInbox(){
       const m=_NOTIF_META[x.type]||[x.title||'お知らせ','var(--text3)',null];
       const when=(x.created_at||'').slice(0,10);
       const clickable=!!m[2];
-      h+=`<div ${clickable?`onclick="ntfGoto('${m[2]}','${x.ref_id||''}','${x.type}','${x.id||''}')" style="cursor:pointer"`:''} style="padding:11px 14px;border-bottom:1px solid #F3F4F6;${x.read?'':'background:#F0F9FF'}">
+      h+=`<div ${clickable?`onclick="ntfGoto('${m[2]}','${x.ref_id||''}','${x.type}','${x.id||''}')"`:''} style="${clickable?'cursor:pointer;':''}padding:11px 14px;border-bottom:1px solid #F3F4F6;${x.read?'':'background:#F0F9FF'}">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
           <div style="min-width:0"><div style="font-size:12px;font-weight:700;color:${m[1]}">${m[0]}${x.read?'':' <span style="font-size:8px;background:var(--red);color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px">未読</span>'}</div>
           <div style="font-size:11px;color:var(--text)">${x.body||''}</div>
