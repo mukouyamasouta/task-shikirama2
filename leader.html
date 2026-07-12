@@ -565,16 +565,18 @@ function ymdValue(idPrefix){
   const y=(document.getElementById(idPrefix+'-y')||{}).value||'';
   const m=(document.getElementById(idPrefix+'-m')||{}).value||'';
   const d=(document.getElementById(idPrefix+'-d')||{}).value||'';
-  return (y&&m&&d)?(y+'-'+m+'-'+d):null;
+  if(!y) return null;
+  if(!m) return y;
+  if(!d) return y+'-'+m;
+  return y+'-'+m+'-'+d;
 }
 function ymdSet(idPrefix, iso){
   if(!iso)return;
   const p=String(iso).split(/[-/]/);
-  if(p.length<3)return;
   const ye=document.getElementById(idPrefix+'-y'),mo=document.getElementById(idPrefix+'-m'),de=document.getElementById(idPrefix+'-d');
-  if(ye)ye.value=p[0];
-  if(mo)mo.value=String(p[1]).padStart(2,'0');
-  if(de)de.value=String(p[2]).padStart(2,'0');
+  if(p[0]&&ye)ye.value=p[0];
+  if(p[1]&&mo)mo.value=String(p[1]).padStart(2,'0');
+  if(p[2]&&de)de.value=String(p[2]).padStart(2,'0');
 }
 function ymdClear(idPrefix){
   [idPrefix+'-y',idPrefix+'-m',idPrefix+'-d'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
@@ -582,7 +584,13 @@ function ymdClear(idPrefix){
 function inDateRange(targetIso, fromIso, toIso){
   if(!targetIso) return true; // 日付未設定は除外せず含める
   if(fromIso && targetIso < fromIso) return false;
-  if(toIso   && targetIso > toIso)   return false;
+  if(toIso){
+    // 部分日付（年のみ=4桁、年月のみ=7桁）は期末まで展開して比較
+    let toEnd=toIso;
+    if(toIso.length===4) toEnd=toIso+'-12-31';
+    else if(toIso.length===7) toEnd=toIso+'-31';
+    if(targetIso>toEnd) return false;
+  }
   return true;
 }
 /* ===== タブ切替・共通 ===== */
