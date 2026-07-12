@@ -1656,11 +1656,15 @@ function renderExecTasks(){
   // 期間（開始〜期限）YMDセレクトを初回生成
   const efw=document.getElementById('exec-from-ymd');if(efw&&!efw.children.length)efw.innerHTML=ymdHtml('exec-from','');
   const etw=document.getElementById('exec-to-ymd');if(etw&&!etw.children.length)etw.innerHTML=ymdHtml('exec-to','');
-  if(!window._extfRestored){window._extfRestored=true;const f=_xfLoad();
-    const ts=document.getElementById('task-team-sel');if(f.tTeam&&ts&&[...ts.options].some(o=>o.value===f.tTeam)){ts.value=f.tTeam;populateExecMemberSelects();}
-    const ms=document.getElementById('task-f-member');if(f.tMember&&ms&&[...ms.options].some(o=>o.value===f.tMember))ms.value=f.tMember;
-    const ss=document.getElementById('task-f-status');if(f.tStatus&&ss)ss.value=f.tStatus;
-    if(f.tFrom)ymdSet('exec-from',f.tFrom);if(f.tTo)ymdSet('exec-to',f.tTo);}
+  if(!window._extfRestored){const f=_xfLoad();
+    const ts=document.getElementById('task-team-sel');const ms=document.getElementById('task-f-member');
+    const teamOk=!f.tTeam||(ts&&[...ts.options].some(o=>o.value===f.tTeam));
+    // 保存されたチームがまだ選択肢に無い間（実データ読込前）は復元を保留してリトライ
+    if(teamOk){window._extfRestored=true;
+      if(f.tTeam&&ts){ts.value=f.tTeam;populateExecMemberSelects();}
+      if(f.tMember&&ms&&[...ms.options].some(o=>o.value===f.tMember))ms.value=f.tMember;
+      const ss=document.getElementById('task-f-status');if(f.tStatus&&ss)ss.value=f.tStatus;
+      if(f.tFrom)ymdSet('exec-from',f.tFrom);if(f.tTo)ymdSet('exec-to',f.tTo);}}
   const teamUuid=document.getElementById('task-team-sel').value||'';
   const fMem=(document.getElementById('task-f-member')||{}).value||'';
   const fSt=(document.getElementById('task-f-status')||{}).value||'';

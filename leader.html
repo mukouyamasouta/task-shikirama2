@@ -1098,7 +1098,9 @@ function renderAssignedTasks(){
     if(ids.indexOf(cur)>=0)mf.value=cur; mf.dataset.n=String(ids.length);
   }
   // 保存済み絞り込みの復元（初回のみ）→ 現在値を保存
-  if(!window._asgfRestored){window._asgfRestored=true;const f=_lfLoad();const ss=document.getElementById('asgf-status');if(f.asgMember&&mf&&ids.indexOf(f.asgMember)>=0)mf.value=f.asgMember;if(f.asgStatus&&ss)ss.value=f.asgStatus;}
+  if(!window._asgfRestored){const f=_lfLoad();const ss=document.getElementById('asgf-status');
+    // 保存されたメンバーがまだ選択肢に無い間（デモ→実データ切替前）は復元を保留してリトライ
+    if(!f.asgMember||ids.indexOf(f.asgMember)>=0){window._asgfRestored=true;if(f.asgMember&&mf)mf.value=f.asgMember;if(f.asgStatus&&ss)ss.value=f.asgStatus;}}
   const fMem=(mf||{}).value||'';
   const fSt=(document.getElementById('asgf-status')||{}).value||'';
   _lfSave({asgMember:fMem,asgStatus:fSt});
@@ -1316,7 +1318,8 @@ function renderEvalRec(){
   EVAL_IDS.forEach(id=>{if(MEMBERS[id])names[MEMBERS[id].name]=1;});
   EVAL_RECORDS.forEach(r=>{names[r.name]=1;});
   const list=Object.keys(names);
-  if(!_evalRecSel){const f=_lfLoad();if(f.evalrecSel&&list.indexOf(f.evalrecSel)>=0)_evalRecSel=f.evalrecSel;}
+  if(!window._evalrecSelRestored){const f=_lfLoad();
+    if(!f.evalrecSel||list.indexOf(f.evalrecSel)>=0){window._evalrecSelRestored=true;if(f.evalrecSel)_evalRecSel=f.evalrecSel;}}
   if(!_evalRecSel&&list.length)_evalRecSel=list[0];
   con.innerHTML=`<div style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
     <label class="fl" style="margin:0">メンバーを選択</label>
@@ -1410,7 +1413,7 @@ let _repSelDate='';
 function repList(id){return REPORTS[id]||[];}
 function repByDate(id,date){return repList(id).find(r=>r.date===date);}
 function renderReports(){
-  if(!_repMember){const f=_lfLoad();if(f.repMember&&MEMBERS[f.repMember])_repMember=f.repMember;}
+  if(!_repMember||!MEMBERS[_repMember]){const f=_lfLoad();if(f.repMember&&MEMBERS[f.repMember])_repMember=f.repMember;}
   if(!_repMember||!MEMBERS[_repMember])_repMember=EVAL_IDS[0];
   renderReportMembers();
   renderReportCalendar();
@@ -1440,7 +1443,8 @@ async function renderSubmissions(){
     sel.innerHTML=ids.map(id=>`<option value="${id}">${MEMBERS[id].name}（${MEMBERS[id].role}）</option>`).join('');
     sel.dataset.n=String(ids.length);
   }
-  if(!window._subRestored){window._subRestored=true;const f=_lfLoad();const vv=document.getElementById('sub-view');if(f.subMember&&ids.indexOf(f.subMember)>=0)sel.value=f.subMember;if(f.subView&&vv)vv.value=f.subView;if(f.subFrom)ymdSet('sub-from',f.subFrom);if(f.subTo)ymdSet('sub-to',f.subTo);}
+  if(!window._subRestored){const f=_lfLoad();const vv=document.getElementById('sub-view');
+    if(!f.subMember||ids.indexOf(f.subMember)>=0){window._subRestored=true;if(f.subMember)sel.value=f.subMember;if(f.subView&&vv)vv.value=f.subView;if(f.subFrom)ymdSet('sub-from',f.subFrom);if(f.subTo)ymdSet('sub-to',f.subTo);}}
   const mid=sel.value||ids[0];if(sel&&!sel.value&&ids[0])sel.value=ids[0];
   const m=MEMBERS[mid]; if(!m)return;
   const view=(document.getElementById('sub-view')||{}).value||'both';
