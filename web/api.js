@@ -302,26 +302,39 @@
   }
 
   // ===== リーダー操作：チーム所属の追加/削除・タスク割当・評価記録 =====
+  // ★リーダーをチームに配置したら teams.leader_id も必ず同期する。
+  //   team_members.role_in_team='leader' だけ設定して leader_id が旧リーダー/NULL のままだと、
+  //   日報・タスク完了通知（_getLeaderForProfile → teams.leader_id）が新リーダーに届かない
+  //   実障害が過去に発生している（チーム「テスト」の leader_id 不整合）。
+  async function _syncTeamLeader(teamUuid, pid) {
+    if (!sb || !teamUuid || !pid) return;
+    try { await sb.from('teams').update({ leader_id: pid }).eq('id', teamUuid); }
+    catch (e) { console.warn('[VexumAPI] teams.leader_id 同期失敗:', e); }
+  }
   async function addTeamMember(teamUuid, pid, role, rate) {
     if (!sb) return { error: 'Supabase未接続' };
+    var isLeader = (role === 'リーダー' || role === 'leader');
     // 既存所属があっても失敗しないよう UPSERT（PK: team_id,profile_id）
     var r = await sb.from('team_members').upsert({
       team_id: teamUuid, profile_id: pid,
-      role_in_team: (role === 'リーダー' || role === 'leader' ? 'leader' : 'member'),
+      role_in_team: (isLeader ? 'leader' : 'member'),
       achievement_rate: (rate != null ? rate : 50)
     }, { onConflict: 'team_id,profile_id' }).select('team_id');
     if (r.error) return { error: friendlyErr(r.error.message) };
+    if (isLeader) await _syncTeamLeader(teamUuid, pid);
     return { ok: true };
   }
   // 仕様準拠の別名: チーム所属を保存（UPSERT）。role はロール名 or 'leader'/'member'
   async function saveTeamMember(profileId, teamId, role) {
     if (!sb) return { error: 'Supabase未接続' };
     if (!profileId || !teamId) return { error: 'profile/team が不明です' };
+    var isLeader = (role === 'リーダー' || role === 'leader');
     var r = await sb.from('team_members').upsert({
       team_id: teamId, profile_id: profileId,
-      role_in_team: (role === 'リーダー' || role === 'leader' ? 'leader' : 'member')
+      role_in_team: (isLeader ? 'leader' : 'member')
     }, { onConflict: 'team_id,profile_id' }).select('team_id');
     if (r.error) return { error: friendlyErr(r.error.message) };
+    if (isLeader) await _syncTeamLeader(teamId, profileId);
     return { ok: true };
   }
   // 指定チームの編成（team_members JOIN profiles）を返す
@@ -1173,6 +1186,7 @@
             achievement_rate: (o.rate != null ? o.rate : 50)
           }, { onConflict: 'team_id,profile_id' });
         } catch (e) {}
+        if (roleEnumVal === 'leader') await _syncTeamLeader(teamUuidR, pidR);
       }
       // ログイン(auth)を確実化：auth_user_id が無ければ vexum_create_login で発行/再リンク
       var loginR = !!(exRow.auth_user_id || reuseUid), pwR = null;
@@ -1193,6 +1207,7 @@
           achievement_rate: (o.rate != null ? o.rate : 50)
         }, { onConflict: 'team_id,profile_id' });
       } catch (e) {}
+      if (roleEnumVal === 'leader') await _syncTeamLeader(teamUuid, pid);
     }
     var loginEnabled = !!reuseUid, pw = null;
     if (!reuseUid) {
