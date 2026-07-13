@@ -243,7 +243,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
   <div class="sec-title" style="font-size:14px;margin-top:8px">送信履歴 <span style="font-size:11px;font-weight:400;color:var(--text3)">チャート送信の履歴・進捗・記入者を確認</span></div>
   <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
-    <span style="font-size:14px">💡</span><span>送信したチャートの宛先・進捗率・誰がどのKPIを記入したかを一覧で確認できます。</span>
+    <span style="font-size:14px">💡</span><span>送信したチャートの宛先・進捗率・誰がどのCSFを記入したかを一覧で確認できます。</span>
   </div>
   <div id="sendhist-container"></div>
 </div>
@@ -540,7 +540,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div class="fg"><label class="fl">テンプレート名</label><input class="fi" id="tplc-name" placeholder="例: 営業チーム標準テンプレート"></div>
     <div class="fg"><label class="fl">中心目標（KGI）</label><input class="fi" id="tplc-center" placeholder="例: 四半期売上目標達成" oninput="tplcCenter(this.value)"></div>
     <div class="fg"><label class="fl">サブ目標（CSF / 8項目）</label><div class="mnd-subs-wrap" id="tplc-subs"></div></div>
-    <button class="f-submit" style="width:100%;background:var(--text3);margin-bottom:10px" onclick="openTplMandala()">🧿 曼荼羅でKPIまで作成</button>
+    <button class="f-submit" style="width:100%;background:var(--text3);margin-bottom:10px" onclick="openTplMandala()">🧿 曼荼羅で作成（KGI+CSF）</button>
     <button class="f-submit" style="width:100%" onclick="submitTpl()">テンプレートを作成</button>
   </div>
 </div>
@@ -550,7 +550,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:760px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
       <div><div style="font-size:16px;font-weight:800;color:var(--accent)">曼荼羅チャート編集</div>
-      <div style="font-size:10px;color:#9ca3af;margin-top:2px">セルをクリックして記入：中心=KGI ／ 第2層=CSF ／ 外周=KPI</div></div>
+      <div style="font-size:10px;color:#9ca3af;margin-top:2px">セルをクリックして記入：中心=KGI ／ 第2層=CSF</div></div>
       <button onclick="closeTplMnd()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
     </div>
     <div style="display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap;font-size:10px;color:#6b7280">
@@ -1477,7 +1477,7 @@ function tplcSyncInputs(){
   const c=document.getElementById('tplc-center');if(c)c.value=TPLEDIT.center;
   for(let i=1;i<=8;i++){const el=document.getElementById('tplc-sub-'+i);if(el)el.value=TPLEDIT.subs[i-1]||'';}
 }
-/* テンプレ曼荼羅エディタ（KPIまで） */
+/* テンプレ曼荼羅エディタ（KGI+CSF・KPI廃止） */
 function openTplMandala(){
   // 入力欄の最新値を取り込む
   TPLEDIT.center=(document.getElementById('tplc-center')||{}).value||'';

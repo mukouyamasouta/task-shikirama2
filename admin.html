@@ -160,7 +160,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 .mnd-sub-num{background:var(--accent-l);color:var(--accent);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
 .mnd-sub-input{border:none;outline:none;padding:8px 10px;font-size:12px;font-family:inherit;width:100%;color:var(--text);background:transparent}
 /* mini preview */
-.mnd-preview-wrap{display:grid;grid-template-columns:repeat(9,1fr);gap:1px;background:#D1D5DB;border-radius:4px;overflow:hidden}
+.mnd-preview-wrap{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#D1D5DB;border-radius:4px;overflow:hidden}
 /* eval states in modal cells */
 .mnd-eval-cell{cursor:pointer}
 .mnd-eval-cell:hover{filter:brightness(.93)}
@@ -526,7 +526,7 @@ function swCreate(id,btn){
       </div>
     </div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-      <div id="mandala-grid" style="display:grid;grid-template-columns:repeat(9,minmax(60px,1fr));gap:2px;min-width:560px"></div>
+      <div id="mandala-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:560px;margin:0 auto"></div>
     </div>
   </div>
 </div>
@@ -667,6 +667,7 @@ function buildMndGrid(k){
 }
 
 function openMandala(k,evalMode){
+  // KPI廃止: 曼荼羅は KGI+CSF8項目 の3x3
   const d=getAllMnd()[k];if(!d)return;
   if(!evalStates[k])evalStates[k]={};
   _curEvalKey=k;
@@ -680,27 +681,15 @@ function openMandala(k,evalMode){
     const pctEl=document.getElementById('mnd-eval-pct');
     if(pctEl)pctEl.textContent=getEvalProgress(k)+'%';
   }
-  const G=buildMndGrid(k);
+  const order=[0,1,2,7,-1,3,6,5,4];
   let h='';
-  for(let r=0;r<9;r++){
-    for(let c=0;c<9;c++){
-      const cell=G[r][c];
-      const es=evalMode?(evalStates[k][`${r},${c}`]||0):0;
-      let sty='min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:9.5px;line-height:1.35;padding:4px 3px;border-radius:3px;word-break:break-all;box-sizing:border-box;';
-      if(c===2||c===5)sty+='border-right:3px solid #9CA3AF;';
-      if(r===2||r===5)sty+='border-bottom:3px solid #9CA3AF;';
-      let oc='';
-      if(cell&&cell.t==='center')sty+=`background:${d.color};color:#fff;font-weight:800;font-size:10.5px;border:2px solid ${d.color};`;
-      else if(cell&&cell.t==='sub')sty+=`background:${d.bg};color:${d.color};font-weight:700;border:1.5px solid ${d.color};`;
-      else{
-        sty+=evalMode?(EVAL_STYLES[es]+'cursor:pointer;'):'background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;';
-        if(evalMode)oc=`onclick="evalCellClick('${k}',${r},${c})"`;
-      }
-      const tx=cell?(cell.t==='center'?cell.tx.replace(/\n/g,'<br>'):cell.tx):'';
-      const icon=(evalMode&&cell?.t==='action'&&es>0)?`<span style="font-size:8px;margin-top:1px">${EVAL_ICONS[es]}</span>`:'';
-      h+=`<div ${oc} style="${sty}">${tx}${icon}</div>`;
-    }
-  }
+  order.forEach(si=>{
+    let sty='min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;line-height:1.35;padding:6px 5px;border-radius:3px;word-break:break-all;box-sizing:border-box;';
+    let tx='';
+    if(si<0){sty+=`background:${d.color};color:#fff;font-weight:800;font-size:12px;border:2px solid ${d.color};`;tx=(d.center||'').replace(/\n/g,'<br>');}
+    else{sty+=`background:${d.bg};color:${d.color};font-weight:700;border:1.5px solid ${d.color};`;tx=(d.subs||[])[si]||'';}
+    h+=`<div style="${sty}">${tx}</div>`;
+  });
   document.getElementById('mandala-grid').innerHTML=h;
   const m=document.getElementById('mandala-modal');
   m.style.display='flex';m.scrollTop=0;

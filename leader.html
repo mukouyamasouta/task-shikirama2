@@ -198,7 +198,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
         <span class="toast" id="asg-saved">✅ 保存しました</span>
       </div>
       <div class="card" style="margin-top:16px">
-        <div class="card-hd"><div><div class="card-title">個人チャートに記入して割当</div><div class="card-sub">KGI/CSF/KPIを直接書き込み「この内容を任せる」</div></div></div>
+        <div class="card-hd"><div><div class="card-title">個人チャートに記入して割当</div><div class="card-sub">KGI/CSFを直接書き込み「この内容を任せる」</div></div></div>
         <div class="card-body">
           <div class="fg"><label class="fl">対象メンバー</label><select class="fs" id="chartedit-member"></select></div>
           <button class="f-submit" style="width:100%;background:var(--text3)" onclick="openChartEditor(document.getElementById('chartedit-member').value)">🧿 チャートを開いて記入</button>
@@ -228,7 +228,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
   <div class="sec-title" style="font-size:13px;margin-top:4px">📥 幹部・統括からの受信チャート</div>
   <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
-    <span style="font-size:14px">💡</span><span>「🧿 チャートを管理」で受信チャートのCSF/KPIをメンバーのタスクとして振り分けられます。割り当てたタスクは各メンバーの個人画面（割り当て）にオレンジ表示されます。</span>
+    <span style="font-size:14px">💡</span><span>「🧿 チャートを管理」で受信チャートのCSFをメンバーのタスクとして振り分けられます。割り当てたタスクは各メンバーの個人画面（割り当て）にオレンジ表示されます。</span>
   </div>
   <div id="inbox-list"></div>
 </div>
@@ -993,7 +993,7 @@ function buildCSV(k){
 }
 function downloadCSV(k){const d=getAllMnd()[k];if(!d)return;const blob=new Blob(['﻿'+buildCSV(k)],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`mandala_${(d.name||k).replace(/[\s　]/g,'_')}_${new Date().toISOString().slice(0,10)}.csv`;a.click();}
 
-/* ===== 個人チャート編集（KGI/CSF/KPIを記入してタスク割当） ===== */
+/* ===== 個人チャート編集（KGI/CSFを記入してタスク割当・KPI廃止） ===== */
 const CELL_META=(function(){
   const M=Array.from({length:9},()=>Array(9).fill(null));
   M[4][4]={type:'center'};
@@ -1225,7 +1225,7 @@ async function renderMemberEval(){
   if(charts.length){
     chartSelHTML=`<div style="background:#FAFCFC;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap"><label class="fl" style="margin:0">評価対象の期間（チャート）</label><select class="fs" style="width:auto;min-width:280px" onchange="onEvalChartChange(this.value)">${charts.map(c=>`<option value="${c.id}" ${c.id===_evalChartId?'selected':''}>${c.period||c.scope_label||'期間未設定'}${c.name?' ／ '+c.name:''}</option>`).join('')}</select>${selfEval?'<span style="font-size:11px;color:var(--amber);font-weight:700">📝 本人自己評価あり</span>':'<span style="font-size:11px;color:var(--text3)">自己評価なし</span>'}</div>`;
   }
-  let h=`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF・KPI）</div><div class="card-sub">${d.name} ／ ${d.team}</div></div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMandala('${id}',false)">🧿 全体を見る</button><button class="card-btn" style="background:var(--accent);color:#fff" onclick="openMandala('${id}',true)">🖊 KPIまで評価</button><button class="card-btn" style="background:var(--accent-l);color:var(--accent);font-weight:700" onclick="toggleEvalinMnd()">🔷 曼荼羅形式</button></div></div>${chartSelHTML}<div id="evalin-mnd-wrap" style="display:none;padding:14px;overflow-x:auto;border-bottom:1px solid var(--border)"></div><div class="card-body">`;
+  let h=`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF）</div><div class="card-sub">${d.name} ／ ${d.team}</div></div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMandala('${id}',false)">🧿 全体を見る</button><button class="card-btn" style="background:var(--accent);color:#fff" onclick="openMandala('${id}',true)">🖊 曼荼羅で評価</button><button class="card-btn" style="background:var(--accent-l);color:var(--accent);font-weight:700" onclick="toggleEvalinMnd()">🔷 曼荼羅形式</button></div></div>${chartSelHTML}<div id="evalin-mnd-wrap" style="display:none;padding:14px;overflow-x:auto;border-bottom:1px solid var(--border)"></div><div class="card-body">`;
   h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-kgi">KGI</span><span class="eval-goal">${(d.center||'').replace(/\n/g,' ')}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'kgi',-1)}</div><textarea class="eval-cmt" rows="2" placeholder="KGIへの評価コメント…" oninput="saveMeval('${id}','kgi',-1,this.value)">${e.kgi.comment}</textarea>${selfKgi}</div>`;
   for(let si=0;si<8;si++)h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-csf">CSF-${si+1}</span><span class="eval-goal">${d.subs[si]}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'csf',si)}</div><textarea class="eval-cmt" rows="2" placeholder="CSF-${si+1}への評価コメント…" oninput="saveMeval('${id}','csf',${si},this.value)">${e.csf[si].comment}</textarea>${selfCsf(si)}</div>`;
   h+=`</div></div>`;
