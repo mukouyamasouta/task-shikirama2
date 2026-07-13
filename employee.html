@@ -1044,10 +1044,8 @@ function resetReportForm(){
       <div class="fg" style="margin-bottom:8px"><label class="fl">② 紐付けるCSFを選択</label>
         <select class="fs" id="tm-csf-sel" onchange="onTmCsfSel()"><option value="">（先にチャートを選択）</option></select>
         <div id="tm-csf-warn" style="display:none;font-size:10px;color:var(--red);font-weight:700;margin-top:4px"></div></div>
-      <div class="fg" style="margin-bottom:8px"><label class="fl">③ 紐付けるKPI（任意）</label>
-        <select class="fs" id="tm-kpi-sel"><option value="">KPIなし（CSFのみに紐付け）</option></select></div>
       <button class="card-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="tmOpenChartEditor()">→ このチャートを編集する</button>
-      <div style="font-size:10px;color:var(--text2);margin-top:6px;line-height:1.5">※ 選択したKGI/CSF/KPIに紐づくチャートタスクとして登録されます。</div>
+      <div style="font-size:10px;color:var(--text2);margin-top:6px;line-height:1.5">※ 選択したCSFに紐づくタスクとして登録されます（同じCSFに何件でも作成できます）。</div>
     </div>
     <div class="fg"><label class="fl">タスク名 *</label>
       <input class="fi" id="tm-name" placeholder="例: 新規顧客 訪問アポ獲得">
@@ -1139,8 +1137,7 @@ function resetReportForm(){
         <select class="fs" id="te-chart-sel" onchange="onTeChartSel()"><option value="">チャートなし（紐付けしない）</option></select></div>
       <div class="fg" style="margin-bottom:8px"><label class="fl">② 紐付けるCSFを選択</label>
         <select class="fs" id="te-csf-sel" onchange="onTeCsfSel()"><option value="">（先にチャートを選択）</option></select></div>
-      <div class="fg" style="margin-bottom:8px"><label class="fl">③ 紐付けるKPI（任意）</label>
-        <select class="fs" id="te-kpi-sel"><option value="">KPIなし（CSFのみに紐付け）</option></select></div>
+
       <button class="card-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="teOpenChartEditor()">→ このチャートを編集する</button>
       <div style="font-size:10px;color:var(--text2);margin-top:6px;line-height:1.5">※ 紐付け（チャート／CSF／KPI）はここで変更できます。</div>
     </div>
@@ -1977,18 +1974,8 @@ function onTmChartSel(){
   }
   onTmCsfSel();_updateTmCreateBtn();
 }
-/* CSF選択 → そのCSF配下の「定義済みKPI」をKPIセレクタに反映 */
-function onTmCsfSel(){
-  const k=(document.getElementById('tm-chart-sel')||{}).value||'';
-  const siV=(document.getElementById('tm-csf-sel')||{}).value;
-  const kpiSel=document.getElementById('tm-kpi-sel');if(!kpiSel)return;
-  if(!k||siV===''||siV==null){ kpiSel.innerHTML='<option value="">KPIなし（CSFのみに紐付け）</option>'; return; }
-  const acts=((CHARTS[k]||{}).acts||[])[+siV]||[];
-  // 8スロットを表示。定義済みは名前、未定義は「（空き）」。「KPIなし」も可。
-  let opts='<option value="">KPIなし（CSFのみに紐付け）</option>';
-  for(let ai=0;ai<8;ai++){const kp=acts[ai];const txt=(kp&&String(kp).trim())?String(kp).trim():'';opts+=`<option value="${ai}">KPI${(+siV)+1}-${ai+1}${txt?' '+txt:'（空き）'}</option>`;}
-  kpiSel.innerHTML=opts;
-}
+/* KPI廃止: 紐付けはチャート→CSFの2段階（関数は呼び出し互換のため残置） */
+function onTmCsfSel(){}
 /* 作成ボタンの活性制御: チャート選択時に空きCSFが無ければdisabled */
 function _updateTmCreateBtn(){
   const btn=document.getElementById('tm-create-btn');if(!btn)return;
@@ -2015,8 +2002,8 @@ function submitTask(){
   const start=fmtDate(startRaw);
   const due=fmtDate(dueRaw);
   const pri=document.getElementById('tm-pri').value;
-  // KGI紐付け（KGIモードかつチャート選択時）: チャート→CSF→KPI を紐付ける
-  let chartKey='',chartName='',csfIdx=null,kpiIdx=null,csfText='';
+  // KGI紐付け（KGIモードかつチャート選択時）: チャート→CSF を紐付ける（KPI廃止）
+  let chartKey='',chartName='',csfIdx=null,csfText='';const kpiIdx=null;
   if(_tmKgiMode){
     chartKey=(document.getElementById('tm-chart-sel')||{}).value||'';
     if(chartKey&&CHARTS[chartKey]){
@@ -2026,19 +2013,17 @@ function submitTask(){
       if(siV===''||siV==null){alert('紐付けるCSFを選択してください');return;}
       csfIdx=+siV;
       csfText=((edits['csf-'+csfIdx]||{}).text!=null?edits['csf-'+csfIdx].text:(d.subs||[])[csfIdx])||('CSF'+(csfIdx+1));
-      const kpiV=(document.getElementById('tm-kpi-sel')||{}).value;
-      kpiIdx=(kpiV===''||kpiV==null)?null:+kpiV;
     }
   }
   const cellStr=(csfIdx!=null)?String(csfIdx):null;
   const meta=chartName
-    ? ('📊 '+chartName+' ／ CSF'+((csfIdx||0)+1)+': '+csfText+(kpiIdx!=null?' ／ KPI'+(csfIdx+1)+'-'+(kpiIdx+1):''))
+    ? ('📊 '+chartName+' ／ CSF'+((csfIdx||0)+1)+': '+csfText)
     : 'チャート以外のタスク';
   const task={id:null,name,kpi:chartName?csfText:'—',meta,from:'🙋 自分で作成',fromClass:'',
     start:startRaw?startRaw.replace(/-/g,'/'):'—',end:dueRaw?dueRaw.replace(/-/g,'/'):'—',dueRaw:dueRaw||null,startRaw:startRaw||null,pct:0,comment:'',status:'todo',pri,self:true,chart:chartName||null,cell:cellStr,csfIdx,kpiIdx};
   const API=window.VexumAPI;
   if(API&&API.ready){
-    API.assignTask({title:name,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self',chartTitle:chartName||null,cell:cellStr,kpi:chartName?csfText:null,sourceKpi:kpiIdx})
+    API.assignTask({title:name,start:startRaw||null,due:dueRaw||null,priority:pri,source:'self',chartTitle:chartName||null,cell:cellStr,kpi:chartName?csfText:null})
       .then(res=>{
         if(res&&res.error){alert('タスクの保存に失敗しました: '+res.error);return;}
         if(res&&res.data)task.id=res.data.id;
@@ -3201,18 +3186,8 @@ function onTeChartSel(a){
   csfSel.innerHTML=opts;
   onTeCsfSel(a);
 }
-/* 編集モーダル: ③KPI一覧 */
-function onTeCsfSel(a){
-  const k=(document.getElementById('te-chart-sel')||{}).value||'';
-  const siV=(document.getElementById('te-csf-sel')||{}).value;
-  const kpiSel=document.getElementById('te-kpi-sel');if(!kpiSel)return;
-  if(!k||siV===''||siV==null){kpiSel.innerHTML='<option value="">KPIなし（CSFのみに紐付け）</option>';return;}
-  const acts=((CHARTS[k]||{}).acts||[])[+siV]||[];
-  const curAi=(a&&a.kpiIdx!=null&&!isNaN(a.kpiIdx))?a.kpiIdx:null;
-  let opts='<option value="">KPIなし（CSFのみに紐付け）</option>';
-  for(let ai=0;ai<8;ai++){const kp=acts[ai];const txt=(kp&&String(kp).trim())?String(kp).trim():'';opts+=`<option value="${ai}"${ai===curAi?' selected':''}>KPI${(+siV)+1}-${ai+1}${txt?' '+txt:'（空き）'}</option>`;}
-  kpiSel.innerHTML=opts;
-}
+/* KPI廃止: 紐付けはチャート→CSFの2段階（関数は呼び出し互換のため残置） */
+function onTeCsfSel(a){}
 function teOpenChartEditor(){
   const k=(document.getElementById('te-chart-sel')||{}).value;
   if(!k){alert('チャートを選択してください');return;}
@@ -3269,21 +3244,19 @@ async function saveTaskEdit(){
         nCsfIdx=+siV;nCell=String(nCsfIdx);
         nChart=d.name||(typeof _chartKgiText==='function'&&_chartKgiText(teK))||'';
         nKgi=(((edits['csf-'+nCsfIdx]||{}).text!=null?edits['csf-'+nCsfIdx].text:(d.subs||[])[nCsfIdx])||('CSF'+(nCsfIdx+1)));
-        const kpiV=(document.getElementById('te-kpi-sel')||{}).value;
-        nKpiIdx=(kpiV===''||kpiV==null)?null:+kpiV;
       }
     }
     linkChanged=(nChart||null)!==(prevChart||null)||(nCell||null)!==(prevCell||null)||(nKpiIdx!=null?nKpiIdx:null)!==(prevKpi!=null?prevKpi:null);
     if(linkChanged){
       a.chart=nChart;a.cell=nCell;a.csfIdx=nCsfIdx;a.kpiIdx=nKpiIdx;a.kpi=nChart?nKgi:'—';
-      a.meta=nChart?('📊 '+nChart+' ／ CSF'+(nCsfIdx+1)+': '+nKgi+(nKpiIdx!=null?' ／ KPI'+(nCsfIdx+1)+'-'+(nKpiIdx+1):'')):'チャート以外のタスク';
+      a.meta=nChart?('📊 '+nChart+' ／ CSF'+(nCsfIdx+1)+': '+nKgi):'チャート以外のタスク';
     }
   }
   const API=window.VexumAPI;
   if(API&&API.ready&&a.id){
     if(nameChanged&&API.updateTask){try{await API.updateTask(a.id,{title:name});}catch(e){}}
     if(datesChanged&&API.updateTask){try{const r=await API.updateTask(a.id,{start:startRaw,due:dueRaw});if(r&&r.error)console.warn('[VEXUM] 期間保存失敗:',r.error);}catch(e){}}
-    if(linkChanged&&API.updateTask){try{const r=await API.updateTask(a.id,{sourceChart:a.chart,sourceCell:a.cell,sourceKpi:a.kpiIdx,relatedKgi:a.chart?a.kpi:null});if(r&&r.error)console.warn('[VEXUM] 紐付け保存失敗:',r.error);}catch(e){}}
+    if(linkChanged&&API.updateTask){try{const r=await API.updateTask(a.id,{sourceChart:a.chart,sourceCell:a.cell,relatedKgi:a.chart?a.kpi:null});if(r&&r.error)console.warn('[VEXUM] 紐付け保存失敗:',r.error);}catch(e){}}
     const res=await API.logTaskTime(a.id,{hours,progressAfter:pct,comment:memo});
     if(res&&res.error){a.hours=(a.hours||0)+hours;_pendingTaskAdd(a.id,pct,a.hours);_updateSyncBadge();console.warn('[VEXUM] タスク保存失敗→再送キューへ:',res.error);}
     else if(res)a.hours=res.totalHours!=null?res.totalHours:(a.hours||0)+hours;

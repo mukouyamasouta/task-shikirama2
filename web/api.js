@@ -436,7 +436,7 @@
     if (o.sendId) { row.source_send_id = o.sendId; row.source_cell = o.cell || null; row.source_chart = o.chartTitle || null; }
     // 受信チャート以外でも、個人画面でKGI（チャート）に紐付けて作成した場合の関連付け
     else if (o.chartTitle) { row.source_chart = o.chartTitle; if (o.cell) row.source_cell = o.cell; }
-    if (o.sourceKpi != null) row.source_kpi = o.sourceKpi;   // 紐付けたKPIインデックス（任意・36_task_kpi_link.sql）
+    // KPI廃止: source_kpi への書き込みは停止（カラムは後方互換のため残置）
     var r = await sb.from('tasks').insert(row).select().single();
     if (r.error && /source_send_id|source_cell|source_chart|source_kpi|period|planned_hours/.test(r.error.message)) {
       // 拡張列が未適用のDB: 拡張列なしで作成（後方互換）
@@ -473,7 +473,7 @@
     // チャート紐付けの変更（タスク編集モーダルの①②③）
     if (patch.sourceChart !== undefined) up.source_chart = patch.sourceChart;
     if (patch.sourceCell !== undefined) up.source_cell = patch.sourceCell;
-    if (patch.sourceKpi !== undefined) up.source_kpi = patch.sourceKpi;
+    // KPI廃止: sourceKpi パッチは無視（source_kpi カラムは残置・読み書き停止）
     if (patch.relatedKgi !== undefined) up.related_kgi = patch.relatedKgi;
     var r = await sb.from('tasks').update(up).eq('id', id).select('id');
     if (r.error) return { error: friendlyErr(r.error.message) };
@@ -1057,9 +1057,9 @@
         : '関連KGI: ' + (t.related_kgi || '—') + ' ／ カテゴリ: ' + (t.category || '—');
       var from = self ? '🙋 自分で作成' : ('📌 ' + (exec ? '幹部' : '上長') + ' · ' + (assigner.full_name || ''));
       if (t.status === 'done' || (t.progress || 0) >= 100) {
-        ASSIGN_HISTORY.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', assignerId: t.assigner_id || null, assignerName: assigner.full_name || '', assignerRole: exec ? '幹部' : '上長', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), startRaw: t.start_date || null, dueRaw: t.due_date || null, comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '', pri: t.priority || 'md', self: self, chart: chart, cell: t.source_cell || null, csfIdx: (t.source_cell != null && /^\d+$/.test(String(t.source_cell))) ? +t.source_cell : null, kpiIdx: (t.source_kpi != null ? +t.source_kpi : null), hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
+        ASSIGN_HISTORY.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', assignerId: t.assigner_id || null, assignerName: assigner.full_name || '', assignerRole: exec ? '幹部' : '上長', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), startRaw: t.start_date || null, dueRaw: t.due_date || null, comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '', pri: t.priority || 'md', self: self, chart: chart, cell: t.source_cell || null, csfIdx: (t.source_cell != null && /^\d+$/.test(String(t.source_cell))) ? +t.source_cell : null, kpiIdx: null /* KPI廃止 */, hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
       } else {
-        ASSIGNMENTS.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', assignerId: t.assigner_id || null, assignerName: assigner.full_name || '', assignerRole: exec ? '幹部' : '上長', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), startRaw: t.start_date || null, dueRaw: t.due_date || null, pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: self, chart: chart, sendId: t.source_send_id || null, cell: t.source_cell || null, csfIdx: (t.source_cell != null && /^\d+$/.test(String(t.source_cell))) ? +t.source_cell : null, kpiIdx: (t.source_kpi != null ? +t.source_kpi : null), hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
+        ASSIGNMENTS.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', assignerId: t.assigner_id || null, assignerName: assigner.full_name || '', assignerRole: exec ? '幹部' : '上長', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), startRaw: t.start_date || null, dueRaw: t.due_date || null, pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: self, chart: chart, sendId: t.source_send_id || null, cell: t.source_cell || null, csfIdx: (t.source_cell != null && /^\d+$/.test(String(t.source_cell))) ? +t.source_cell : null, kpiIdx: null /* KPI廃止 */, hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
       }
     });
 
@@ -1670,7 +1670,7 @@
         hours: (t.total_hours != null ? +t.total_hours : 0), period: t.period || '', teamUuid: t.team_id,
         chart: t.source_chart || null, sendId: t.source_send_id || null, cell: t.source_cell || null,
         csfIdx: (t.source_cell != null && /^\d+$/.test(String(t.source_cell))) ? +t.source_cell : null,
-        kpiIdx: (t.source_kpi != null ? +t.source_kpi : null)
+        kpiIdx: null /* KPI廃止 */
       });
     });
     var memberPid = {};
