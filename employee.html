@@ -1619,6 +1619,7 @@ async function renderEvalMndOverlay(k,d){
     if(!wrap2||evalChartKey!==k||evalView!=='mandala')return;
     API.renderEvalMandala(d,d.memberKpiEdits||{},wrap2,{
       evalData:_evalDataCache[k]||null,
+      csfProgressOf:si=>evalCsfProgress((d.memberKpiEdits||{}),si,k),
       onCellClick:(kind,si,ai)=>onEvalMndCellClick(k,kind,si,ai)
     });
   };
@@ -1628,8 +1629,17 @@ async function renderEvalMndOverlay(k,d){
     draw();
   }
 }
-function evalCsfProgress(edits,si){let s=0;for(let ai=0;ai<8;ai++){const e=edits[si+'-'+ai];s+=e&&e.progress!=null?Math.round(+e.progress):0;}return Math.round(s/8);}
-function evalKgiProgress(edits){let s=0;for(let si=0;si<8;si++)s+=evalCsfProgress(edits,si);return Math.round(s/8);}
+// KPI廃止: CSF進捗 = 紐付けタスクの平均（あれば）→ CSFセル記入progress → 旧KPIセル平均（互換）
+function evalCsfProgress(edits,si,k){
+  if(k&&typeof _chartTasks==='function'){
+    const tks=_chartTasks(k).filter(t=>t.csfIdx===si);
+    if(tks.length)return Math.round(tks.reduce((s,t)=>s+(+t.pct||0),0)/tks.length);
+  }
+  const ce=edits['csf-'+si];if(ce&&ce.progress!=null)return Math.round(+ce.progress);
+  let s=0;for(let ai=0;ai<8;ai++){const e=edits[si+'-'+ai];s+=e&&e.progress!=null?Math.round(+e.progress):0;}
+  return Math.round(s/8);
+}
+function evalKgiProgress(edits,k){let s=0;for(let si=0;si<8;si++)s+=evalCsfProgress(edits,si,k);return Math.round(s/8);}
 function evalColorOf(pct){
   if(pct>=100)return{bg:'#D1FAE5',fg:'#065F46'};
   if(pct>=50)return{bg:'#DBEAFE',fg:'#1E40AF'};
@@ -1639,22 +1649,21 @@ function evalColorOf(pct){
 function evalBar(pct,color){return `<div style="display:flex;align-items:center;gap:8px;margin:4px 0 10px"><div style="flex:1;height:8px;background:#F3F4F6;border-radius:4px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${color}"></div></div><div style="font-size:12px;font-weight:800;color:${color};min-width:34px;text-align:right">${pct}%</div></div>`;}
 function evalStars(n){let h='';for(let i=1;i<=5;i++)h+=`<span style="color:${i<=n?'#F59E0B':'#D1D5DB'}">★</span>`;return h;}
 function onEvalMndCellClick(k,kind,si,ai){
+  // KPI廃止: KGI/CSFの2種のみ（CSF詳細に紐付けタスク一覧を表示）
   const d=getAllMnd()[k];if(!d)return;
   const edits=d.memberKpiEdits||{};
   const ev=_evalDataCache[k]||null;
   if(kind==='kgi'){
-    openEvalDetailModal('kgi',0,{center:d.center,edits,ev});
+    openEvalDetailModal('kgi',0,{center:d.center,edits,ev,chartKey:k});
   }else if(kind==='csf'){
-    openEvalDetailModal('csf',si,{name:(d.subs||[])[si]||`CSF${si+1}`,acts:(d.acts||[])[si]||[],edits,si,ev});
-  }else{
-    openEvalDetailModal('kpi',{si,ai},{name:((d.acts||[])[si]||[])[ai]||`KPI${ai+1}`,parentName:(d.subs||[])[si]||'',edit:edits[si+'-'+ai]||{}});
+    openEvalDetailModal('csf',si,{name:(d.subs||[])[si]||`CSF${si+1}`,edits,si,ev,chartKey:k});
   }
 }
 function openEvalDetailModal(kind,index,data){
   const modal=document.getElementById('eval-detail-modal');if(!modal)return;
   const title=document.getElementById('edm-title'),body=document.getElementById('edm-body');
   if(kind==='kgi'){
-    const pct=evalKgiProgress(data.edits);const col=evalColorOf(pct);
+    const pct=evalKgiProgress(data.edits,data.chartKey);const col=evalColorOf(pct);
     const ev=data.ev;
     title.innerHTML='🎯 KGI（中心目標）';
     let h=`<div style="font-size:13px;font-weight:700;margin-bottom:10px">${(data.center||'').replace(/\n/g,' ')}</div><hr style="border:none;border-top:1px solid var(--border);margin:10px 0">`;
@@ -1670,7 +1679,7 @@ function openEvalDetailModal(kind,index,data){
     }
     body.innerHTML=h;
   }else if(kind==='csf'){
-    const pct=evalCsfProgress(data.edits,data.si);const col=evalColorOf(pct);
+    const pct=evalCsfProgress(data.edits,data.si,data.chartKey);const col=evalColorOf(pct);
     const evCsf=data.ev&&data.ev.csf&&data.ev.csf[data.si];
     title.innerHTML='📊 CSF'+(data.si+1)+' '+data.name;
     let h=`<div style="font-weight:700;margin-bottom:4px">達成率</div>${evalBar(pct,col.fg)}`;
@@ -1681,21 +1690,14 @@ function openEvalDetailModal(kind,index,data){
       h+=`<div style="font-size:11px;color:var(--text3);background:#F3F4F6;display:inline-block;padding:3px 10px;border-radius:10px;font-weight:700;margin-bottom:10px">未評価</div>`;
       h+=`<button class="f-submit" style="margin-bottom:10px" onclick="closeEvalDetailModal();openSelfEval()">📝 自己評価を入力</button>`;
     }
-    h+=`<div style="font-weight:700;margin-bottom:6px">紐づくKPI（${(data.acts||[]).filter(Boolean).length}件）</div><div>`;
-    (data.acts||[]).forEach((name,ai)=>{
-      if(!name)return;
-      const e=data.edits[data.si+'-'+ai];const apct=e&&e.progress!=null?Math.round(+e.progress):0;
-      h+=`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F3F4F6"><span>・${name}</span><span style="font-weight:700;color:${evalColorOf(apct).fg}">${apct}%${apct>=100?'✅':''}</span></div>`;
+    const linked=(data.chartKey&&typeof _chartTasks==='function')?_chartTasks(data.chartKey).filter(t=>t.csfIdx===data.si):[];
+    h+=`<div style="font-weight:700;margin-bottom:6px">紐付けタスク（${linked.length}件）</div><div>`;
+    if(!linked.length)h+=`<div style="font-size:11px;color:var(--text3);padding:4px 0">このCSFに紐付けられたタスクはありません</div>`;
+    linked.forEach(t=>{
+      const apct=+t.pct||0;
+      h+=`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F3F4F6;gap:8px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">・${t.name}</span><span style="font-weight:700;flex-shrink:0;color:${evalColorOf(apct).fg}">${apct}%${apct>=100?'✅':''}${t.hours?` <span style=\"font-weight:400;color:var(--text3)\">${t.hours}h</span>`:''}</span></div>`;
     });
     h+='</div>';
-    body.innerHTML=h;
-  }else{
-    const e=data.edit||{};const pct=e.progress!=null?Math.round(+e.progress):0;const col=evalColorOf(pct);
-    title.innerHTML='✅ '+(data.name||'KPI');
-    let h=`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">親CSF: ${data.parentName||''}</div><hr style="border:none;border-top:1px solid var(--border);margin:10px 0">`;
-    h+=`<div style="font-weight:700;margin-bottom:4px">進捗</div>${evalBar(pct,col.fg)}`;
-    h+=`<div style="font-weight:700;margin-bottom:4px">作業時間</div><div style="margin-bottom:10px">${e.hoursTotal!=null?e.hoursTotal+'h':'—'}</div>`;
-    if(e.note)h+=`<div style="font-weight:700;margin-bottom:4px">メモ・コメント</div><div style="color:var(--text2)">${e.note}</div>`;
     body.innerHTML=h;
   }
   modal.style.display='flex';

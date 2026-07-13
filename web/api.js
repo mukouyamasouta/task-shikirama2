@@ -1745,28 +1745,27 @@
     return { avgRate: avgRate, progress: overallProgress, doneCount: done, lateCount: late, taskCount: tasksAll.length, memberCount: personCount, reportCount: reportsAll.length, byTeam: byTeam };
   }
 
-  // ===== 評価管理タブ共通: 曼荼羅形式で進捗%を表示・CSFクリックでKPI展開 =====
+  // ===== 評価管理タブ共通: 曼荼羅形式で進捗%を表示（KGI+CSFの3x3・KPI廃止） =====
   // chart: {center, subs:[8], acts:[8][8]} / edits: mandala_charts.member_kpi_edits 形式 { 'si-ai': {progress, ...} }
   function renderEvalMandala(chart, edits, containerEl, opts) {
+    // KPI廃止: 評価オーバーレイも KGI+CSF8項目 の3x3表示。
+    // CSF進捗は opts.csfProgressOf(si)（画面側から紐付けタスク由来を注入）
+    // → 無ければ member_kpi_edits['csf-si'].progress → 旧KPIセル(si-ai)平均（互換）の順。
     if (!chart || !containerEl) return;
     edits = edits || {};
     opts = opts || {};
     var evalData = opts.evalData || null;
     containerEl.__cellClick = opts.onCellClick || null;
-    var SP_MAP = [
-      { cr: 3, cc: 3, oc: [1, 1], si: 0 }, { cr: 3, cc: 4, oc: [1, 4], si: 1 }, { cr: 3, cc: 5, oc: [1, 7], si: 2 },
-      { cr: 4, cc: 3, oc: [4, 1], si: 3 }, { cr: 4, cc: 5, oc: [4, 7], si: 4 },
-      { cr: 5, cc: 3, oc: [7, 1], si: 5 }, { cr: 5, cc: 4, oc: [7, 4], si: 6 }, { cr: 5, cc: 5, oc: [7, 7], si: 7 }
-    ];
-    var expanded = containerEl._evalExpanded || (containerEl._evalExpanded = {});
-    function progressOf(si, ai) {
-      var e = edits[si + '-' + ai];
-      return e && e.progress != null ? Math.round(+e.progress) : 0;
+    function oldCsfAvg(si) {
+      var sum = 0;
+      for (var ai = 0; ai < 8; ai++) { var e = edits[si + '-' + ai]; sum += e && e.progress != null ? Math.round(+e.progress) : 0; }
+      return Math.round(sum / 8);
     }
     function csfProgress(si) {
-      var sum = 0;
-      for (var ai = 0; ai < 8; ai++) sum += progressOf(si, ai);
-      return Math.round(sum / 8);
+      if (typeof opts.csfProgressOf === 'function') { var p = opts.csfProgressOf(si); if (p != null) return Math.round(+p); }
+      var ce = edits['csf-' + si];
+      if (ce && ce.progress != null) return Math.round(+ce.progress);
+      return oldCsfAvg(si);
     }
     function colorOf(pct) {
       if (pct >= 100) return { bg: '#D1FAE5', fg: '#065F46', bd: '#10B981' };
@@ -1774,62 +1773,31 @@
       if (pct >= 1) return { bg: '#FEF3C7', fg: '#92400E', bd: '#F59E0B' };
       return { bg: '#F3F4F6', fg: '#6B7280', bd: '#D1D5DB' };
     }
-    var G = [];
-    for (var i = 0; i < 9; i++) G.push(Array(9).fill(null));
-    G[4][4] = { type: 'center' };
-    SP_MAP.forEach(function (sp) {
-      G[sp.cr][sp.cc] = { type: 'sub', si: sp.si };
-      G[sp.oc[0]][sp.oc[1]] = { type: 'sub', si: sp.si };
-      var ai = 0;
-      for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++) {
-        if (dr === 0 && dc === 0) continue;
-        var r = sp.oc[0] + dr, c = sp.oc[1] + dc;
-        if (!G[r][c]) G[r][c] = { type: 'action', si: sp.si, ai: ai };
-        ai++;
-      }
-    });
-    var html = '<div style="display:grid;grid-template-columns:repeat(9,minmax(54px,1fr));gap:2px;min-width:520px">';
-    for (var r2 = 0; r2 < 9; r2++) for (var c2 = 0; c2 < 9; c2++) {
-      var meta = G[r2][c2];
-      var sty = 'position:relative;min-height:46px;display:flex;align-items:center;justify-content:center;font-size:9px;text-align:center;padding:2px;word-break:break-all;line-height:1.2;';
-      if (c2 === 2 || c2 === 5) sty += 'border-right:2px solid #9CA3AF;';
-      if (r2 === 2 || r2 === 5) sty += 'border-bottom:2px solid #9CA3AF;';
+    var order = [0, 1, 2, 7, -1, 3, 6, 5, 4];
+    var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:560px;margin:0 auto">';
+    order.forEach(function (si) {
+      var sty = 'position:relative;min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;text-align:center;padding:4px;word-break:break-all;line-height:1.25;border-radius:6px;';
       var txt = '', badge = '', onclick = '';
-      if (!meta) { sty += 'background:#fff;'; }
-      else if (meta.type === 'center') {
+      if (si === -1) {
         sty += 'background:#0D9488;color:#fff;font-weight:800;' + (containerEl.__cellClick ? 'cursor:pointer;' : '');
-        txt = (chart.center || '').slice(0, 10);
+        txt = (chart.center || '').slice(0, 14);
         if (evalData) {
           var kgiTxt = (evalData.submitted && evalData.kgi) ? ('★' + evalData.kgi) : '未評価';
-          badge = '<span style="position:absolute;bottom:1px;right:2px;font-size:10px;font-weight:800">' + kgiTxt + '</span>';
+          badge = '<span style="position:absolute;bottom:1px;right:3px;font-size:10px;font-weight:800">' + kgiTxt + '</span>';
         }
         if (containerEl.__cellClick) onclick = ' onclick="var _c=this.closest(\'[data-eval-mnd]\');_c.__cellClick&&_c.__cellClick(\'kgi\',0,0)"';
-      } else if (meta.type === 'sub') {
-        var pct = csfProgress(meta.si); var col = colorOf(pct);
-        sty += 'background:' + col.bg + ';color:' + col.fg + ';font-weight:700;border:1.5px solid ' + col.bd + ';cursor:pointer;';
-        txt = ((chart.subs || [])[meta.si] || '').slice(0, 8);
-        badge = '<span style="position:absolute;bottom:1px;right:2px;font-size:7px;font-weight:800">' + pct + '%</span>';
-        onclick = ' onclick="var _c=this.closest(\'[data-eval-mnd]\');_c.__toggleCsf(' + meta.si + ');_c.__cellClick&&_c.__cellClick(\'csf\',' + meta.si + ',0)"';
       } else {
-        var visible = !!expanded[meta.si];
-        if (!visible) { sty += 'background:#F9FAFB;color:#E5E7EB;'; }
-        else {
-          var apct = progressOf(meta.si, meta.ai); var acol = colorOf(apct);
-          sty += 'background:' + acol.bg + ';color:' + acol.fg + ';border:1px solid ' + acol.bd + ';' + (containerEl.__cellClick ? 'cursor:pointer;' : '');
-          txt = (((chart.acts || [])[meta.si] || [])[meta.ai] || '').slice(0, 8);
-          badge = '<span style="position:absolute;bottom:0;right:2px;font-size:6.5px;font-weight:700">' + apct + '%</span>';
-          if (containerEl.__cellClick) onclick = ' onclick="var _c=this.closest(\'[data-eval-mnd]\');_c.__cellClick&&_c.__cellClick(\'kpi\',' + meta.si + ',' + meta.ai + ')"';
-        }
+        var pct = csfProgress(si); var col = colorOf(pct);
+        sty += 'background:' + col.bg + ';color:' + col.fg + ';font-weight:700;border:1.5px solid ' + col.bd + ';cursor:pointer;';
+        txt = ((chart.subs || [])[si] || '').slice(0, 14);
+        badge = '<span style="position:absolute;bottom:1px;right:3px;font-size:8px;font-weight:800">' + pct + '%</span>';
+        onclick = ' onclick="var _c=this.closest(\'[data-eval-mnd]\');_c.__cellClick&&_c.__cellClick(\'csf\',' + si + ',0)"';
       }
       html += '<div style="' + sty + '"' + onclick + '>' + txt + badge + '</div>';
-    }
+    });
     html += '</div>';
     containerEl.setAttribute('data-eval-mnd', '1');
     containerEl.innerHTML = html;
-    containerEl.__toggleCsf = function (si) {
-      expanded[si] = !expanded[si];
-      renderEvalMandala(chart, edits, containerEl, opts);
-    };
   }
 
   // ===== 個人画面のチャート管理(renderCmSimpleGrid)と同じ見た目で曼荼羅を表示（参照のみ） =====
@@ -1927,14 +1895,8 @@
       return h;
     }
     function paint() {
-      var on = containerEl._kpiOn;
-      var btnTxt = on ? '− KPIを隠す' : '＋ KPIを表示';
-      var inner = on ? fullHTML() : simpleHTML();
-      containerEl.innerHTML =
-        '<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button type="button" class="card-btn" style="background:var(--accent-l,#CCEDE9);color:var(--accent,#0D9488);border-color:var(--accent,#0D9488);font-weight:700" data-mnd-kpi-toggle>' + btnTxt + '</button></div>' +
-        '<div style="overflow-x:auto">' + inner + '</div>';
-      var btn = containerEl.querySelector('[data-mnd-kpi-toggle]');
-      if (btn) btn.onclick = function () { containerEl._kpiOn = !containerEl._kpiOn; paint(); };
+      // KPI廃止: 常にKGI+CSF8項目のシンプル表示（「＋KPIを表示」トグル撤去）
+      containerEl.innerHTML = '<div style="overflow-x:auto">' + simpleHTML() + '</div>';
       if (clickable) {
         var cells = containerEl.querySelectorAll('[data-mnd-cell]');
         Array.prototype.forEach.call(cells, function (el) {
