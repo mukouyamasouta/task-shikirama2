@@ -2981,14 +2981,10 @@ function renderTaskTable(){
     const editorName=t.by||(t.ref&&t.ref.editedBy)||'';
     const editor=editorName?`<span style="font-size:9px;background:${_editorColor(editorName)}22;color:${_editorColor(editorName)};padding:1px 6px;border-radius:8px;font-weight:700;margin-left:6px">✎ ${editorName}</span>`:'';
     const pcChip=`<span class="chip ${(priMap[t.pri]||priMap.md)[0]}">${(priMap[t.pri]||priMap.md)[1]}</span>`;
-    // CSFセクション内: KPIチップ(テキスト付き)+KPI記入ボタン / セクション外: 従来のCSF/KPIチップ
+    // KPI廃止: 紐付け表示はCSFチップのみ（CSFセクション内は見出しで自明なため非表示）
     let csfChip='';
-    if(inCsfSection&&chartKey&&t.kpiIdx!=null&&t.csfIdx!=null){
-      const kpiTxt=(((CHARTS[chartKey]||{}).acts||[])[t.csfIdx]||[])[t.kpiIdx];
-      const kpiLabel=kpiTxt&&String(kpiTxt).trim()?String(kpiTxt).trim().slice(0,20):'';
-      csfChip=`<span style="font-size:9px;background:#EDE9FE;color:#6D28D9;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">KPI${t.csfIdx+1}-${t.kpiIdx+1}${kpiLabel?' '+kpiLabel:''}</span>`;
-    }else if(t.csfIdx!=null){
-      csfChip=`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px" title="${t.kpi}">CSF${t.csfIdx+1}${t.kpiIdx!=null?' / KPI'+(t.csfIdx+1)+'-'+(t.kpiIdx+1):''}</span>`;
+    if(!inCsfSection&&t.csfIdx!=null){
+      csfChip=`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px" title="${t.kpi}">CSF${t.csfIdx+1}</span>`;
     }
     const db=dueBadge(t);
     const rid=t.arr+t.idx;
@@ -3069,25 +3065,7 @@ function renderTaskTable(){
         h+=`<div style="display:flex;gap:6px;align-items:center"><span class="chip ${csfSc[0]}">${csfSc[1]}</span><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${c.pct}%;background:${csfBarCol}"></div></div><div class="pp" style="font-size:10px;color:${csfBarCol}">${c.pct}%</div></div></div>`;
         h+=`</div>`;
         h+=`</div>`;
-        // KPI一覧: 入力済みスロットのみ表示。全空なら「＋ KPI追加」ボタン1つ。readonlyは非表示
-        if(!isRo){
-          const kpiActs=(CHARTS[ck].acts||[])[c.si]||[];
-          const filledKpis=[];
-          for(let ai=0;ai<8;ai++){const kTxt=kpiActs[ai]&&String(kpiActs[ai]).trim()?String(kpiActs[ai]).trim():'';if(kTxt)filledKpis.push({ai,kTxt});}
-          if(filledKpis.length){
-            h+=`<div style="background:#F9FAFB;border-bottom:1px solid #E5E7EB;padding:2px 14px 2px 28px">`;
-            filledKpis.forEach(({ai,kTxt})=>{
-              const kTasks=csfTasks.filter(t=>t.kpiIdx===ai);
-              const kH=Math.round(kTasks.reduce((s,t)=>s+(t.hours||0),0)*10)/10;
-              h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #F3F4F6;gap:8px;cursor:pointer" onclick="openCellEdit('${ck}','kpi',${c.si},${ai})">`;
-              h+=`<div style="font-size:10px;color:#374151;min-width:0"><span style="font-size:9px;background:#EDE9FE;color:#6D28D9;padding:1px 5px;border-radius:6px;font-weight:700;margin-right:5px">KPI${c.si+1}-${ai+1}</span>${kTxt}${kTasks.length?`<span style="font-size:9px;color:var(--text3);margin-left:5px">${kTasks.length}件 ${kH}h</span>`:''}</div>`;
-              h+=`</div>`;
-            });
-            h+=`</div>`;
-          }else{
-            h+=`<div style="padding:6px 14px 6px 28px;background:#F9FAFB;border-bottom:1px solid #E5E7EB;cursor:pointer" onclick="openCellEdit('${ck}','kpi',${c.si},0)"><span style="font-size:10px;color:var(--accent);font-weight:700">＋ KPI追加</span></div>`;
-          }
-        }
+        // KPI廃止: CSF配下は紐付けタスク行のみ（KPIスロット一覧は撤去）
         csfTasks.forEach(t=>h+=rowHtml(t,ck,true));
         h+=`</div>`;
       });
