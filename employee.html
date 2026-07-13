@@ -3467,7 +3467,7 @@ function _renderCsfBreakdown(tasksAll){
   const showKgiTag=keys.length>1;
   rows.innerHTML=items.map(({k,kgiName,c})=>{
     const linked=(typeof _chartTasks==='function'?_chartTasks(k):[]).filter(t=>t.csfIdx===c.si);
-    // 工数はチャート管理と同じ計算（CSF上書き値→KPIタスク合計→セル記入時間）
+    // 工数はチャート管理と同じ計算（CSF上書き値→紐付けタスク合計＋セル記入時間）
     const hrs=(typeof _csfHours==='function')?_csfHours(k,c.si):Math.round(linked.reduce((s,t)=>s+(t.hours||0),0)*10)/10;
     const cnt=linked.length;
     const col=_csfColor(c.pct);
