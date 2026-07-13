@@ -3712,7 +3712,6 @@ function renderGantt(){
     if(typeof syncKpiEditsFromCharts==='function')syncKpiEditsFromCharts();
     const d=CHARTS[ck];const edits=_chartEdits(ck);
     const csfText=si=>{const ed=edits['csf-'+si];return String(((ed&&ed.text!=null)?ed.text:(d.subs||[])[si])||'').trim();};
-    const kpiText=(si,ai)=>{const ed=edits[si+'-'+ai];return String(((ed&&ed.text!=null)?ed.text:((d.acts||[])[si]||[])[ai])||'').trim();};
     const cn1=d.name||'',cn2=(typeof _chartKgiText==='function'?_chartKgiText(ck):'')||'';
     const kgiLabel=cn2||cn1||'(KGI未設定)';
     const ftasks=(g.rows||[]).map(r=>r.ref).filter(Boolean);
@@ -3724,25 +3723,23 @@ function renderGantt(){
       return{has:false};
     };
     const usedTask=new Set();
-    const taskFor=(si,ai)=>{
-      const cand=ftasks.filter(t=>{const ci=(t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1;if(ci!==si)return false;return ai==null?(t.kpiIdx==null):(t.kpiIdx===ai);});
-      if(!cand.length)return null;
-      return cand.find(t=>t.startRaw||t.dueRaw)||cand[0];
-    };
     const definedCsf=[];for(let si=0;si<8;si++){if(csfText(si))definedCsf.push(si);}
     if(!definedCsf.length&&!ftasks.length)return '';
+    // KPI廃止: CSF行＋その配下の紐付けタスク行（件数無制限）を生成
     const rows=[];
     definedCsf.forEach(si=>{
-      const ct=taskFor(si,null);if(ct)usedTask.add(ct);
+      const csfTasks=ftasks.filter(t=>((t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1)===si);
+      csfTasks.forEach(t=>usedTask.add(t));
+      const ct=csfTasks.find(t=>t.startRaw||t.dueRaw)||csfTasks[0]||null;
       rows.push(Object.assign({kind:'csf',si,ai:null,label:csfText(si),task:ct||null},rowPeriod(si,null,ct)));
-      for(let ai=0;ai<8;ai++){const kt=kpiText(si,ai);if(!kt)continue;const tt=taskFor(si,ai);if(tt)usedTask.add(tt);rows.push(Object.assign({kind:'kpi',si,ai,label:kt,task:tt||null},rowPeriod(si,ai,tt)));}
+      csfTasks.forEach(t=>rows.push(Object.assign({kind:'task',si,ai:null,label:(t.name||'タスク'),task:t},rowPeriod(si,null,t))));
     });
     ftasks.filter(t=>!usedTask.has(t)).forEach(t=>{
-      const si=(t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1;const ai=(t.kpiIdx!=null&&!isNaN(t.kpiIdx))?t.kpiIdx:null;
-      rows.push(Object.assign({kind:ai!=null?'kpi':'csf',si,ai,label:(t.name||'タスク'),task:t,orphan:true},rowPeriod(si,ai,t)));
+      const si=(t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1;
+      rows.push(Object.assign({kind:'task',si,ai:null,label:(t.name||'タスク'),task:t,orphan:true},rowPeriod(si,null,t)));
     });
     if(!rows.length)return '';
-    let thead=`<tr><th style="position:sticky;left:0;top:0;z-index:6;background:#fff;border:1px solid var(--border);min-width:180px;width:180px;padding:5px 8px;text-align:left;font-size:11px;font-weight:800">CSF / KPI</th>`;
+    let thead=`<tr><th style="position:sticky;left:0;top:0;z-index:6;background:#fff;border:1px solid var(--border);min-width:180px;width:180px;padding:5px 8px;text-align:left;font-size:11px;font-weight:800">CSF / 紐付けタスク</th>`;
     for(let day=1;day<=daysInMonth;day++){
       const dow=new Date(year,mo,day).getDay();
       const isSun=dow===0,isSat=dow===6,isTod=day===todayD;
@@ -3755,7 +3752,7 @@ function renderGantt(){
     rows.forEach(r=>{
       const color=r.si>=0?GANTT_COLORS[r.si%GANTT_COLORS.length]:'#9CA3AF';
       const isCsf=r.kind==='csf';
-      const tag=isCsf?'CSF':'KPI';
+      const tag=isCsf?'CSF':'タスク';
       const lblBg=isCsf?(color+'26'):(color+'0E');
       const indent=isCsf?'':'padding-left:20px;';
       const arrow=isCsf?'':`<span style="color:${color};font-weight:700;font-size:11px;flex:0 0 auto">└</span>`;
