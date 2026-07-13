@@ -510,9 +510,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
   <div class="card">
     <div class="card-hd">
-      <div><div class="card-title">曼荼羅チャート</div><div class="card-sub" id="cm-grid-sub">基本表示：中心(KGI)＋CSF 8項目。「KPIを表示」で外周の施策まで展開・編集できます</div></div>
+      <div><div class="card-title">曼荼羅チャート</div><div class="card-sub" id="cm-grid-sub">中心(KGI)＋CSF 8項目。CSFセルをクリックすると内容・進捗・工数と紐付けタスクを確認できます</div></div>
       <div style="display:flex;align-items:center;gap:8px">
-        <button id="cm-kpi-toggle" class="card-btn" style="background:var(--accent-l);color:var(--accent);border-color:var(--accent);font-weight:700" onclick="toggleCmKpi()">＋ KPIを表示</button>
         <button class="card-btn" onclick="(function(){const k=document.getElementById('cm-chart-sel').value;if(k&&CHARTS[k])openMandala(k,false);})()">⛶ 全画面</button>
       </div>
     </div>
@@ -1000,10 +999,9 @@ function resetReportForm(){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
       <div>
         <div id="mandala-team-name" style="font-size:16px;font-weight:800;color:#1a1a2e;margin-bottom:3px">曼荼羅チャート</div>
-        <div style="font-size:10px;color:#9ca3af" id="mnd-sublabel">中心：KGI　第2層：CSF（8項目）。「KPIを表示」で各CSFの施策まで展開</div>
+        <div style="font-size:10px;color:#9ca3af" id="mnd-sublabel">中心：KGI　第2層：CSF（8項目）。CSFの施策はタスク管理で「紐付けタスク」として管理します</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-        <button id="mnd-kpi-toggle" onclick="toggleMndKpi()" style="padding:6px 12px;background:var(--accent-l,#DAEEE9);color:var(--accent,#0D9488);border:1px solid var(--accent,#0D9488);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">＋ KPIを表示</button>
         <button onclick="closeMandala()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#9ca3af;line-height:1;padding:0 0 0 4px">✕</button>
       </div>
     </div>
@@ -1089,6 +1087,10 @@ function resetReportForm(){
       <span style="font-size:15px;font-weight:800;color:#0E7490"><span id="kpi-edit-hours-total">0</span>h</span>
     </div>
     <!-- CSF専用: 合計時間の変更（配下KPI合計を上書き。空欄で自動計算に戻る） -->
+    <div id="kpi-edit-linked-wrap" style="display:none;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">🔗 このCSFに紐付けられたタスク <span id="kpi-edit-linked-count" style="font-weight:400;color:var(--text3)"></span></div>
+      <div id="kpi-edit-linked-list" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
+    </div>
     <div class="fg" id="kpi-edit-csfhours-wrap" style="display:none;background:#FFFBEB;border:1px solid #FCD34D;border-radius:6px;padding:8px 10px;margin-bottom:12px">
       <label class="fl">合計時間の変更</label>
       <div style="display:flex;gap:8px;align-items:center">
@@ -1096,7 +1098,7 @@ function resetReportForm(){
         <span style="font-size:12px;font-weight:700;color:var(--text2)">h</span>
         <button type="button" class="card-btn" style="flex:0 0 auto;font-size:10px;padding:5px 8px" onclick="resetCsfHours()">リセット</button>
       </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:5px">※ 入力すると配下KPIの合計時間を上書きし、KGIの合計時間にも反映されます。<br>現在の自動計算値（KPI合計）: <span id="kpi-edit-csfhours-auto">0</span>h（空欄で保存／リセットすると自動計算に戻ります）</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:5px">※ 入力すると紐付けタスク等の合計時間を上書きし、KGIの合計時間にも反映されます。<br>現在の自動計算値（紐付けタスク合計）: <span id="kpi-edit-csfhours-auto">0</span>h（空欄で保存／リセットすると自動計算に戻ります）</div>
     </div>
     <!-- CSF/KPI専用: 期間（開始日・終了日）。紐づくタスクがあればそのタスクへ、無ければmember_kpi_editsへ保存 -->
     <div class="fg" id="kpi-edit-period-wrap" style="display:none;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:8px 10px;margin-bottom:12px">
@@ -1408,26 +1410,12 @@ function buildSimpleGridHTML(k){
   return h;
 }
 function _mndApplyView(){
+  // KPI廃止: 全画面曼荼羅も常にKGI+CSF8項目のシンプル表示（旧9x9コンテナは非表示）
   const full=document.getElementById('mandala-grid'),simple=document.getElementById('mandala-grid-simple');
-  const tg=document.getElementById('mnd-kpi-toggle'),sub=document.getElementById('mnd-sublabel');
-  if(_mndKpiOn){
-    full.style.display='grid';simple.style.display='none';
-    if(tg){tg.textContent='− KPIを隠す';}
-    if(sub)sub.textContent='中心：KGI　第2層：CSF　外周：KPI（各8項目）';
-  }else{
-    full.style.display='none';simple.style.display='grid';
-    if(tg){tg.textContent='＋ KPIを表示';}
-    if(sub)sub.textContent='基本表示：中心(KGI)＋CSF 8項目。「KPIを表示」で施策まで展開';
-  }
+  if(full)full.style.display='none';
+  if(simple)simple.style.display='';
 }
-function toggleMndKpi(){
-  _mndKpiOn=!_mndKpiOn;
-  if(_mndCurKey){
-    if(_mndKpiOn)document.getElementById('mandala-grid').innerHTML=buildGridHTML(_mndCurKey,_mndEvalMode);
-    else document.getElementById('mandala-grid-simple').innerHTML=buildSimpleGridHTML(_mndCurKey);
-  }
-  _mndApplyView();
-}
+
 function openMandala(k,evalMode){
   const d=getAllMnd()[k];if(!d)return;
   if(!evalStates[k])evalStates[k]={};_curEvalKey=k;_mndCurKey=k;_mndEvalMode=!!evalMode;
@@ -1435,11 +1423,9 @@ function openMandala(k,evalMode){
   const lc=document.getElementById('mleg-c'),ls=document.getElementById('mleg-s');
   if(lc)lc.style.background=d.color;if(ls){ls.style.background=d.bg;ls.style.borderColor=d.color;}
   const eb=document.getElementById('mnd-eval-bar');if(eb){eb.style.display=evalMode?'flex':'none';const p=document.getElementById('mnd-eval-pct');if(p)p.textContent=getEvalProgress(k)+'%';}
-  // 評価モードはKPIまで必要なので自動展開。通常は簡素表示(CSF)が既定。
-  _mndKpiOn=!!evalMode;
-  document.getElementById('mandala-grid').innerHTML=buildGridHTML(k,evalMode);
+  // KPI廃止: 評価モードを含め常にKGI+CSF8項目のシンプル表示
+  _mndKpiOn=false;
   document.getElementById('mandala-grid-simple').innerHTML=buildSimpleGridHTML(k);
-  const tg=document.getElementById('mnd-kpi-toggle');if(tg)tg.style.display=evalMode?'none':'';
   _mndApplyView();
   const m=document.getElementById('mandala-modal');m.style.display='flex';m.scrollTop=0;
 }
@@ -2162,18 +2148,6 @@ if(typeof renderProgressDash==='function')renderProgressDash();
 
 <script>
 /* ===== チャート管理タブ ===== */
-const KPI_LOC_MAP=(function(){
-  const m={};
-  SP_MAP.forEach(function(sp){
-    let ai=0;
-    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
-      if(dr===0&&dc===0)continue;
-      const r=sp.oc[0]+dr,c=sp.oc[1]+dc;
-      m[r+','+c]={si:sp.si,ai};ai++;
-    }
-  });
-  return m;
-})();
 
 let kpiEdits={};      // {chartKey:{'si-ai':{text,note,progress}}}
 let kpiOrigActs={};   // 初回ロード時の元データ
@@ -2221,7 +2195,6 @@ function updateCmEditCount(k){
 }
 
 // チャート管理の簡素表示（中心KGI + CSF8 の3x3）
-let _cmKpiOn=false;
 // CSF配下KPIの累計作業時間の合計（kpiEdits['si-ai'].hoursTotal）
 // このチャートに紐づくタスク（source_chart=チャート名 or KGI文言で照合）
 function _chartTasks(k){
@@ -2282,55 +2255,14 @@ function renderCmSimpleGrid(k){
   const con=document.getElementById('cm-kpi-grid-simple');if(con)con.innerHTML=h;
 }
 function _cmApplyView(){
+  // KPI廃止（CSF紐付けタスクへ移行）: 曼荼羅は常にKGI+CSF8項目のシンプル表示
   const full=document.getElementById('cm-kpi-grid'),simple=document.getElementById('cm-kpi-grid-simple');
-  const tg=document.getElementById('cm-kpi-toggle'),sub=document.getElementById('cm-grid-sub');
   if(!full||!simple)return;
-  if(_cmKpiOn){full.style.display='';simple.style.display='none';if(tg)tg.textContent='− KPIを隠す';if(sub)sub.textContent='中心(KGI)＋CSF＋外周KPI。KPIセルをクリックで編集・進捗入力（黄色=編集済み）';}
-  else{full.style.display='none';simple.style.display='';if(tg)tg.textContent='＋ KPIを表示';if(sub)sub.textContent='基本表示：中心(KGI)＋CSF 8項目。「KPIを表示」で外周の施策まで展開・編集できます';}
+  full.style.display='none';simple.style.display='';
 }
-function toggleCmKpi(){_cmKpiOn=!_cmKpiOn;_cmApplyView();}
 function renderCmKpiGrid(k){
+  // KPI廃止: シンプルグリッド（KGI+CSF）のみ描画（関数名は呼び出し互換のため維持）
   renderCmSimpleGrid(k);_cmApplyView();
-  const d=CHARTS[k];if(!d)return;
-  const ro=!!d.readonly;
-  const edits=kpiEdits[k]||{};
-  const G=buildMndGrid(k);
-  let h='<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:2px;background:#D1D5DB;border-radius:6px;overflow:hidden;min-width:480px">';
-  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
-    const cell=G[r][c];
-    let sty='min-height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.3;padding:3px 2px;word-break:break-all;position:relative;box-sizing:border-box;';
-    if(c===2||c===5)sty+='border-right:3px solid #9CA3AF;';
-    if(r===2||r===5)sty+='border-bottom:3px solid #9CA3AF;';
-    let oc2='',tx='';
-    if(cell&&cell.t==='center'){
-      const ed=edits['center'];
-      sty+=`background:${d.color};color:#fff;font-weight:800;font-size:10px;`+(ro?'':'cursor:pointer;')+(ed?'box-shadow:inset 0 0 0 2px #F59E0B;':'');
-      tx=((ed&&ed.text!=null?ed.text:cell.tx)||'').replace(/\n/g,'<br>')+(ed&&ed.progress!=null?`<span style="font-size:7px;display:block">${ed.progress}%</span>`:'');
-      oc2=ro?'':`onclick="openCellEdit('${k}','center')"`;
-    }else if(cell&&cell.t==='sub'){
-      const ed=edits['csf-'+cell.si];
-      sty+=(ed?'background:#FEF3C7;box-shadow:inset 0 0 0 1.5px #F59E0B;':`background:${d.bg};`)+`color:${d.color};font-weight:700;`+(ro?'':'cursor:pointer;');
-      tx=(ed&&ed.text!=null?ed.text:cell.tx)+(ed?'<span style="font-size:7px;position:absolute;top:1px;right:2px;color:#D97706">✏</span>':'')+(ed&&ed.progress!=null?`<span style="font-size:7px;display:block">${ed.progress}%</span>`:'');
-      oc2=ro?'':`onclick="openCellEdit('${k}','csf',${cell.si})"`;
-    }else if(cell&&cell.t==='action'){
-      const loc=KPI_LOC_MAP[r+','+c];
-      if(loc){
-        const ekey=loc.si+'-'+loc.ai,ed=edits[ekey];
-        if(ed){
-          sty+='background:#FEF3C7;color:#92400E;border:1.5px solid #F59E0B;'+(ro?'':'cursor:pointer;');
-          const pg=ed.progress>0?`<span style="font-size:7px;margin-top:1px">${ed.progress}%</span>`:'';
-          tx=`<span style="font-size:7px;position:absolute;top:1px;right:2px;color:#D97706">✏</span>${ed.text||cell.tx||''}${pg}`;
-        }else{
-          sty+='background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;'+(ro?'':'cursor:pointer;');
-          tx=cell.tx||'';
-        }
-        oc2=ro?'':`onclick="openKpiEdit('${k}',${loc.si},${loc.ai})"`;
-      }else{sty+='background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;';tx=cell?cell.tx:'';}
-    }else{sty+='background:#E5E7EB;';}
-    h+=`<div ${oc2} style="${sty}">${tx}</div>`;
-  }
-  h+='</div>';
-  const con=document.getElementById('cm-kpi-grid');if(con)con.innerHTML=h;
 }
 
 // セル編集キー: KGI=center / CSF=csf-si / KPI=si-ai
@@ -2355,14 +2287,16 @@ function openCellEdit(k,kind,si,ai){
   document.getElementById('kpi-edit-hours').value='';
   document.getElementById('kpi-edit-hours-total').textContent=ed?(ed.hoursTotal||0):0;  // 累計時間
   document.getElementById('kpi-edit-note').value=ed?(ed.note||''):'';
-  // CSFのみ: 作業時間の直接入力欄（KPI合計を上書き）
+  // CSFのみ: 作業時間の直接入力欄（紐付けタスク合計を上書き）＋紐付けタスク一覧
   const csfhWrap=document.getElementById('kpi-edit-csfhours-wrap');
+  const linkedWrap=document.getElementById('kpi-edit-linked-wrap');
   if(kind==='csf'){
     if(csfhWrap)csfhWrap.style.display='';
     const ov=(_chartEdits(k).csf_hours_override||{});
     const ci=document.getElementById('kpi-edit-csfhours');if(ci)ci.value=(ov[si]!=null&&ov[si]!=='')?ov[si]:'';
     const ca=document.getElementById('kpi-edit-csfhours-auto');if(ca)ca.textContent=_csfKpiHours(k,si);
-  }else if(csfhWrap){csfhWrap.style.display='none';}
+    _renderCellLinkedTasks(k,si);
+  }else{if(csfhWrap)csfhWrap.style.display='none';if(linkedWrap)linkedWrap.style.display='none';}
   // CSFのみ: 内容の削除ボタン
   const delWrap2=document.getElementById('kpi-edit-del-wrap');
   if(delWrap2)delWrap2.style.display=(kind==='csf')?'':'none';
@@ -2407,6 +2341,25 @@ function _cellPeriod(k,kind,si,ai){
   }
   const pmap=(_chartEdits(k).period)||{};const pk=_cellKey(kind,si,ai);const per=pmap[pk]||{};
   return {start:per.start||'',end:per.end||'',fromTask:false,taskCount:0};
+}
+// CSF編集モーダル内の「紐付けタスク一覧」を描画（タスク名・期限・進捗・工数、クリックでタスク編集へ）
+function _renderCellLinkedTasks(k,si){
+  const wrap=document.getElementById('kpi-edit-linked-wrap');
+  const list=document.getElementById('kpi-edit-linked-list');
+  const cnt=document.getElementById('kpi-edit-linked-count');
+  if(!wrap||!list)return;
+  const linked=_cellLinkedTasks(k,'csf',si);
+  // rid（A/H+index）特定のため元配列を走査（linkedの要素は元配列への参照）
+  const rows=[];
+  ASSIGNMENTS.forEach((t,i)=>{if(linked.includes(t))rows.push({t,rid:'A'+i});});
+  ASSIGN_HISTORY.forEach((t,i)=>{if(linked.includes(t))rows.push({t,rid:'H'+i});});
+  if(!rows.length){wrap.style.display='';cnt.textContent='（0件）';list.innerHTML='<div style="padding:10px;font-size:11px;color:var(--text3);text-align:center">紐付けタスクはありません。タスク管理の「＋タスク作成」でこのCSFに紐付けできます</div>';return;}
+  wrap.style.display='';cnt.textContent='（'+rows.length+'件）';
+  list.innerHTML=rows.map(({t,rid})=>`<div onclick="closeKpiEdit();gotoTab('tasks');setTimeout(()=>{if(typeof openTaskEdit==='function')openTaskEdit('${rid}')},250)" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #F3F4F6;cursor:pointer">
+    <div style="min-width:0;flex:1"><div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.name}</div><div style="font-size:9px;color:var(--text3)">期限 ${t.end||'—'}</div></div>
+    <span style="font-size:10px;font-weight:700;color:var(--accent);flex-shrink:0">${t.pct!=null?t.pct:0}%</span>
+    <span style="font-size:10px;color:var(--text3);flex-shrink:0">${t.hours!=null?t.hours:0}h</span>
+  </div>`).join('');
 }
 // 互換: 既存の KPI クリック呼び出し
 function openKpiEdit(k,si,ai){openCellEdit(k,'kpi',si,ai);}
