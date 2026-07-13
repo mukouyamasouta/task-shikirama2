@@ -2188,18 +2188,13 @@ function _chartTasks(k){
   return [...ASSIGNMENTS,...ASSIGN_HISTORY].filter(t=>t.chart&&((cn1&&String(t.chart)===String(cn1))||(cn2&&String(t.chart)===String(cn2))));
 }
 // KPI単位の作業時間: そのKPIに紐づくタスクのtotal_hours合計（タスクがあれば優先）。無ければ曼荼羅セルのhoursTotal
-function _kpiHours(k,si,ai){
-  const tks=_chartTasks(k).filter(t=>t.csfIdx===si&&t.kpiIdx===ai);
-  if(tks.length)return tks.reduce((s,t)=>s+(+t.hours||0),0);
-  const ed=_chartEdits(k)[si+'-'+ai];
-  return (ed&&ed.hoursTotal)?(+ed.hoursTotal||0):0;
-}
-// CSF配下KPIのtotal_hours合計（KPIタスク＋CSF直下タスク＋未タスクKPIのセル時間＋CSFセル自身の記入時間）
+// KPI廃止: CSFの合計時間 = CSF紐付け全タスクの合計（件数無制限・kpiIdx不問）
+//          ＋ CSFセル自身に記入した累計時間 ＋ 旧KPIセル時間（si-aiキー・旧データ互換の読み取りのみ）
 function _csfKpiHours(k,si){
-  let sum=0;
-  for(let ai=0;ai<8;ai++)sum+=_kpiHours(k,si,ai);
-  sum+=_chartTasks(k).filter(t=>t.csfIdx===si&&t.kpiIdx==null).reduce((s,t)=>s+(+t.hours||0),0); // CSF直下タスク
-  sum+=(+((_chartEdits(k)['csf-'+si]||{}).hoursTotal)||0); // CSFセル自身に記入した累計時間
+  let sum=_chartTasks(k).filter(t=>t.csfIdx===si).reduce((s,t)=>s+(+t.hours||0),0);
+  sum+=(+((_chartEdits(k)['csf-'+si]||{}).hoursTotal)||0);
+  const ed=_chartEdits(k);
+  for(let ai=0;ai<8;ai++){const e=ed[si+'-'+ai];if(e&&e.hoursTotal)sum+=(+e.hoursTotal||0);}
   return Math.round(sum*10)/10;
 }
 // CSFの作業時間: 上書き値（csf_hours_override[si]）があれば優先、なければKPI合計
