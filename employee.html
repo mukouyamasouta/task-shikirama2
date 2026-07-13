@@ -157,9 +157,9 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 .mnd-sub-row:last-child{border-bottom:none}
 .mnd-sub-num{background:var(--accent-l);color:var(--accent);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
 .mnd-sub-input{border:none;outline:none;padding:8px 10px;font-size:12px;font-family:inherit;width:100%;color:var(--text);background:transparent}
-.mnd-preview-wrap{display:grid;grid-template-columns:repeat(9,1fr);gap:1px;background:#D1D5DB;border-radius:4px;overflow:hidden}
+.mnd-preview-wrap{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#D1D5DB;border-radius:4px;overflow:hidden}
 /* grid editor */
-.grid-editor-wrap{display:grid;grid-template-columns:repeat(9,1fr);gap:2px;background:#D1D5DB;border-radius:6px;overflow:hidden}
+.grid-editor-wrap{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:#D1D5DB;border-radius:6px;overflow:hidden}
 .ge-cell{min-height:54px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.3;padding:4px 3px;cursor:pointer;word-break:break-all;position:relative;transition:filter .12s}
 .ge-cell:hover{filter:brightness(.9)}
 /* チャート管理 */
@@ -395,7 +395,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div class="g2">
       <div>
         <div class="card">
-          <div class="card-hd"><div><div class="card-title">作成設定</div><div class="card-sub">中心=KGI ／ サブ=CSF（8項目） ／ 外周=KPI</div></div></div>
+          <div class="card-hd"><div><div class="card-title">作成設定</div><div class="card-sub">中心=KGI ／ サブ=CSF（8項目）。施策はCSF紐付けタスクで管理</div></div></div>
           <div class="card-body">
             <div class="fg"><label class="fl">KGI（中心目標）</label>
               <input class="fi" id="mnd-center-input" placeholder="例: Q4個人売上 ¥18M達成" oninput="updateMndPreview()">
@@ -1794,12 +1794,19 @@ function applyMndTemplate(key){
   d.subs.forEach((s,i)=>{const el=document.getElementById(`mnd-sub-${i+1}`);if(el)el.value=s;});updateMndPreview();
 }
 function updateMndPreview(){
+  // KPI廃止: プレビューは KGI+CSF8項目 の3x3
   const grid=document.getElementById('mnd-send-preview');if(!grid)return;
   const center=(document.getElementById('mnd-center-input')||{}).value||'';
   const subs=Array.from({length:8},(_,i)=>(document.getElementById(`mnd-sub-${i+1}`)||{}).value||'');
-  const G=Array.from({length:9},()=>Array(9).fill(null));G[4][4]={t:'center'};
-  SP_MAP.forEach(({cr,cc,oc,si})=>{G[cr][cc]={t:'sub',v:subs[si]};G[oc[0]][oc[1]]={t:'sub',v:subs[si]};for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(dr===0&&dc===0)continue;const r2=oc[0]+dr,c2=oc[1]+dc;if(r2>=0&&r2<9&&c2>=0&&c2<9&&!G[r2][c2])G[r2][c2]={t:'action'};}});
-  let h='';for(let r=0;r<9;r++)for(let c=0;c<9;c++){const cell=G[r][c];let sty='min-height:20px;display:flex;align-items:center;justify-content:center;font-size:5px;text-align:center;padding:1px;word-break:break-all;line-height:1.2;';if(c===2||c===5)sty+='border-right:2px solid #9CA3AF;';if(r===2||r===5)sty+='border-bottom:2px solid #9CA3AF;';let txt='';if(cell&&cell.t==='center'){sty+='background:#0D9488;color:#fff;font-weight:800;';txt=center.slice(0,5);}else if(cell&&cell.t==='sub'){sty+='background:#CCEDE9;color:#0D9488;font-weight:700;';txt=(cell.v||'').slice(0,4);}else sty+='background:#F9FAFB;color:#9CA3AF;';h+=`<div style="${sty}">${txt}</div>`;}
+  const order=[0,1,2,7,-1,3,6,5,4];
+  let h='';
+  order.forEach(si=>{
+    let sty='min-height:34px;display:flex;align-items:center;justify-content:center;font-size:8px;text-align:center;padding:2px;word-break:break-all;line-height:1.2;';
+    let txt='';
+    if(si<0){sty+='background:#0D9488;color:#fff;font-weight:800;';txt=center.slice(0,10);}
+    else{sty+='background:#CCEDE9;color:#0D9488;font-weight:700;';txt=(subs[si]||'').slice(0,8);}
+    h+=`<div style="${sty}">${txt}</div>`;
+  });
   grid.innerHTML=h;
 }
 function previewMndFull(){
@@ -1850,23 +1857,15 @@ function initGridEditor(){
   renderGridEditor();
 }
 function renderGridEditor(){
-  const G=Array.from({length:9},()=>Array(9).fill(null));
-  G[4][4]={t:'center'};
-  SP_MAP.forEach(({cr,cc,oc,si})=>{
-    G[cr][cc]={t:'sub',si};G[oc[0]][oc[1]]={t:'sub',si};
-    let ai=0;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(dr===0&&dc===0)continue;const r=oc[0]+dr,c=oc[1]+dc;if(r>=0&&r<9&&c>=0&&c<9&&!G[r][c])G[r][c]={t:'action',si,ai};ai++;}
-  });
+  // KPI廃止: グリッドエディタは KGI+CSF8項目 の3x3（施策はCSF紐付けタスクで管理）
+  const order=[0,1,2,7,-1,3,6,5,4];
   let h='<div class="grid-editor-wrap">';
-  for(let r=0;r<9;r++){for(let c=0;c<9;c++){
-    const cell=G[r][c];
-    let sty='';let txt='';let cls='ge-cell';let click='';
-    if(c===2||c===5)sty+='border-right:3px solid #9CA3AF;';if(r===2||r===5)sty+='border-bottom:3px solid #9CA3AF;';
-    if(cell&&cell.t==='center'){sty+='background:#0D9488;color:#fff;font-weight:800;font-size:10px;';txt=newChart.center||'<span style="opacity:.5">KGI</span>';click=`openCellEditor('center',-1,-1,event)`;}
-    else if(cell&&cell.t==='sub'){sty+=`background:#CCEDE9;color:#0D9488;font-weight:700;font-size:9px;`;txt=newChart.subs[cell.si]||`<span style="opacity:.5">CSF${cell.si+1}</span>`;click=`openCellEditor('sub',${cell.si},-1,event)`;}
-    else if(cell&&cell.t==='action'){sty+='background:#F9FAFB;color:#4B5563;font-size:9px;';txt=newChart.acts[cell.si][cell.ai]||'';click=`openCellEditor('action',${cell.si},${cell.ai},event)`;}
-    else{sty+='background:#E5E7EB;';}
-    h+=`<div class="${cls}" style="${sty}" onclick="${click}">${txt}</div>`;
-  }}
+  order.forEach(si=>{
+    let sty='';let txt='';let click='';
+    if(si<0){sty+='background:#0D9488;color:#fff;font-weight:800;font-size:10px;';txt=newChart.center||'<span style="opacity:.5">KGI</span>';click=`openCellEditor('center',-1,-1,event)`;}
+    else{sty+=`background:#CCEDE9;color:#0D9488;font-weight:700;font-size:9px;`;txt=newChart.subs[si]||`<span style="opacity:.5">CSF${si+1}</span>`;click=`openCellEditor('sub',${si},-1,event)`;}
+    h+=`<div class="ge-cell" style="${sty}" onclick="${click}">${txt}</div>`;
+  });
   h+='</div>';
   document.getElementById('grid-editor-container').innerHTML=h;
   updateGridSummary();
