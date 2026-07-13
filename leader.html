@@ -1722,7 +1722,7 @@ renderReports();
     <div id="ib-hint" style="background:var(--accent-l);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:var(--text2)">CSF（内周）または KPI（外周）セルをクリックして選択 → 担当メンバーと期間を設定 →「振り分ける」。<strong style="color:#92400E">黄色</strong>=割当済み（担当者と進捗%を表示）／<strong style="color:var(--accent)">緑枠</strong>=選択中</div>
     <div style="overflow-x:auto;margin-bottom:14px"><div id="ib-grid" style="min-width:520px"></div></div>
     <div style="border:1px solid var(--border);border-radius:10px;padding:14px">
-      <div id="iba-kpilabel" style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px">未選択 — グリッドのCSF/KPIセルをクリックしてください</div>
+      <div id="iba-kpilabel" style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px">未選択 — グリッドのCSFセルをクリックしてください</div>
       <div class="fr">
         <div class="fg"><label class="fl">タスク名</label><input class="fi" id="iba-name" placeholder="KPIセルを選択すると自動入力"></div>
         <div class="fg"><label class="fl">担当メンバー</label><select class="fs" id="iba-member"></select></div>
@@ -1803,13 +1803,9 @@ function renderInbox(){
   con.innerHTML=h;
 }
 function ibBuildGrid(){
-  const G=Array.from({length:9},()=>Array(9).fill(null));
-  G[4][4]={t:'center'};
-  SP_MAP.forEach(({cr,cc,oc,si})=>{
-    G[cr][cc]={t:'sub',si};G[oc[0]][oc[1]]={t:'sub',si};
-    let ai=0;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(dr===0&&dc===0)continue;const r=oc[0]+dr,c=oc[1]+dc;if(r>=0&&r<9&&c>=0&&c<9&&!G[r][c])G[r][c]={t:'action',si,ai};ai++;}
-  });
-  return G;
+  // KPI廃止: 受信チャートも KGI+CSF8項目 の3x3表示（振り分けはCSF単位）
+  const order=[0,1,2,7,-1,3,6,5,4];
+  return order.map(si=>si<0?{t:'center'}:{t:'sub',si});
 }
 let _ibMode='assign';
 function ibSetMode(m){
@@ -1821,7 +1817,7 @@ function ibSetMode(m){
   const hint=document.getElementById('ib-hint');
   if(hint)hint.innerHTML=m==='assign'
     ?'CSF（内周）または KPI（外周）セルをクリックして選択 → 担当メンバーと期間を設定 →「振り分ける」。<strong style="color:#92400E">黄色</strong>=割当済み（担当者と進捗%を表示）／<strong style="color:var(--accent)">緑枠</strong>=選択中'
-    :'✏ 編集モード: CSF/KPIセルをクリックすると文言を編集できます。保存するとチャートに反映され、幹部の送信履歴・メンバーの受信ボックスにも同じ内容が表示されます。';
+    :'✏ 編集モード: CSFセルをクリックすると文言を編集できます。保存するとチャートに反映され、幹部の送信履歴・メンバーの受信ボックスにも同じ内容が表示されます。';
   _ibSel=null;ibRenderGrid();
 }
 function ibCellBadge(cs){
@@ -1833,38 +1829,26 @@ function ibCellBadge(cs){
 }
 function ibRenderGrid(){
   const s=_ibCur;if(!s)return;
-  const G=ibBuildGrid();
-  let h='<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:2px;background:#D1D5DB;border-radius:6px;overflow:hidden">';
-  const drawn={};
-  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
-    const cell=G[r][c];
-    let sty='min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.3;padding:3px 2px;word-break:break-all;position:relative;box-sizing:border-box;';
-    if(c===2||c===5)sty+='border-right:3px solid #9CA3AF;';
-    if(r===2||r===5)sty+='border-bottom:3px solid #9CA3AF;';
+  const cells=ibBuildGrid();
+  const oldEditCnt=si=>Object.keys(s.cell_status||{}).filter(k=>new RegExp('^'+si+'-\\d+$').test(k)).length;
+  let h='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:#D1D5DB;border-radius:6px;overflow:hidden">';
+  cells.forEach(cell=>{
+    let sty='min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:10px;line-height:1.3;padding:5px 4px;word-break:break-all;position:relative;box-sizing:border-box;';
     let oc2='',tx='';
-    if(cell&&cell.t==='center'){sty+='background:var(--accent);color:#fff;font-weight:800;font-size:10px;';tx=(s.center||'').replace(/\n/g,'<br>');}
-    else if(cell&&cell.t==='sub'){
+    if(cell.t==='center'){sty+='background:var(--accent);color:#fff;font-weight:800;font-size:11px;';tx=(s.center||'').replace(/\n/g,'<br>');}
+    else{
       const key='csf-'+cell.si,cs=(s.cell_status||{})[key];
       const sel=_ibSel&&_ibSel.csf===cell.si;
       sty+='background:var(--accent-l);color:var(--accent);font-weight:700;cursor:pointer;';
       tx=((s.subs||[])[cell.si]||'')+ibCellBadge(cs);
+      const n=oldEditCnt(cell.si);
+      if(n)tx+=`<span style="font-size:8px;color:#D97706;font-weight:700;margin-top:2px">✏ 記入${n}件</span>`;
       if(cs&&cs.assignedTo)sty+='box-shadow:inset 0 0 0 1.5px #F59E0B;';
       if(sel)sty+='outline:2.5px solid var(--accent);outline-offset:-2.5px;';
-      // 内周セルは2箇所に描画されるが、クリックはどちらも同じCSF
       oc2=`onclick="ibPickCsf(${cell.si})"`;
     }
-    else if(cell&&cell.t==='action'){
-      const key=cell.si+'-'+cell.ai,cs=(s.cell_status||{})[key];
-      const sel=_ibSel&&_ibSel.si===cell.si&&_ibSel.ai===cell.ai;
-      const base=((s.acts||[])[cell.si]||[])[cell.ai]||'';
-      if(cs&&cs.assignedTo){sty+='background:#FEF3C7;color:#92400E;border:1.5px solid #F59E0B;cursor:pointer;';tx=base+ibCellBadge(cs);}
-      else if(cs){sty+='background:#FEF3C7;color:#92400E;border:1.5px solid #F59E0B;cursor:pointer;';tx=`<span style="font-size:7px;position:absolute;top:1px;right:2px;color:#D97706">✏</span>${base}${ibCellBadge(cs)}`;}
-      else{sty+='background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;cursor:pointer;';tx=base;}
-      if(sel)sty+='outline:2.5px solid var(--accent);outline-offset:-2.5px;';
-      oc2=`onclick="ibPick(${cell.si},${cell.ai})"`;
-    }else{sty+='background:#E5E7EB;';}
     h+=`<div ${oc2} style="${sty}">${tx}</div>`;
-  }
+  });
   h+='</div>';
   document.getElementById('ib-grid').innerHTML=h;
 }
@@ -1873,7 +1857,7 @@ function ibOpen(id){
   _ibCur=s;_ibSel=null;_ibMode='assign';
   document.getElementById('ib-title').textContent=(s.center||'').replace(/\n/g,' ')+' — 受信チャートの管理';
   document.getElementById('ib-meta').textContent='送信者: '+(s.sent_by_name||'—')+' ／ 受信日: '+((s.sent_at||'').slice(0,10))+' ／ 全体進捗: '+(s.progress||0)+'%';
-  document.getElementById('iba-kpilabel').textContent='未選択 — グリッドのCSF/KPIセルをクリックしてください';
+  document.getElementById('iba-kpilabel').textContent='未選択 — グリッドのCSFセルをクリックしてください';
   document.getElementById('iba-name').value='';
   const ms=document.getElementById('iba-member');
   ms.innerHTML=(EVAL_IDS.length?EVAL_IDS:DASH_IDS).map(mid=>`<option value="${mid}">${MEMBERS[mid]?MEMBERS[mid].name:mid}</option>`).join('');
@@ -1927,7 +1911,7 @@ async function ibEditSave(){
 function ibFmtMD(d){if(!d)return'-';const p=d.split('-');return p.length===3?(+p[1])+'/'+(+p[2]):d;}
 async function ibAssign(){
   const s=_ibCur;if(!s)return;
-  if(!_ibSel){alert('振り分けるCSF/KPIセルをクリックして選択してください');return;}
+  if(!_ibSel){alert('振り分けるCSFセルをクリックして選択してください');return;}
   const name=(document.getElementById('iba-name').value||'').trim();
   if(!name){alert('タスク名を入力してください');return;}
   const mid=document.getElementById('iba-member').value;
@@ -1959,7 +1943,7 @@ async function ibAssign(){
   MEMBER_TASKS[mid].push({id:taskId,name,kpi:csf,start:ibFmtMD(start),due:ibFmtMD(due),pri,status:'todo',pct:0,chart:chartTitle,sendId:s.id,cell:key});
   if(typeof renderAssignedTasks==='function')renderAssignedTasks();
   _ibSel=null;document.getElementById('iba-name').value='';
-  document.getElementById('iba-kpilabel').textContent='未選択 — グリッドのCSF/KPIセルをクリックしてください';
+  document.getElementById('iba-kpilabel').textContent='未選択 — グリッドのCSFセルをクリックしてください';
   ibRenderGrid();renderInbox();updateInboxBadge();
   alert('✅ 「'+name+'」を '+(m?m.name:'')+' に振り分けました。\n個人画面の「割り当て」「タスク管理」に 📊 '+chartTitle+' のタスクとして表示され、本人が進捗を書くとこのチャートに自動反映されます。');
 }

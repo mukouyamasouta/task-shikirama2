@@ -2836,34 +2836,30 @@ function renderInbox(){
   con.innerHTML=h;
 }
 function ibBuildGrid(){
-  const G=Array.from({length:9},()=>Array(9).fill(null));
-  G[4][4]={t:'center'};
-  SP_MAP.forEach(({cr,cc,oc,si})=>{
-    G[cr][cc]={t:'sub',si};G[oc[0]][oc[1]]={t:'sub',si};
-    let ai=0;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(dr===0&&dc===0)continue;const r=oc[0]+dr,c=oc[1]+dc;if(r>=0&&r<9&&c>=0&&c<9&&!G[r][c])G[r][c]={t:'action',si,ai};ai++;}
-  });
-  return G;
+  // KPI廃止: 受信チャートも KGI+CSF8項目 の3x3表示（施策はCSF紐付けタスクで管理）
+  const order=[0,1,2,7,-1,3,6,5,4];
+  return order.map(si=>si<0?{t:'center'}:{t:'sub',si});
 }
 function ibRenderGrid(){
   const s=_ibCur;if(!s)return;
-  const G=ibBuildGrid();
-  let h='<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:2px;background:#D1D5DB;border-radius:6px;overflow:hidden">';
-  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
-    const cell=G[r][c];
-    let sty='min-height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.3;padding:3px 2px;word-break:break-all;position:relative;box-sizing:border-box;';
-    if(c===2||c===5)sty+='border-right:3px solid #9CA3AF;';
-    if(r===2||r===5)sty+='border-bottom:3px solid #9CA3AF;';
+  const cells=ibBuildGrid();
+  // 旧KPIセル(si-ai)の記入件数をCSFセルへ集約表示（旧データ互換）
+  const oldEditCnt=si=>Object.keys(s.cell_status||{}).filter(k=>new RegExp('^'+si+'-\\d+$').test(k)).length;
+  let h='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:#D1D5DB;border-radius:6px;overflow:hidden">';
+  cells.forEach(cell=>{
+    let sty='min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:10px;line-height:1.3;padding:5px 4px;word-break:break-all;position:relative;box-sizing:border-box;';
     let oc2='',tx='';
-    if(cell&&cell.t==='center'){sty+='background:var(--accent);color:#fff;font-weight:800;font-size:10px;';tx=(s.center||'').replace(/\n/g,'<br>');}
-    else if(cell&&cell.t==='sub'){sty+='background:var(--accent-l);color:var(--accent);font-weight:700;';tx=(s.subs||[])[cell.si]||'';}
-    else if(cell&&cell.t==='action'){
-      const key=cell.si+'-'+cell.ai,ed=(s.cell_status||{})[key];
-      if(ed){sty+='background:#FEF3C7;color:#92400E;border:1.5px solid #F59E0B;cursor:pointer;';tx=`<span style="font-size:7px;position:absolute;top:1px;right:2px;color:#D97706">✏</span>${((s.acts||[])[cell.si]||[])[cell.ai]||''}`;}
-      else{sty+='background:#F9FAFB;color:#4B5563;border:1px solid #E5E7EB;cursor:pointer;';tx=((s.acts||[])[cell.si]||[])[cell.ai]||'';}
-      oc2=`onclick="ibOpenCell(${cell.si},${cell.ai})"`;
-    }else{sty+='background:#E5E7EB;';}
+    if(cell.t==='center'){sty+='background:var(--accent);color:#fff;font-weight:800;font-size:11px;';tx=(s.center||'').replace(/\n/g,'<br>');}
+    else{
+      const key='csf-'+cell.si,ed=(s.cell_status||{})[key];
+      const n=oldEditCnt(cell.si);
+      if(ed){sty+='background:#FEF3C7;color:#92400E;border:1.5px solid #F59E0B;cursor:pointer;';tx=`<span style="font-size:7px;position:absolute;top:1px;right:2px;color:#D97706">✏</span>${(s.subs||[])[cell.si]||''}`;}
+      else{sty+='background:var(--accent-l);color:var(--accent);font-weight:700;cursor:pointer;';tx=(s.subs||[])[cell.si]||'';}
+      if(n)tx+=`<span style="font-size:8px;color:#D97706;font-weight:700;margin-top:2px">✏ 記入${n}件</span>`;
+      oc2=`onclick="ibOpenCell(${cell.si},null)"`;
+    }
     h+=`<div ${oc2} style="${sty}">${tx}</div>`;
-  }
+  });
   h+='</div>';
   document.getElementById('ib-grid').innerHTML=h;
 }
@@ -2879,24 +2875,24 @@ function ibOpen(id){
 }
 function ibClose(){document.getElementById('ib-fill-modal').style.display='none';_ibCur=null;}
 function ibOpenCell(si,ai){
+  // KPI廃止: 記入はCSFセル単位（key='csf-'+si）。ai引数は互換のため残置（未使用）
   const s=_ibCur;if(!s)return;
-  _ibCell={si,ai};
+  _ibCell={si,ai:null};
+  const cur=((s.cell_status||{})['csf-'+si]||{}).text||'';
   document.getElementById('ib-cell-csf').textContent=`CSF-${si+1}: ${(s.subs||[])[si]||''}`;
-  document.getElementById('ib-cell-orig').textContent=((s.acts||[])[si]||[])[ai]||'（未入力）';
-  document.getElementById('ib-cell-text').value=((s.acts||[])[si]||[])[ai]||'';
+  document.getElementById('ib-cell-orig').textContent=(s.subs||[])[si]||'（未入力）';
+  document.getElementById('ib-cell-text').value=cur;
   document.getElementById('ib-cell-modal').style.display='flex';
   document.getElementById('ib-cell-text').focus();
 }
 function ibCellClose(){document.getElementById('ib-cell-modal').style.display='none';_ibCell=null;}
 function ibCellSave(){
   const s=_ibCur;if(!s||!_ibCell)return;
-  const{si,ai}=_ibCell;
+  const{si}=_ibCell;
   const txt=(document.getElementById('ib-cell-text').value||'').trim();
-  if(!s.acts[si])s.acts[si]=Array(8).fill('');
-  s.acts[si][ai]=txt;
   s.cell_status=s.cell_status||{};s.edited_by=s.edited_by||{};
-  s.cell_status[si+'-'+ai]={text:txt,by:ibMyName()};
-  s.edited_by[si+'-'+ai]=ibMyName();
+  s.cell_status['csf-'+si]={text:txt,by:ibMyName()};
+  s.edited_by['csf-'+si]=ibMyName();
   ibCellClose();ibRenderGrid();
 }
 async function ibSave(){
