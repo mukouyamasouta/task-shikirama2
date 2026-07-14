@@ -1958,17 +1958,15 @@ function onTmChartSel(){
   const csfSel=document.getElementById('tm-csf-sel');const warn=document.getElementById('tm-csf-warn');
   if(!k){ if(csfSel)csfSel.innerHTML='<option value="">（先にチャートを選択）</option>'; if(warn)warn.style.display='none'; onTmCsfSel();_updateTmCreateBtn(); return; }
   const d=CHARTS[k]||{};const edits=_chartEdits(k);
-  // 選択可能なCSF = 定義済み（名前あり）かつ 配下KPI（acts）に空きセルがある（＝紐付け余地あり）
+  // KPI廃止: 選択可能なCSF = 定義済み（名前あり）のもの全て（件数制限なし）
   const opts=[];(d.subs||[]).forEach((s,si)=>{
     const txt=((edits['csf-'+si]||{}).text!=null?edits['csf-'+si].text:s)||'';
     if(!txt||!String(txt).trim())return;                  // 名前なしCSFは除外
-    const acts=(d.acts||[])[si]||[];
-    let hasEmpty=false;for(let ai=0;ai<8;ai++){if(!(acts[ai]&&String(acts[ai]).trim())){hasEmpty=true;break;}}
-    if(hasEmpty)opts.push({si,txt:String(txt).trim()});   // KPIに空きがあるCSFのみ
+    opts.push({si,txt:String(txt).trim()});               // KPIスロットの空き確認は不要（無制限）
   });
   if(!opts.length){
-    if(csfSel)csfSel.innerHTML='<option value="">空いているCSFがありません</option>';
-    if(warn){warn.style.display='block';warn.textContent='空いているCSFがありません（全CSFのKPIが埋まっている、またはCSF未作成）。チャート管理でCSF/KPIを調整してください。';}
+    if(csfSel)csfSel.innerHTML='<option value="">CSFが設定されていません</option>';
+    if(warn){warn.style.display='block';warn.textContent='チャートにCSFが設定されていません。チャート管理でCSFを追加してください。';}
   }else{
     if(csfSel)csfSel.innerHTML='<option value="">CSFを選択</option>'+opts.map(o=>`<option value="${o.si}">CSF${o.si+1} ${o.txt}</option>`).join('');
     if(warn)warn.style.display='none';

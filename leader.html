@@ -1885,13 +1885,20 @@ async function ibAssign(){
   const pri=document.getElementById('iba-pri').value||'md';
   const isCsf=_ibSel.csf!=null;
   const csf=(s.subs||[])[_ibSel.si]||'—';
+  // cell_status/edited_by（送信チャート側のセルバッジ表示用）はグリッド描画側（ibRenderGrid）が
+  // 常に 'csf-'+si で引くため、そのキー形式を維持する。
   const key=isCsf?('csf-'+_ibSel.si):(_ibSel.si+'-'+_ibSel.ai);
+  // tasks.source_cell はCSFインデックスの素の数字文字列で保存する（web/api.js csfIdxFromCell の正規形）。
+  // 'csf-N'/'N-M'のまま渡すと以前はcsfIdxがnullになり、タスク管理・ガント・ダッシュボードの
+  // CSF行からタスクが消えて見えた（KPI廃止移行の回帰バグ）。api.js側は旧形式も救済読み取りするが、
+  // 新規書き込みは常に正規形にする。
+  const taskCell=String(_ibSel.si);
   const chartTitle=ibChartTitle(s);
   const API=window.VexumAPI;
   let taskId=null;
   if(API&&API.ready){
     const res=await API.assignTask({title:name,kpi:csf,assigneePid:pidOf(mid),teamUuid:teamMeta.uid,start,due,priority:pri,
-      sendId:String(s.id).startsWith('demo-')?null:s.id,cell:key,chartTitle});
+      sendId:String(s.id).startsWith('demo-')?null:s.id,cell:taskCell,chartTitle});
     if(res&&res.error){alert('割当失敗: '+res.error);return;}
     if(res&&res.data)taskId=res.data.id;
   }
@@ -1903,7 +1910,7 @@ async function ibAssign(){
     API.updateSend(s.id,{cell_status:s.cell_status,edited_by:s.edited_by,status:s.status});
   }
   if(!MEMBER_TASKS[mid])MEMBER_TASKS[mid]=[];
-  MEMBER_TASKS[mid].push({id:taskId,name,kpi:csf,start:ibFmtMD(start),due:ibFmtMD(due),pri,status:'todo',pct:0,chart:chartTitle,sendId:s.id,cell:key});
+  MEMBER_TASKS[mid].push({id:taskId,name,kpi:csf,start:ibFmtMD(start),due:ibFmtMD(due),pri,status:'todo',pct:0,chart:chartTitle,sendId:s.id,cell:taskCell,csfIdx:_ibSel.si});
   if(typeof renderAssignedTasks==='function')renderAssignedTasks();
   _ibSel=null;document.getElementById('iba-name').value='';
   document.getElementById('iba-kpilabel').textContent='未選択 — グリッドのCSFセルをクリックしてください';
