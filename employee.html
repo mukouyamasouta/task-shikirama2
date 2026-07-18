@@ -294,7 +294,6 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <!-- 評価管理 -->
 <div id="tc-reviews" class="tab-content">
   <div class="sec-title">評価管理 <span style="font-size:11px;font-weight:400;color:var(--text3)">曼荼羅チャートのKGI / CSF / KPIを評価</span>
-    <button class="f-submit" style="padding:7px 16px;font-size:12px;background:var(--amber)" onclick="openSelfEval()">📝 自己評価を入力 / 編集 / 提出</button>
   </div>
   <div id="self-eval-status-card" style="background:#FFFBEB;border:1px solid #F59E0B;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#92400E;display:none"></div>
 
@@ -1451,10 +1450,24 @@ function setStar(k,type,si,n){
   const r=_rat(k);
   if(type==='kgi')r.kgi.stars=(r.kgi.stars===n?0:n);
   else r.csf[si].stars=(r.csf[si].stars===n?0:n);
+  // localStorage即時保存（ページリロード後も星が残る）
+  try{
+    const saved=JSON.parse(localStorage.getItem('vexum_eval_draft_'+k)||'null')||{r:JSON.parse(JSON.stringify(r))};
+    if(type==='kgi'){saved.r.kgi=saved.r.kgi||{};saved.r.kgi.stars=r.kgi.stars;}
+    else{saved.r.csf=saved.r.csf||[];saved.r.csf[si]=saved.r.csf[si]||{};saved.r.csf[si].stars=r.csf[si].stars;}
+    localStorage.setItem('vexum_eval_draft_'+k,JSON.stringify(saved));
+  }catch(e){}
   renderEval();
 }
 function saveRat(k,type,si,field,val){
   const r=_rat(k);
+  // localStorage即時保存
+  try{
+    const _sd=JSON.parse(localStorage.getItem('vexum_eval_draft_'+k)||'null')||{r:{}};
+    if(!_sd.r)_sd.r={};if(!_sd.r.kgi)_sd.r.kgi={};if(!_sd.r.csf)_sd.r.csf=Array.from({length:8},()=>({}));
+    if(type==='kgi')_sd.r.kgi[field]=val;else{if(!_sd.r.csf[si])_sd.r.csf[si]={};_sd.r.csf[si][field]=val;}
+    localStorage.setItem('vexum_eval_draft_'+k,JSON.stringify(_sd));
+  }catch(e){}
   if(type==='kgi')r.kgi[field]=val;else r.csf[si][field]=val;
   if(field!=='pct')return;
   const pct=Math.min(100,Math.max(0,+val||0));
@@ -1756,6 +1769,7 @@ function renderEval(){
     renderEvalMndOverlay(k,d);
   }else{
     con.innerHTML=renderEvalBar(k);
+    _loadAndRestoreEvalBar(k);
   }
   renderFeedback(k);
 }
@@ -1884,7 +1898,30 @@ function renderEvalBar(k){
         <textarea class="eval-cmt" rows="2" placeholder="CSF-${si+1}の進捗・評価コメントを入力…" oninput="saveRat('${k}','csf',${si},'comment',this.value)">${cs.comment}</textarea>
       </div></div>`;
   }
+  h+=`<div style="display:flex;gap:10px;margin-top:16px;padding:0 2px">
+    <button class="f-submit" style="flex:1;background:#6B7280;font-size:13px" onclick="saveEvalInline('${k}',false)">💾 保存</button>
+    <button class="f-submit" style="flex:1;font-size:13px" onclick="saveEvalInline('${k}',true)">📤 提出（リーダーに反映）</button>
+  </div>`;
   return h;
+}
+async function saveEvalInline(k,isSubmit){
+  const d=CHARTS[k];if(!d)return;
+  const r=_rat(k);
+  if(isSubmit&&!r.kgi.stars){alert('KGIの星評価を選択してください');return;}
+  if(isSubmit&&!confirm('提出するとリーダー・幹部画面に確定として反映されます。よろしいですか？'))return;
+  const chartId=evalDbId(k,d);
+  const csfArr=r.csf.map(cs=>({stars:cs.stars||0,comment:cs.comment||''}));
+  const payload={chartId,period:d.period||'',kgi:r.kgi.stars||0,kgiComment:r.kgi.comment||'',csf:csfArr,submitted:!!isSubmit};
+  // localStorageへ即時保存（リロード後も残る）
+  try{localStorage.setItem('vexum_eval_draft_'+k,JSON.stringify({r:JSON.parse(JSON.stringify(r)),period:d.period||'',submitted:!!isSubmit}));}catch(e){}
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    const res=await API.upsertSelfEval(payload);
+    if(res&&res.error){alert('保存失敗: '+res.error);return;}
+    _evalDataCache[k]=null; // キャッシュクリアして次回再取得
+  }
+  showToast(isSubmit?'✅ 提出しました。リーダー・幹部画面に反映されます。':'💾 保存しました');
+  if(typeof renderEval==='function')renderEval();
 }
 function toggleEvalCsf(id,hd){const b=document.getElementById(id),a=hd.querySelector('.karrow'),open=b.classList.contains('open');b.classList.toggle('open',!open);a.classList.toggle('open',!open);}
 function updateCsfBar(k,si,val){
@@ -1892,6 +1929,59 @@ function updateCsfBar(k,si,val){
   const bar=document.getElementById(`csfbar${k}${si}`),pp=document.getElementById(`csfpp${k}${si}`);
   if(bar){bar.style.width=pct+'%';bar.style.background=col;}
   if(pp){pp.textContent=pct+'%';pp.style.color=col;}
+}
+async function _loadAndRestoreEvalBar(k){
+  const d=CHARTS[k];if(!d)return;
+  const r=_rat(k);
+  let loaded=false;
+  // まずSupabaseから取得（キャッシュ優先）
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    try{
+      if(!(k in _evalDataCache)||_evalDataCache[k]===null){
+        _evalDataCache[k]=await API.loadMySelfEval(evalDbId(k,d));
+      }
+      const ev=_evalDataCache[k];
+      if(ev){
+        r.kgi.stars=ev.kgi||0;r.kgi.comment=ev.kgiComment||'';
+        (ev.csf||[]).forEach((c,i)=>{if(r.csf[i]){r.csf[i].stars=c.stars||0;r.csf[i].comment=c.comment||'';}});
+        loaded=true;
+      }
+    }catch(e){}
+  }
+  // Supabase未接続またはデータなし→localStorageから復元
+  if(!loaded){
+    try{
+      const saved=JSON.parse(localStorage.getItem('vexum_eval_draft_'+k)||'null');
+      if(saved&&saved.r){
+        const sr=saved.r;
+        r.kgi.stars=sr.kgi&&sr.kgi.stars||0;r.kgi.comment=sr.kgi&&sr.kgi.comment||'';
+        (sr.csf||[]).forEach((c,i)=>{if(r.csf[i]){r.csf[i].stars=c.stars||0;r.csf[i].comment=c.comment||'';}});
+        loaded=true;
+      }
+    }catch(e){}
+  }
+  if(!loaded)return;
+  // DOM上のinput/textareaに復元値を反映
+  const kEl=document.getElementById('kgi-'+k);if(!kEl)return;
+  // KGI星
+  const kgiStars=kEl.closest('.kgi-card').querySelectorAll('.stars .star');
+  kgiStars.forEach((el,i)=>el.classList.toggle('on',i<r.kgi.stars));
+  // KGI達成率・コメント
+  const kgiPct=kEl.querySelector('input[type=number]');if(kgiPct)kgiPct.value=r.kgi.pct||'';
+  const kgiCmt=kEl.querySelector('textarea');if(kgiCmt)kgiCmt.value=r.kgi.comment||'';
+  // CSF各項目
+  for(let si=0;si<8;si++){
+    const cb=document.getElementById('csf'+k+si);if(!cb)continue;
+    const csfStars=cb.closest('.kgi-card').querySelectorAll('.stars .star');
+    csfStars.forEach((el,i)=>el.classList.toggle('on',i<(r.csf[si]&&r.csf[si].stars||0)));
+    const csfPct=cb.querySelector('input[type=number]');if(csfPct){csfPct.value=r.csf[si]&&r.csf[si].pct||'';updateCsfBar(k,si,csfPct.value);}
+    const csfCmt=cb.querySelector('textarea');if(csfCmt)csfCmt.value=r.csf[si]&&r.csf[si].comment||'';
+  }
+  // 星表示を再描画
+  if(typeof renderEvalBar!=='undefined'){
+    const pctBig=document.getElementById('eval-pct-big');if(pctBig)pctBig.textContent=getEvalProgress(k)+'%';
+  }
 }
 
 function renderFeedback(k){
