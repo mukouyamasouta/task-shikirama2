@@ -1433,7 +1433,8 @@ async function renderSubmissions(){
     rep.parentElement.style.display='';
     rep.innerHTML=reps.length?reps.map(r=>{
       const c=(typeof PCOND!=='undefined'&&PCOND[r.cond])||['📝','',''];
-      return `<div onclick="jumpToReportFromSub('${mid}','${r.date}')" onmouseover="this.style.background='#FAFCFC'" onmouseout="this.style.background=''" style="cursor:pointer;padding:10px 14px;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between"><div style="font-size:12px;font-weight:700">${r.date} ${c[0]||''}</div><div style="font-size:10px;color:var(--text3)">稼働 ${r.hours||'—'}</div></div><div style="font-size:11px;color:var(--text2);margin-top:3px">${(r.done||'').slice(0,80)}</div>${r.goal?`<div style="font-size:10px;color:#C2410C;margin-top:2px">🌅 ${r.goal}</div>`:''}</div>`;
+      const morningOnly=!r.submitted&&_hasMorningDataLd(r);
+      return `<div onclick="jumpToReportFromSub('${mid}','${r.date}')" onmouseover="this.style.background='#FAFCFC'" onmouseout="this.style.background=''" style="cursor:pointer;padding:10px 14px;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between"><div style="font-size:12px;font-weight:700">${r.date} ${c[0]||''}</div><div style="font-size:10px;color:var(--text3)">稼働 ${r.hours||'—'}</div></div>${morningOnly?`<div style="font-size:10px;color:#C2410C;font-weight:700;margin-top:3px">🌅 始業のみ（予定・終業未提出）</div>`:`<div style="font-size:11px;color:var(--text2);margin-top:3px">${(r.done||'').slice(0,80)}</div>`}${(!morningOnly&&r.goal)?`<div style="font-size:10px;color:var(--text3);margin-top:2px">実績 ${r.goal}</div>`:''}</div>`;
     }).join(''):'<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">日報はまだありません</div>';
   }
   // 工数履歴
@@ -1489,10 +1490,11 @@ function renderReportCalendar(){
     const sel=ds===_repSelDate;
     if(r){
       const c=COND[r.cond]||COND.normal;
-      h+=`<div onclick="showReportDetail('${ds}')" style="min-height:64px;border:1.5px solid ${sel?c[2]:'var(--border)'};border-radius:8px;padding:5px;cursor:pointer;background:${sel?c[2]+'1A':'#fff'};transition:.12s" title="${r.done}">
+      const morningOnly=!r.submitted&&_hasMorningDataLd(r);
+      h+=`<div onclick="showReportDetail('${ds}')" style="min-height:64px;border:1.5px solid ${sel?c[2]:'var(--border)'};border-radius:8px;padding:5px;cursor:pointer;background:${sel?c[2]+'1A':'#fff'};transition:.12s" title="${morningOnly?'始業のみ（予定）':r.done}">
         <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;font-weight:700;color:var(--text2)">${day}</span><span style="font-size:13px">${c[0]}</span></div>
         <div style="font-size:8.5px;color:var(--text3);margin-top:1px">${r.hours}</div>
-        <div style="font-size:8.5px;color:var(--text2);line-height:1.3;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${r.done}</div>
+        ${morningOnly?'<div style="font-size:8.5px;color:#C2410C;font-weight:700;margin-top:2px">🌅 始業のみ（予定）</div>':`<div style="font-size:8.5px;color:var(--text2);line-height:1.3;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${r.done}</div>`}
       </div>`;
     }else{
       h+=`<div style="min-height:64px;border:1px solid #F3F4F6;border-radius:8px;padding:5px;background:#FAFCFC"><span style="font-size:10px;color:var(--text3)">${day}</span></div>`;
@@ -1504,19 +1506,44 @@ function renderReportCalendar(){
   h+='</div>';
   document.getElementById('report-calendar').innerHTML=h;
 }
+// "HH:MM"の2点間の勤務時間(h)。employee.html _workHours と同ロジック
+function _hm2minLd(t){if(!t)return null;const p=String(t).split(':');if(p.length<2)return null;const h=+p[0],m=+p[1];return isNaN(h)||isNaN(m)?null:h*60+m;}
+function _workHoursLd(inT,outT){const a=_hm2minLd(inT),b=_hm2minLd(outT);if(a==null||b==null)return null;let d=b-a;if(d<0)d+=24*60;return Math.round(d/60*10)/10;}
+// r.planHoursはemployee.html側で常に"出勤〜退勤"の文字列連結(未入力でも"~"になる)のため、
+// 存在チェックだけでは常にtruthyになってしまう。出退勤いずれかが実際に入力されているか、
+// または今日やることが入力されているかで判定する（employee.html _hasMorningData と同じ考え方）。
+function _hasMorningDataLd(r){
+  if(!r)return false;
+  const pt=String(r.planHours||'').split('~');
+  return !!((pt[0]&&pt[0].trim())||(pt[1]&&pt[1].trim())||r.planTasks);
+}
 function showReportDetail(ds){
   _repSelDate=ds;renderReportCalendar();
   const m=MEMBERS[_repMember];const r=repByDate(_repMember,ds);
   if(!r){document.getElementById('report-detail').innerHTML='';return;}
   const c=COND[r.cond]||COND.normal;
   const p=ds.split('-');const dow=['日','月','火','水','木','金','土'][new Date(+p[0],+p[1]-1,+p[2]).getDay()];
+  // 始業（予定: plan_tasks/plan_hours）と終業（実績: done/plan/issue/actual_hours）を判別して表示する。
+  // employee.html側の始業のみ提出（終業前）の日報が、リーダー側でも「始業のみ（予定）」として見える。
+  const pt=String(r.planHours||'').split('~');
+  const hasMorning=_hasMorningDataLd(r);
+  const morningOnly=!r.submitted&&hasMorning;
+  const statusLabel=r.submitted?'終業提出済み':(hasMorning?'始業のみ（予定・終業未提出）':'—');
+  const morning=hasMorning?`<div style="grid-column:1/2;background:#FFF7ED;border:1px solid #FDBA74;border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:800;color:#C2410C;margin-bottom:4px">🌅 始業（予定）</div>
+      ${(pt[0]||pt[1])?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>出退勤予定:</b> ${pt[0]||'—'}〜${pt[1]||'—'}${_workHoursLd(pt[0],pt[1])!=null?'（'+_workHoursLd(pt[0],pt[1])+'h）':''}</div>`:''}
+      ${r.planTasks?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>今日やること:</b> ${r.planTasks}</div>`:''}
+    </div>`:'';
+  const evening=r.submitted?`<div style="grid-column:${hasMorning?'2/3':'1/3'}">
+      <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:3px">✅ 本日の達成タスク</div><div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px">${r.done}</div>
+      <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:3px">📅 明日の予定</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.plan}</div>
+    </div>`:(hasMorning?`<div style="grid-column:2/3;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:11px;text-align:center;background:#FAFAFA;border:1px dashed var(--border);border-radius:6px">終業（実績）はまだ提出されていません</div>`:'');
+  const issue=(r.submitted&&r.issue)?`<div style="grid-column:1/3"><div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:3px">⚠ 課題・相談事項</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.issue}</div></div>`:'';
   const h=`<div class="card"><div class="card-hd" style="border-left:4px solid ${m.color}">
-      <div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:8px;background:${m.color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px">${m.name.charAt(0)}</div><div><div class="card-title">${m.name} <span class="badge ${m.role==='リーダー'?'b-manager':'b-employee'}" style="margin-left:2px">${m.role}</span></div><div class="card-sub">${+p[0]}/${+p[1]}/${+p[2]} (${dow}) ／ 稼働 ${r.hours}</div></div></div>
+      <div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:8px;background:${m.color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px">${m.name.charAt(0)}</div><div><div class="card-title">${m.name} <span class="badge ${m.role==='リーダー'?'b-manager':'b-employee'}" style="margin-left:2px">${m.role}</span></div><div class="card-sub">${+p[0]}/${+p[1]}/${+p[2]} (${dow}) ／ 稼働 ${r.hours} ／ ${statusLabel}</div></div></div>
       <span style="font-size:12px;font-weight:700;color:${c[2]}">${c[0]} ${c[1]}</span>
     </div><div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div><div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:3px">✅ 本日の達成タスク</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.done}</div></div>
-      <div><div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:3px">📅 明日の予定</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.plan}</div></div>
-      <div style="grid-column:1/3"><div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:3px">⚠ 課題・相談事項</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.issue}</div></div>
+      ${morning}${evening}${issue}
     </div></div>`;
   document.getElementById('report-detail').innerHTML=h;
 }

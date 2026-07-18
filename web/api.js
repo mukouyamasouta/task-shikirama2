@@ -295,7 +295,13 @@
     var REPORTS = {};
     raw.daily_reports.forEach(function (r) {
       var key = pidToKey[r.author_id]; if (!key || !MEMBERS[key]) return;
-      (REPORTS[key] = REPORTS[key] || []).push({ date: r.report_date, hours: r.hours, done: r.done, plan: r.plan, issue: r.issue, cond: r.condition });
+      (REPORTS[key] = REPORTS[key] || []).push({
+        date: r.report_date, hours: r.hours, done: r.done, plan: r.plan, issue: r.issue, cond: r.condition,
+        // 始業(計画)/終業(実績)の内訳。employee.html側と同じ列から取得し、
+        // リーダー画面でも「始業のみ（予定）」の日報を判別・表示できるようにする
+        planTasks: r.plan_tasks || '', planHours: r.plan_hours || '', goal: r.goal || '',
+        actualHours: (r.actual_hours != null ? r.actual_hours : ''), submitted: !!r.submitted_at
+      });
     });
 
     var EVAL_RECORDS = raw.eval_records.map(function (r) {

@@ -539,7 +539,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <div class="form-card">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:6px" id="prep-form-title">本日の日報（始業 → 終業）</h3>
         <div style="font-size:11px;color:var(--text3);margin-bottom:14px">出勤時に「始業」を、退勤時に「終業」を入力します。<span id="prep-edit-note" style="display:none;color:var(--accent);font-weight:700"></span></div>
-        <div class="fg"><label class="fl">日付</label><input class="fi" type="date" id="prep-date"></div>
+        <div class="fg"><label class="fl">日付</label><input class="fi" type="date" id="prep-date" onchange="_prepUpdateMorningStatus()"></div>
         <!-- 始業 -->
         <div style="background:#FFF7ED;border:1px solid #FDBA74;border-radius:8px;padding:12px;margin-bottom:12px">
           <div style="font-size:12px;font-weight:800;color:#C2410C;margin-bottom:8px">始業（出勤時の予定）</div>
@@ -549,8 +549,9 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
           </div>
           <div style="font-size:11px;color:#C2410C;font-weight:700;margin:-4px 0 8px">予定勤務時間: <span id="prep-planwork">—</span></div>
           <div class="fg"><label class="fl">今日やること</label><textarea class="fi" id="prep-plantasks" rows="2" placeholder="今日取り組むことを簡単に…" style="resize:vertical"></textarea></div>
-          <button class="card-btn" style="width:100%;background:#FFEDD5;color:#C2410C;border-color:#FDBA74;font-weight:700;padding:9px" onclick="reportSaveMorning()">始業を保存</button>
+          <button class="card-btn" style="width:100%;background:#FFEDD5;color:#C2410C;border-color:#FDBA74;font-weight:700;padding:9px" onclick="reportSaveMorning()">📤 始業をリーダーに提出</button>
           <span id="report-morning-msg" style="display:none;margin-left:8px;color:var(--green);font-size:11px;font-weight:700">保存しました</span>
+          <div id="report-morning-status" style="display:none;margin-top:8px;font-size:11px;font-weight:700;color:#059669;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:6px;padding:6px 10px"></div>
         </div>
         <!-- 終業 -->
         <div style="background:#EFF6FF;border:1px solid #93C5FD;border-radius:8px;padding:12px">
@@ -935,7 +936,7 @@ function _prepStore(rec){
   const p=rec.date.split('-');prepYear=+p[0];prepMonth=+p[1]-1;
   renderPReportCalendar();showPReportDetail(rec.date);
 }
-// 始業：今日の計画を保存し、リーダーへ一度共有（同日は重複通知しない）
+// 始業：今日の計画をリーダーに提出（同日は重複通知しない）
 async function reportSaveMorning(){
   const rec=_prepGather();
   if(!rec.date){alert('日付を入力してください');return;}
@@ -945,7 +946,29 @@ async function reportSaveMorning(){
     if(res&&res.error){alert('保存に失敗しました: '+res.error);return;}
   }
   _prepStore(rec);
+  _lsSet('vexum_report_morning_'+_curPid()+'_'+rec.date,_nowHM());
+  _prepUpdateMorningStatus();
   const m=document.getElementById('report-morning-msg');if(m){m.style.display='inline';setTimeout(()=>m.style.display='none',2500);}
+}
+function _nowHM(){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+// 始業提出済み状態表示: フォームの日付に対応する日報が既に始業データを持っていれば「✓ 始業提出済み」を出す
+// （複数端末でも判定できるよう、真偽自体は実データ(PREPORTS)の有無で判定し、HH:MMのみ端末ローカルの記録を補助表示する）
+// r.planHours は _prepGather() で常に "出勤〜退勤" の文字列連結(未入力でも"~"になる)のため、
+// 存在チェックだけでは常にtruthyになってしまう。出退勤いずれかが実際に入力されているか、
+// または今日やることが入力されているかで判定する（employee.html・leader.html共通の考え方）。
+function _hasMorningData(r){
+  if(!r)return false;
+  const pt=String(r.planHours||'').split('~');
+  return !!((pt[0]&&pt[0].trim())||(pt[1]&&pt[1].trim())||r.planTasks);
+}
+function _prepUpdateMorningStatus(){
+  const el=document.getElementById('report-morning-status');if(!el)return;
+  const ds=(document.getElementById('prep-date')||{}).value||'';
+  const r=ds?prepByDate(ds):null;
+  if(!_hasMorningData(r)){el.style.display='none';el.textContent='';return;}
+  const t=_lsGet('vexum_report_morning_'+_curPid()+'_'+ds);
+  el.style.display='block';
+  el.textContent='✓ 始業提出済み'+(t?'（'+t+'）':'')+' — リーダーに共有されています';
 }
 // 終業：報告を提出（リーダーへ通知）
 async function reportSubmit(){
@@ -972,6 +995,7 @@ function editPReport(ds){
   prepCalcPlanWork();prepCalcActualWork();
   const note=document.getElementById('prep-edit-note');if(note){note.style.display='inline';note.textContent='（'+r.date+' を編集中）';}
   document.getElementById('prep-edit-actions').style.display='block';
+  _prepUpdateMorningStatus();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 // 削除
@@ -990,6 +1014,8 @@ function resetReportForm(){
   prepCalcPlanWork();prepCalcActualWork();
   const note=document.getElementById('prep-edit-note');if(note)note.style.display='none';
   document.getElementById('prep-edit-actions').style.display='none';
+  const d=document.getElementById('prep-date');if(d)d.value=_epToday();
+  _prepUpdateMorningStatus();
 }
 </script>
 
@@ -2091,10 +2117,10 @@ function showPReportDetail(ds){
   prepSel=ds;renderPReportCalendar();
   const r=prepByDate(ds);if(!r){document.getElementById('prep-detail').innerHTML='';return;}
   const p=ds.split('-');const dow=['日','月','火','水','木','金','土'][new Date(+p[0],+p[1]-1,+p[2]).getDay()];
-  const sub=(r.submitted?'終業提出済み':'始業のみ')+(r.hours&&r.hours!=='—'?' ／ 工数 '+r.hours:'');
+  const sub=(r.submitted?'終業提出済み':_hasMorningData(r)?'始業のみ（終業未提出）':'—')+(r.hours&&r.hours!=='—'?' ／ 工数 '+r.hours:'');
   const pt=String(r.planHours||'').split('~'),at=String(r.goal||'').split('~');
   const pw=_workHours(pt[0],pt[1]),aw=_workHours(at[0],at[1]);
-  const morning=(r.planHours||r.planTasks)?`<div style="grid-column:1/2;background:#FFF7ED;border-radius:6px;padding:8px 10px">
+  const morning=_hasMorningData(r)?`<div style="grid-column:1/2;background:#FFF7ED;border-radius:6px;padding:8px 10px">
         <div style="font-size:10px;font-weight:800;color:#C2410C;margin-bottom:4px">始業（予定）</div>
         ${(pt[0]||pt[1])?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>出退勤:</b> ${pt[0]||'—'}〜${pt[1]||'—'}${pw!=null?'（'+pw+'h）':''}</div>`:''}
         ${r.planTasks?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>やること:</b> ${r.planTasks}</div>`:''}
@@ -2123,6 +2149,7 @@ function showPReportDetail(ds){
 updateTbNewBtn('progress');
 renderEval();
 renderPReportCalendar();
+_prepUpdateMorningStatus();
 if(typeof restoreTasksFromLS==='function')restoreTasksFromLS();
 renderAssign();
 updateAssignBadge();
@@ -3965,6 +3992,7 @@ function vexumLogout(){
     if(typeof renderAssign==='function') renderAssign();
     if(typeof updateAssignBadge==='function') updateAssignBadge();
     if(typeof renderPReportCalendar==='function') renderPReportCalendar();
+    if(typeof _prepUpdateMorningStatus==='function') _prepUpdateMorningStatus();
     if(window.VexumUI)VexumUI.refresh();
     console.log('[VEXUM] Supabaseデータを反映しました'+(window._actingEmpId?'（従業員として代理表示）':''));
     if(typeof flushPendingCharts==='function'){flushPendingCharts();if(typeof flushPendingTasks==='function')flushPendingTasks();}
