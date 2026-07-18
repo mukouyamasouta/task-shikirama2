@@ -1868,7 +1868,9 @@ function closeEvalDetailModal(){const m=document.getElementById('eval-detail-mod
 
 function renderEvalBar(k){
   const d=getAllMnd()[k];const r=_rat(k);const yr=d.period||'';
-  // KGI（クリックで評価・コメント欄を開閉）
+  // 常にkpiEdits/タスクから最新の達成率を取得（全タブで自動同期）
+  const _ce=_chartEdits(k);
+  r.kgi.pct=String(evalKgiProgress(_ce,k));
   const kg=r.kgi;
   let h=`<div class="kgi-card"><div class="kgi-hd open" onclick="toggleEvalCsf('kgi-${k}',this)">
     <span class="karrow open">▶</span>
@@ -1878,15 +1880,15 @@ function renderEvalBar(k){
     <div id="kgi-${k}" class="kgi-body open" onclick="event.stopPropagation()">
       <div class="eval-rate-row">
         <span class="eval-rate-lbl">5段階評価</span>${starHTML(k,'kgi',-1)}
-        <span class="eval-rate-lbl" style="margin-left:8px">達成率</span>
-        <input type="number" class="eval-pct-sm" min="0" max="100" value="${kg.pct}" placeholder="0" oninput="saveRat('${k}','kgi',-1,'pct',this.value)"><span style="font-size:12px;font-weight:700;color:var(--text2)">%</span>
+        <span class="eval-rate-lbl" style="margin-left:8px">達成率（CSF平均）</span>
+        <input type="number" class="eval-pct-sm" min="0" max="100" value="${kg.pct}" placeholder="0" readonly style="background:#f5f5f5;cursor:default"><span style="font-size:12px;font-weight:700;color:var(--text2)">%</span>
       </div>
       <textarea class="eval-cmt" rows="2" placeholder="KGIに対する自己評価・総括コメントを入力…" oninput="saveRat('${k}','kgi',-1,'comment',this.value)">${kg.comment}</textarea>
     </div></div>`;
   // CSF（KPIは表示しない。星評価＋達成率＋コメント）
   for(let si=0;si<8;si++){
     const cs=r.csf[si];
-    if(!cs._seeded){cs.pct=String(getCsfPct(k,si));cs._seeded=true;}
+    cs.pct=String(evalCsfProgress(_ce,si,k)); // 常にkpiEdits/タスクから最新値を取得
     const pct=Math.min(100,Math.max(0,+cs.pct||0));const col=pct>=80?'var(--green)':pct>=40?'var(--amber)':'var(--accent)';
     h+=`<div class="kgi-card"><div class="kgi-hd open" onclick="toggleEvalCsf('csf${k}${si}',this)"><span class="karrow open">▶</span><div style="flex:1"><div class="kgi-title" style="font-size:12.5px">CSF-${si+1} &nbsp;${d.subs[si]}</div></div><div class="pw" style="min-width:140px"><div class="pt"><div class="pf" id="csfbar${k}${si}" style="width:${pct}%;background:${col}"></div></div><div class="pp" id="csfpp${k}${si}" style="color:${col}">${pct}%</div></div></div>
       <div id="csf${k}${si}" class="kgi-body open" onclick="event.stopPropagation()">
