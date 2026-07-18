@@ -3170,6 +3170,9 @@ function renderTaskTable(){
         const csfEnd=csfPer.end||'';
         const csfDB=(()=>{
           if(!csfEnd)return '<span style="font-size:9px;background:#F3F4F6;color:#9CA3AF;padding:2px 6px;border-radius:6px;margin-left:6px">期限未設定</span>';
+          // KGI期間からの継承（CSF自体には期間未設定）の場合は、個別に迫っている/超過しているような
+          // 赤・黄の緊急色を出さず、中立色＋「(KGI)」表記に留める（CSF固有の遅延だと誤認させないため）
+          if(csfPer.fromChart)return `<span style="font-size:9px;background:#F3F4F6;color:#6B7280;padding:2px 6px;border-radius:6px;margin-left:6px;white-space:nowrap">📅 ${+csfEnd.slice(5,7)}/${+csfEnd.slice(8,10)}まで（KGI）</span>`;
           const diff=Math.ceil((new Date(csfEnd)-new Date(today))/(1000*60*60*24));
           const dc=diff<=3?'#DC2626':diff<=7?'#D97706':'#6B7280';
           const dbg=diff<=3?'#FEE2E2':diff<=7?'#FEF3C7':'#F3F4F6';
@@ -3602,9 +3605,10 @@ function _renderCsfBreakdown(tasksAll){
     const kgiTag=showKgiTag?`<span style="font-size:9px;background:#F1F5F9;color:var(--text3);padding:1px 7px;border-radius:8px;font-weight:700;flex-shrink:0;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${kgiName}">${kgiName.slice(0,14)}${kgiName.length>14?'…':''}</span>`:'';
     // チャート管理で設定した期間（ガントと同じ情報源）を表示。期限超過・未達成は赤で警告
     const per=(typeof _cellPeriod==='function')?_cellPeriod(k,'csf',c.si):{start:'',end:''};
-    const overdue=per.end&&per.end<today&&c.pct<100;
+    // KGI期間からの継承（CSF自体は期間未設定）の場合は、CSF固有の遅延だと誤認させないよう⚠超過表示は出さない
+    const overdue=!per.fromChart&&per.end&&per.end<today&&c.pct<100;
     const perTag=(per.start||per.end)
-      ?`<span style="font-size:9px;color:${overdue?'var(--red)':'var(--text3)'};font-weight:${overdue?'700':'600'};flex-shrink:0">📅 ${(per.start||'').replace(/-/g,'/')||'—'}〜${(per.end||'').replace(/-/g,'/')||'—'}${overdue?' ⚠超過':''}</span>`
+      ?`<span style="font-size:9px;color:${overdue?'var(--red)':'var(--text3)'};font-weight:${overdue?'700':'600'};flex-shrink:0">📅 ${(per.start||'').replace(/-/g,'/')||'—'}〜${(per.end||'').replace(/-/g,'/')||'—'}${overdue?' ⚠超過':''}${per.fromChart?'（KGI）':''}</span>`
       :'';
     return `<div onclick="gotoChartCsfEdit('${k}',${c.si})" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
       <span style="font-size:9px;color:var(--accent);font-weight:700;flex-shrink:0;min-width:36px">CSF${c.si+1}</span>
@@ -3687,8 +3691,9 @@ function renderKgiProgress(){
         +csfs.map(c=>{const cc=_csfColor(c.pct);const ch=_csfHours(x.k,c.si);
           const today2=_epToday();
           const per=(typeof _cellPeriod==='function')?_cellPeriod(x.k,'csf',c.si):{start:'',end:''};
-          const overdue=per.end&&per.end<today2&&c.pct<100;
-          const perTag=(per.start||per.end)?`<span style="font-size:9px;color:${overdue?'var(--red)':'var(--text3)'};font-weight:${overdue?'700':'600'};flex-shrink:0">📅 ${(per.start||'').replace(/-/g,'/')||'—'}〜${(per.end||'').replace(/-/g,'/')||'—'}${overdue?' ⚠超過':''}</span>`:'';
+          // KGI期間からの継承（CSF自体は期間未設定）の場合は、CSF固有の遅延だと誤認させないよう⚠超過表示は出さない
+          const overdue=!per.fromChart&&per.end&&per.end<today2&&c.pct<100;
+          const perTag=(per.start||per.end)?`<span style="font-size:9px;color:${overdue?'var(--red)':'var(--text3)'};font-weight:${overdue?'700':'600'};flex-shrink:0">📅 ${(per.start||'').replace(/-/g,'/')||'—'}〜${(per.end||'').replace(/-/g,'/')||'—'}${overdue?' ⚠超過':''}${per.fromChart?'（KGI）':''}</span>`:'';
           return `<div onclick="event.stopPropagation();gotoChartCsfEdit('${x.k}',${c.si})" style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;border-radius:6px" onmouseover="this.style.background='#FAFAFA'" onmouseout="this.style.background=''">
             <span style="font-size:9px;color:var(--accent);font-weight:700;flex-shrink:0;min-width:30px">CSF${c.si+1}</span>
             <span style="font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.text}">${c.text}</span>
@@ -3707,8 +3712,14 @@ function renderKgiProgress(){
   }).join('');
 }
 /* CSFクリック → チャート管理タブの該当チャートを開き、該当CSFセルへスクロール＋ハイライト */
+// 期間絞り込みが有効な状態で対象チャートが範囲外だと一覧から消えて選択できないため、
+// ダッシュボード等からの直接遷移では絞り込みを解除してから開く
+function _cmEnsureChartVisible(chartId){
+  if((_cmFromFilter||_cmToFilter)&&chartId&&!_cmChartInDateFilter(chartId,_cmFromFilter,_cmToFilter))clearCmDateFilter();
+}
 function gotoChartCsf(chartId,csfIndex){
   gotoTab('chartmgr');
+  _cmEnsureChartVisible(chartId);
   initChartMgr();
   setTimeout(()=>{
     const sel=document.getElementById('cm-chart-sel');
@@ -3727,6 +3738,7 @@ function gotoChartCsf(chartId,csfIndex){
 function gotoChartCsfEdit(chartId,csfIndex){
   const ro=!!(CHARTS[chartId]&&CHARTS[chartId].readonly);
   gotoTab('chartmgr');
+  _cmEnsureChartVisible(chartId);
   initChartMgr();
   setTimeout(()=>{
     const sel=document.getElementById('cm-chart-sel');
@@ -3743,6 +3755,7 @@ function gotoChartCsfEdit(chartId,csfIndex){
 function gotoChartMgrEdit(chartId){
   const ro=!!(CHARTS[chartId]&&CHARTS[chartId].readonly);
   gotoTab('chartmgr');
+  _cmEnsureChartVisible(chartId);
   initChartMgr();
   setTimeout(()=>{
     const sel=document.getElementById('cm-chart-sel');
@@ -3757,6 +3770,7 @@ function gotoChartMgrEdit(chartId){
 /* KGIカードクリック → チャート管理タブの該当チャートを選択して編集グリッドへスクロール */
 function gotoChartMgr(chartId){
   gotoTab('chartmgr');
+  _cmEnsureChartVisible(chartId);
   initChartMgr();
   setTimeout(()=>{
     const sel=document.getElementById('cm-chart-sel');
