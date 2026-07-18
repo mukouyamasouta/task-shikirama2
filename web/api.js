@@ -202,7 +202,11 @@
     if (cell == null) return null;
     var s = String(cell);
     var m = /^(?:csf-)?(\d+)(?:-\d+)?$/.exec(s);
-    return m ? +m[1] : null;
+    if (!m) return null;
+    var n = +m[1];
+    // CSFは常に0-7の8スロット。範囲外は不正データとしてnull扱いにし、
+    // 「一致するCSF行が無いため一覧からも未紐付けバケットからも漏れて消える」事故を防ぐ
+    return (n >= 0 && n <= 7) ? n : null;
   }
   // 書き込み前の正規化: 'csf-N'/'N-M' 等どんな形式で渡されても、判別できればCSFインデックスの
   // 素の数字文字列に矯正して保存する（呼び出し側の書式ミスが将来また「タスク消失」を再発させないための防御）。
@@ -1942,8 +1946,9 @@
     if (override && override[csfIndex] != null && override[csfIndex] !== '') {
       return Math.round((+override[csfIndex]) * 10) / 10;
     }
+    var csfIdxNum = +csfIndex; // 呼び出し側が文字列（例: セレクトのvalue）で渡しても一致するよう数値化
     var sum = (tasks || []).filter(function (t) {
-      return String(t.source_chart) === String(chartId) && csfIdxFromCell(t.source_cell) === csfIndex;
+      return String(t.source_chart) === String(chartId) && csfIdxFromCell(t.source_cell) === csfIdxNum;
     }).reduce(function (s, t) { return s + (+t.total_hours || 0); }, 0);
     return Math.round(sum * 10) / 10;
   }
