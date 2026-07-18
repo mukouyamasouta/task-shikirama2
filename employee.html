@@ -333,6 +333,22 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
   </div>
 
+  <!-- 絞り込みフィルター（タスク管理・チャート管理と同UI） -->
+  <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:12px;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;box-shadow:var(--shadow)">
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">開始日</div>
+      <div id="eval-from-wrap"></div>
+    </div>
+    <div style="display:flex;align-items:flex-end;padding-bottom:6px;color:var(--text3)">〜</div>
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">終了日</div>
+      <div id="eval-to-wrap"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <button class="f-btn active" onclick="evalFilterDate()">絞り込む</button>
+      <button class="f-btn" onclick="evalFilterClear()">リセット</button>
+    </div>
+  </div>
   <!-- コントロールバー -->
   <div class="eval-select-bar">
     <div style="flex:1;min-width:220px">
@@ -346,17 +362,6 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
           <option value="team_A">営業チームA — チーム目標（売上¥50M達成）</option>
         </optgroup>
       </select>
-    </div>
-    <div>
-      <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:5px">期間 開始</div>
-      <input type="date" id="eval-filter-from" class="fi" style="padding:6px 8px;font-size:12px;width:140px" onchange="evalFilterDate()">
-    </div>
-    <div>
-      <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:5px">期間 終了</div>
-      <input type="date" id="eval-filter-to" class="fi" style="padding:6px 8px;font-size:12px;width:140px" onchange="evalFilterDate()">
-    </div>
-    <div style="align-self:flex-end">
-      <button class="card-btn" onclick="evalFilterClear()" style="padding:6px 12px;font-size:12px">リセット</button>
     </div>
     <div>
       <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:5px">表示形式</div>
@@ -815,11 +820,9 @@ function restoreSavedFilters(){
   // チャート管理: 期間絞り込み
   if(typeof _cmFromFilter!=='undefined')_cmFromFilter=f.cmFrom||'';
   if(typeof _cmToFilter!=='undefined')_cmToFilter=f.cmTo||'';
-  // 評価管理: 期間絞り込み
+  // 評価管理: 期間絞り込み（YMD復元は_mountEvalDateFilter内でrenderEval時に行う）
   if(typeof _evalFromFilter!=='undefined')_evalFromFilter=f.evalFrom||'';
   if(typeof _evalToFilter!=='undefined')_evalToFilter=f.evalTo||'';
-  const ef=document.getElementById('eval-filter-from');if(ef)ef.value=_evalFromFilter;
-  const et=document.getElementById('eval-filter-to');if(et)et.value=_evalToFilter;
 }
 // 編集者名→一意の色（個人/リーダーで共通。誰がどこを編集したか色で区別）
 function _editorColor(name){const pal=['#0D9488','#EC4899','#F59E0B','#6366F1','#10B981','#EF4444','#8B5CF6','#06B6D4'];let h=0;for(let i=0;i<(name||'').length;i++)h=(h*31+name.charCodeAt(i))%pal.length;return pal[h];}
@@ -843,6 +846,7 @@ async function asgSaveData(i,btn){
   const old=btn.textContent;btn.textContent=`✓ 記録しました（+${hours}h／合計${a.hours}h）`;btn.style.background='var(--green)';
   // 作業時間の変更を CSF/KGI 合計（ダッシュボード・チャート・ガント）へ即反映
   if(typeof renderProgressDash==='function')renderProgressDash();
+  if(typeof renderEval==='function')renderEval();
   if(typeof renderGantt==='function'&&_taskViewGantt)renderGantt();
   setTimeout(()=>{btn.textContent=old;btn.style.background='var(--accent)';renderAssign();if(typeof renderTaskTable==='function')renderTaskTable();},1500);
   if(a.pct>=100){setTimeout(()=>processAssignCompletion(),1600);}
@@ -1403,20 +1407,30 @@ let _curEvalKey='';
 let evalView='bar';
 let evalChartKey='self_q3';
 let _evalFromFilter='', _evalToFilter='';
+let _evalFromPart=null, _evalToPart=null;
 function evalFilterDate(){
-  _evalFromFilter=(document.getElementById('eval-filter-from')||{}).value||'';
-  _evalToFilter=(document.getElementById('eval-filter-to')||{}).value||'';
+  _evalFromPart=_ymdGetPart('eval-from');
+  _evalToPart=_ymdGetPart('eval-to');
+  _evalFromFilter=ymdValue('eval-from')||'';
+  _evalToFilter=ymdValue('eval-to')||'';
   _filtersSave({evalFrom:_evalFromFilter,evalTo:_evalToFilter});
   populateEvalChartSel();
   renderEval();
 }
 function evalFilterClear(){
   _evalFromFilter='';_evalToFilter='';
-  const ef=document.getElementById('eval-filter-from');if(ef)ef.value='';
-  const et=document.getElementById('eval-filter-to');if(et)et.value='';
+  _evalFromPart=null;_evalToPart=null;
+  ymdClear('eval-from');ymdClear('eval-to');
   _filtersSave({evalFrom:'',evalTo:''});
   populateEvalChartSel();
   renderEval();
+}
+function _mountEvalDateFilter(){
+  const fw=document.getElementById('eval-from-wrap');if(fw&&!fw.children.length)fw.innerHTML=ymdHtml('eval-from');
+  const tw=document.getElementById('eval-to-wrap');if(tw&&!tw.children.length)tw.innerHTML=ymdHtml('eval-to');
+  if(_evalFromFilter)ymdSet('eval-from',_evalFromFilter);else _ymdRestorePart('eval-from',_evalFromPart);
+  if(_evalToFilter)ymdSet('eval-to',_evalToFilter);else _ymdRestorePart('eval-to',_evalToPart);
+  ['eval-from','eval-to'].forEach(p=>['-y','-m','-d'].forEach(sfx=>{const e=document.getElementById(p+sfx);if(e)e.onchange=evalFilterDate;}));
 }
 
 /* KGI・CSF の星評価／達成率／コメント状態 */
@@ -1727,6 +1741,7 @@ function populateEvalChartSel(){
 }
 function renderEval(){
   populateEvalChartSel();
+  _mountEvalDateFilter();
   const k=evalChartKey;const d=getAllMnd()[k];
   if(!d)return;
   if(!evalStates[k])evalStates[k]={};
