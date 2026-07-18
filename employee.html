@@ -815,6 +815,11 @@ function restoreSavedFilters(){
   // チャート管理: 期間絞り込み
   if(typeof _cmFromFilter!=='undefined')_cmFromFilter=f.cmFrom||'';
   if(typeof _cmToFilter!=='undefined')_cmToFilter=f.cmTo||'';
+  // 評価管理: 期間絞り込み
+  if(typeof _evalFromFilter!=='undefined')_evalFromFilter=f.evalFrom||'';
+  if(typeof _evalToFilter!=='undefined')_evalToFilter=f.evalTo||'';
+  const ef=document.getElementById('eval-filter-from');if(ef)ef.value=_evalFromFilter;
+  const et=document.getElementById('eval-filter-to');if(et)et.value=_evalToFilter;
 }
 // 編集者名→一意の色（個人/リーダーで共通。誰がどこを編集したか色で区別）
 function _editorColor(name){const pal=['#0D9488','#EC4899','#F59E0B','#6366F1','#10B981','#EF4444','#8B5CF6','#06B6D4'];let h=0;for(let i=0;i<(name||'').length;i++)h=(h*31+name.charCodeAt(i))%pal.length;return pal[h];}
@@ -1398,12 +1403,10 @@ let _curEvalKey='';
 let evalView='bar';
 let evalChartKey='self_q3';
 let _evalFromFilter='', _evalToFilter='';
-function _lfLoad(){try{return JSON.parse(localStorage.getItem('vexum_filters_employee')||'{}')||{};}catch(e){return{};}}
-function _lfSave(patch){const f=_lfLoad();Object.assign(f,patch);try{localStorage.setItem('vexum_filters_employee',JSON.stringify(f));}catch(e){}}
 function evalFilterDate(){
   _evalFromFilter=(document.getElementById('eval-filter-from')||{}).value||'';
   _evalToFilter=(document.getElementById('eval-filter-to')||{}).value||'';
-  _lfSave({evalFrom:_evalFromFilter,evalTo:_evalToFilter});
+  _filtersSave({evalFrom:_evalFromFilter,evalTo:_evalToFilter});
   populateEvalChartSel();
   renderEval();
 }
@@ -1411,14 +1414,10 @@ function evalFilterClear(){
   _evalFromFilter='';_evalToFilter='';
   const ef=document.getElementById('eval-filter-from');if(ef)ef.value='';
   const et=document.getElementById('eval-filter-to');if(et)et.value='';
-  _lfSave({evalFrom:'',evalTo:''});
+  _filtersSave({evalFrom:'',evalTo:''});
   populateEvalChartSel();
   renderEval();
 }
-// evalフィルタ復元
-const _fEval=_lfLoad();
-if(_fEval.evalFrom){_evalFromFilter=_fEval.evalFrom;const ef=document.getElementById('eval-filter-from');if(ef)ef.value=_evalFromFilter;}
-if(_fEval.evalTo){_evalToFilter=_fEval.evalTo;const et=document.getElementById('eval-filter-to');if(et)et.value=_evalToFilter;}
 
 /* KGI・CSF の星評価／達成率／コメント状態 */
 const evalRatings={};
