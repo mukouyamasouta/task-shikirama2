@@ -225,15 +225,30 @@
     if (teamLetter) {
       teamUuid = Object.keys(TEAM_KEY).filter(function (id) { return TEAM_KEY[id] === teamLetter; })[0] || teamLetter;
     } else {
-      // ログイン中ユーザーが「リーダーのチーム」を特定（leader_id一致 → 所属でrole=leader → 所属）
+      // ログイン中ユーザーが「リーダーのチーム」を特定（マルチロール対応4段階フォールバック）
       var me = await currentProfile();
       if (me && me.id) {
-        var t1 = raw.teams.filter(function (t) { return t.leader_id === me.id; })[0];
+        // 1. leader_id直接一致
+        var t1 = raw.teams.filter(function(t){ return t.leader_id === me.id; })[0];
         if (t1) teamUuid = t1.id;
         if (!teamUuid) {
-          var tm0 = raw.team_members.filter(function (m) { return m.profile_id === me.id; });
-          var lead = tm0.filter(function (m) { return m.role_in_team === 'leader'; })[0] || tm0[0];
+          // 2. 同メールの全profileでleader_id照合（マルチロール不一致対応）
+          var myPids = raw.profiles.filter(function(p){ return p.email === me.email; }).map(function(p){ return p.id; });
+          var t2 = raw.teams.filter(function(t){ return myPids.indexOf(t.leader_id) >= 0; })[0];
+          if (t2) teamUuid = t2.id;
+        }
+        if (!teamUuid) {
+          // 3. team_members.role_in_team='leader' で照合
+          var tm0 = raw.team_members.filter(function(m){ return m.profile_id === me.id; });
+          var lead = tm0.filter(function(m){ return m.role_in_team === 'leader'; })[0] || tm0[0];
           if (lead) teamUuid = lead.team_id;
+        }
+        if (!teamUuid) {
+          // 4. 同メール全profileでteam_members照合
+          var myPids2 = raw.profiles.filter(function(p){ return p.email === me.email; }).map(function(p){ return p.id; });
+          var tm1 = raw.team_members.filter(function(m){ return myPids2.indexOf(m.profile_id) >= 0 && m.role_in_team === 'leader'; })[0]
+                 || raw.team_members.filter(function(m){ return myPids2.indexOf(m.profile_id) >= 0; })[0];
+          if (tm1) teamUuid = tm1.team_id;
         }
       }
     }
@@ -289,6 +304,16 @@
         id: t.id, name: t.title, kpi: t.related_kgi || '—', start: fmtMD(t.start_date), due: fmtMD(t.due_date), dueRaw: t.due_date || null, pri: t.priority, status: t.status,
         pct: t.progress || 0, hours: (t.total_hours != null ? +t.total_hours : 0), period: t.period || '', chart: t.source_chart || null, sendId: t.source_send_id || null, cell: t.source_cell || null,
         csfIdx: csfIdxFromCell(t.source_cell)
+      });
+    });
+
+    // pidToKeyに含まれない同一人物のprofile_idを追加（マルチロールで日報のauthor_idが異なる場合の対応）
+    persons.forEach(function(person) {
+      var representKey = pidToKey[person.pids[0]];
+      if (!representKey) return;
+      var emails = person.pids.map(function(pid){ var p=prof[pid]; return p?p.email:''; }).filter(Boolean);
+      raw.profiles.forEach(function(rp){
+        if (emails.indexOf(rp.email) >= 0 && !pidToKey[rp.id]) pidToKey[rp.id] = representKey;
       });
     });
 

@@ -1371,7 +1371,7 @@ async function _evalRecDetail(){
 
 /* ===== 日報（メンバー別カレンダー） ===== */
 let _repMember=EVAL_IDS[0];
-let _repYear=2025,_repMonth=4; // 0-indexed: 4=5月
+const _repNow=new Date();let _repYear=_repNow.getFullYear(),_repMonth=_repNow.getMonth();
 let _repSelDate='';
 function repList(id){return REPORTS[id]||[];}
 function repByDate(id,date){return repList(id).find(r=>r.date===date);}
