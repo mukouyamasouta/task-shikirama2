@@ -317,9 +317,28 @@
       });
     });
 
+    // さらに daily_reports.author_id を直接メール照合でも補完（team_members未登録のprofileでも対応）
+    var profByEmail = {};
+    raw.profiles.forEach(function(rp){ if(rp.email) profByEmail[rp.email.toLowerCase()] = rp; });
+    raw.daily_reports.forEach(function(r){
+      if (pidToKey[r.author_id]) return; // 既にマッピング済み
+      var rp = profByEmail[(raw.profiles.filter(function(p){ return p.id===r.author_id; })[0]||{}).email||''];
+      if (!rp) return;
+      // このauthor_idのメールでpidToKeyに登録済みのprofileを探す
+      var matched = Object.keys(pidToKey).find(function(pid){
+        var pp = raw.profiles.filter(function(p){ return p.id===pid; })[0];
+        return pp && pp.email && pp.email.toLowerCase() === rp.email.toLowerCase();
+      });
+      if (matched) { pidToKey[r.author_id] = pidToKey[matched]; }
+    });
+
+    console.log('[VEXUM DEBUG] teamUuid=', teamUuid, 'members=', members.length, 'persons=', persons.length, 'daily_reports total=', raw.daily_reports.length, 'pidToKey keys=', Object.keys(pidToKey).length);
+
     var REPORTS = {};
     raw.daily_reports.forEach(function (r) {
-      var key = pidToKey[r.author_id]; if (!key || !MEMBERS[key]) return;
+      var key = pidToKey[r.author_id];
+      if (!pidToKey[r.author_id]) console.warn('[VEXUM DEBUG] 日報 author_id がpidToKeyに未登録:', r.author_id, 'date=', r.report_date);
+      if (!key || !MEMBERS[key]) return;
       (REPORTS[key] = REPORTS[key] || []).push({
         date: r.report_date, hours: r.hours, done: r.done, plan: r.plan, issue: r.issue, cond: r.condition,
         // 始業(計画)/終業(実績)の内訳。employee.html側と同じ列から取得し、
