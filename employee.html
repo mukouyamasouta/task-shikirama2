@@ -492,10 +492,28 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="sec-title">チャート管理
     <button class="f-submit" style="font-size:12px;padding:7px 16px" onclick="openNewChartModal()">＋ チャートを新規作成</button>
   </div>
+  <!-- 絞り込みフィルター（KGIの期間で対象チャートを絞り込む。進捗ダッシュボードと同じUI様式） -->
+  <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:12px;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;box-shadow:var(--shadow)">
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">開始日</div>
+      <div id="cm-from-ymd"></div>
+    </div>
+    <div style="display:flex;align-items:flex-end;padding-bottom:6px;color:var(--text3)">〜</div>
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">期限</div>
+      <div id="cm-to-ymd"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <button class="f-btn active" onclick="onCmDateFilterChange()">絞り込む</button>
+      <button class="f-btn" onclick="clearCmDateFilter()">リセット</button>
+    </div>
+    <span id="cm-filter-badge" style="display:none;font-size:10px;background:var(--accent);color:#fff;padding:2px 10px;border-radius:12px;font-weight:700;align-self:center"></span>
+  </div>
   <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;box-shadow:var(--shadow)">
     <div style="flex:1;min-width:200px">
       <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:5px">管理するチャート</div>
       <select class="fs" id="cm-chart-sel" onchange="onCmChartChange()" style="font-size:12px;padding:7px 10px;font-weight:600"></select>
+      <div id="cm-chart-period" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
     </div>
     <div style="text-align:center">
       <div style="font-size:10px;color:var(--text3);margin-bottom:4px">編集済み</div>
@@ -510,7 +528,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
   <div class="card">
     <div class="card-hd">
-      <div><div class="card-title">曼荼羅チャート</div><div class="card-sub" id="cm-grid-sub">中心(KGI)＋CSF 8項目。CSFセルをクリックすると内容・進捗・工数と紐付けタスクを確認できます</div></div>
+      <div><div class="card-title">曼荼羅チャート <span id="cm-mnd-period" style="font-size:11px;font-weight:700;color:var(--accent)"></span></div><div class="card-sub" id="cm-grid-sub">中心(KGI)＋CSF 8項目。CSFセルをクリックすると内容・進捗・工数と紐付けタスクを確認できます</div></div>
       <div style="display:flex;align-items:center;gap:8px">
         <button class="card-btn" onclick="(function(){const k=document.getElementById('cm-chart-sel').value;if(k&&CHARTS[k])openMandala(k,false);})()">⛶ 全画面</button>
       </div>
@@ -748,6 +766,23 @@ function _epToday(){return new Date().toISOString().slice(0,10);}
 // ローカル永続化（Supabase未接続/SQL未適用でも編集が残るためのフォールバック）
 function _lsGet(key){try{return JSON.parse(localStorage.getItem(key)||'null');}catch(e){return null;}}
 function _lsSet(key,val){try{localStorage.setItem(key,JSON.stringify(val));}catch(e){}}
+/* ===== 直近に設定した期間の記憶（アカウントごと・全画面共通の汎用機能） =====
+   チャート/タスク作成モーダル・CSF編集モーダルで、期間欄が未入力の時のデフォルト値として使う。
+   特定アカウント（中村等のデモシード）へのハードコードは行わず、profile_idをキーに含めた
+   localStorageで誰のアカウントでも同一に動作する。 */
+function _curPid(){try{return localStorage.getItem('vexum_last_profile_id')||'anon';}catch(e){return 'anon';}}
+function _periodMemKey(){return 'vexum_last_period_'+_curPid();}
+function _saveLastPeriod(start,end){if(!start&&!end)return;_lsSet(_periodMemKey(),{start:start||'',end:end||''});}
+function _loadLastPeriod(){return _lsGet(_periodMemKey())||null;}
+// 指定id(開始日/終了日のinput)が両方とも空の場合のみ、直近記憶値をプリセットする（既存値があれば上書きしない）
+function _presetPeriodIfEmpty(startId,endId){
+  const s=document.getElementById(startId),e=document.getElementById(endId);
+  if(!s&&!e)return;
+  if((s&&s.value)||(e&&e.value))return;
+  const last=_loadLastPeriod();if(!last)return;
+  if(s&&last.start)s.value=last.start;
+  if(e&&last.end)e.value=last.end;
+}
 /* ===== 絞り込み状態の永続化（リセットするまでログイン後も維持） ===== */
 const FILTER_LS_KEY='vexum_filters_emp';
 function _filtersLoad(){return _lsGet(FILTER_LS_KEY)||{};}
@@ -766,6 +801,9 @@ function restoreSavedFilters(){
   if(typeof _asgToFilter!=='undefined')_asgToFilter=f.asgTo||'';
   // ダッシュボードのKGI/日付はセレクト生成後に反映（renderKgiProgress内で消費）
   if(f.dash&&(f.dash.chart&&f.dash.chart!=='all'||f.dash.from||f.dash.to))window._dashRestore={...f.dash};
+  // チャート管理: 期間絞り込み
+  if(typeof _cmFromFilter!=='undefined')_cmFromFilter=f.cmFrom||'';
+  if(typeof _cmToFilter!=='undefined')_cmToFilter=f.cmTo||'';
 }
 // 編集者名→一意の色（個人/リーダーで共通。誰がどこを編集したか色で区別）
 function _editorColor(name){const pal=['#0D9488','#EC4899','#F59E0B','#6366F1','#10B981','#EF4444','#8B5CF6','#06B6D4'];let h=0;for(let i=0;i<(name||'').length;i++)h=(h*31+name.charCodeAt(i))%pal.length;return pal[h];}
@@ -1955,6 +1993,8 @@ function openTaskCreate(){
   _tmKgiMode=true;  // 既定はKGI紐付けUIを展開
   const lb=document.getElementById('tm-chart-link');if(lb)lb.style.display='block';
   const nm=document.getElementById('tm-name');if(nm)nm.value='';
+  ['tm-start','tm-due'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  _presetPeriodIfEmpty('tm-start','tm-due');
   _fillTmChartSel();onTmChartSel();_updateTmLinkLabel();_updateTmCreateBtn();
   document.getElementById('task-modal').style.display='flex';
 }
@@ -2055,6 +2095,7 @@ function submitTask(){
       });
   }
   ASSIGNMENTS.push(task);
+  _saveLastPeriod(startRaw,dueRaw);
   renderTaskTable();renderAssign();updateAssignBadge();
   if(typeof renderCmTasks==='function')renderCmTasks();
   document.getElementById('tm-name').value='';
@@ -2176,17 +2217,55 @@ function syncKpiEditsFromCharts(){
     }
   });
 }
+// KGIの期間[開始日,終了日]と絞り込み範囲[from,to]が重なるか（未設定側は無制限とみなす）
+function _cmChartInDateFilter(k,from,to){
+  if(!from&&!to)return true;
+  const c=CHARTS[k]||{};
+  const toIso=v=>v?String(v).replace(/\//g,'-'):'';
+  const cs=toIso(c.startDate||''),ce=toIso(c.endDate||'');
+  if(!cs&&!ce)return false; // 期間未設定のチャートは絞り込み中は対象外
+  if(from&&ce&&ce<from)return false;
+  if(to&&cs&&cs>to)return false;
+  return true;
+}
+let _cmFromFilter='',_cmToFilter='';
 function initChartMgr(){
   const sel=document.getElementById('cm-chart-sel');if(!sel)return;
   syncKpiEditsFromCharts();
   restoreChartsFromLS();
+  // 期間絞り込みYMDセレクトを初回生成
+  const fw=document.getElementById('cm-from-ymd');if(fw&&!fw.children.length)fw.innerHTML=ymdHtml('cm-from','');
+  const tw=document.getElementById('cm-to-ymd');if(tw&&!tw.children.length)tw.innerHTML=ymdHtml('cm-to','');
+  if(_cmFromFilter)ymdSet('cm-from',_cmFromFilter);
+  if(_cmToFilter)ymdSet('cm-to',_cmToFilter);
+  ['cm-from','cm-to'].forEach(p=>['-y','-m','-d'].forEach(sfx=>{const e=document.getElementById(p+sfx);if(e)e.onchange=onCmDateFilterChange;}));
+  const cur=sel.value;
   let opts='';
   Object.entries(CHARTS).forEach(([k,c])=>{
     if(k.startsWith('__'))return;
+    if(!_cmChartInDateFilter(k,_cmFromFilter,_cmToFilter))return;
     opts+=`<option value="${k}">${_chartLabel(k)}${c.readonly?'（参照のみ）':''}</option>`;
   });
-  sel.innerHTML=opts||'<option value="">— チャートなし —</option>';
+  sel.innerHTML=opts||'<option value="">— 該当するチャートがありません —</option>';
+  if(cur&&CHARTS[cur]&&_cmChartInDateFilter(cur,_cmFromFilter,_cmToFilter))sel.value=cur;
+  const badge=document.getElementById('cm-filter-badge');
+  if(badge){
+    if(_cmFromFilter||_cmToFilter){badge.textContent=(_cmFromFilter||'')+'〜'+(_cmToFilter||'');badge.style.display='';}
+    else badge.style.display='none';
+  }
   onCmChartChange();
+}
+// 期間絞り込みの変更（進捗ダッシュボードと同じくlocalStorageへ永続化）
+function onCmDateFilterChange(){
+  _cmFromFilter=ymdValue('cm-from')||'';_cmToFilter=ymdValue('cm-to')||'';
+  _filtersSave({cmFrom:_cmFromFilter,cmTo:_cmToFilter});
+  initChartMgr();
+}
+function clearCmDateFilter(){
+  ymdClear('cm-from');ymdClear('cm-to');
+  _cmFromFilter='';_cmToFilter='';
+  _filtersSave({cmFrom:null,cmTo:null});
+  initChartMgr();
 }
 
 function onCmChartChange(){
@@ -2195,7 +2274,15 @@ function onCmChartChange(){
   const db=document.getElementById('cm-del-btn');
   if(db)db.style.display=(k&&CHARTS[k]&&!CHARTS[k].readonly)?'':'none';
   if(typeof cmCancelDeleteChart==='function')cmCancelDeleteChart();
-  if(!k||!CHARTS[k])return;
+  const perEl=document.getElementById('cm-chart-period');
+  const mndPerEl=document.getElementById('cm-mnd-period');
+  if(!k||!CHARTS[k]){if(perEl)perEl.textContent='';if(mndPerEl)mndPerEl.textContent='';return;}
+  {
+    const c=CHARTS[k];
+    const txt=(c.startDate||c.endDate)?`📅 ${c.startDate||'?'}〜${c.endDate||'?'}`:'';
+    if(perEl)perEl.textContent=txt;
+    if(mndPerEl)mndPerEl.textContent=txt;
+  }
   if(!kpiOrigActs[k]){const d=CHARTS[k];kpiOrigActs[k]=(d.acts||[]).map(row=>[...(row||[])]);}
   renderCmKpiGrid(k);renderCmTasks();updateCmEditCount(k);
 }
@@ -2321,12 +2408,14 @@ function openCellEdit(k,kind,si,ai){
       const toIso=v=>v?String(v).replace(/\//g,'-'):'';
       if(ps)ps.value=toIso(d.startDate||'');
       if(pe)pe.value=toIso(d.endDate||'');
+      if(!(ps&&ps.value)&&!(pe&&pe.value)&&typeof _presetPeriodIfEmpty==='function')_presetPeriodIfEmpty('kpi-edit-pstart','kpi-edit-pend');
       if(hint)hint.textContent='チャート全体の期間です。KGI名の横・ダッシュボードに反映されます。';
     }else{
       const per=_cellPeriod(k,kind,si,ai);
       if(ps)ps.value=per.start||'';
       if(pe)pe.value=per.end||'';
-      if(hint)hint.textContent=per.fromTask?('紐づくタスク（'+per.taskCount+'件）の期間を更新します。'):'まだタスクが無いため、チャートに期間情報として保存します（タスク化後も引き継がれます）。';
+      if(!per.start&&!per.end&&typeof _presetPeriodIfEmpty==='function')_presetPeriodIfEmpty('kpi-edit-pstart','kpi-edit-pend');
+      if(hint)hint.textContent=per.fromTask?('紐づくタスク（'+per.taskCount+'件）の期間を更新します。'):per.fromChart?'CSF独自の期間が未設定のため、KGI（チャート全体）の期間を初期値として表示しています。変更するとこのCSF独自の期間として保存されます。':'まだタスクが無いため、チャートに期間情報として保存します（タスク化後も引き継がれます）。';
     }
   }else if(perWrap){perWrap.style.display='none';}
   document.getElementById('kpi-edit-modal').style.display='flex';
@@ -2337,7 +2426,7 @@ function _cellLinkedTasks(k,kind,si){
   const cn1=d.name||'',cn2=(typeof _chartKgiText==='function'?_chartKgiText(k):'')||'';
   return [...ASSIGNMENTS,...ASSIGN_HISTORY].filter(t=>t.chart&&((cn1&&String(t.chart)===String(cn1))||(cn2&&String(t.chart)===String(cn2)))&&((t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1)===si);
 }
-// CSF/KPIの現在の期間（タスク優先→member_kpi_edits.period）。{start,end,fromTask,taskCount}
+// CSF/KPIの現在の期間（タスク優先→member_kpi_edits.period→【フォールバック】チャート(KGI)全体の期間）。{start,end,fromTask,fromChart,taskCount}
 function _cellPeriod(k,kind,si,ai){
   const linked=_cellLinkedTasks(k,kind,si).filter(t=>kind==='kpi'?(t.kpiIdx===ai):true);
   if(linked.length){
@@ -2346,7 +2435,14 @@ function _cellPeriod(k,kind,si,ai){
     return {start:withP.startRaw||'',end:withP.dueRaw||'',fromTask:true,taskCount:linked.length};
   }
   const pmap=(_chartEdits(k).period)||{};const pk=_cellKey(kind,si,ai);const per=pmap[pk]||{};
-  return {start:per.start||'',end:per.end||'',fromTask:false,taskCount:0};
+  if(per.start||per.end)return {start:per.start||'',end:per.end||'',fromTask:false,taskCount:0};
+  // CSF/KPI側に明示的な期間設定が無い場合のみ、チャート(KGI)全体の期間をデフォルトとして使う
+  if(kind!=='center'){
+    const d=CHARTS[k]||{};const toIso=v=>v?String(v).replace(/\//g,'-'):'';
+    const cs=toIso(d.startDate||''),ce=toIso(d.endDate||'');
+    if(cs||ce)return {start:cs,end:ce,fromTask:false,fromChart:true,taskCount:0};
+  }
+  return {start:'',end:'',fromTask:false,taskCount:0};
 }
 // CSF編集モーダル内の「紐付けタスク一覧」を描画（タスク名・期限・進捗・工数、クリックでタスク編集へ）
 function _renderCellLinkedTasks(k,si){
@@ -2449,6 +2545,7 @@ function saveKpiEdit(){
     const ps=(document.getElementById('kpi-edit-pstart')||{}).value||null;
     const pe=(document.getElementById('kpi-edit-pend')||{}).value||null;
     if(ps&&pe&&pe<ps){alert('終了日は開始日以降にしてください');return;}
+    _saveLastPeriod(ps,pe);
     const linked=_cellLinkedTasks(k,kind,si).filter(t=>kind==='kpi'?(t.kpiIdx===ai):true);
     if(linked.length){
       const API=window.VexumAPI;
@@ -2474,6 +2571,7 @@ function saveKpiEdit(){
     const cps=(document.getElementById('kpi-edit-pstart')||{}).value||null;
     const cpe=(document.getElementById('kpi-edit-pend')||{}).value||null;
     if(cps&&cpe&&cpe<cps){alert('終了日は開始日以降にしてください');return;}
+    _saveLastPeriod(cps,cpe);
     d.startDate=cps?cps.replace(/-/g,'/'):'';   // "YYYY/MM/DD" 表記で保持（_chartLabel等と揃える）
     d.endDate=cpe?cpe.replace(/-/g,'/'):'';
     const API0=window.VexumAPI;
@@ -2674,6 +2772,7 @@ async function cmSaveTask(id,btn){
 /* ===== チャート追加（新しい曼荼羅チャートを作成） ===== */
 function openCmAddTask(){
   ['cm-ac-name','cm-ac-start','cm-ac-end'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  _presetPeriodIfEmpty('cm-ac-start','cm-ac-end');
   document.getElementById('cm-add-task-modal').style.display='flex';
 }
 function closeCmAddTask(){document.getElementById('cm-add-task-modal').style.display='none';}
@@ -2688,9 +2787,12 @@ async function submitCmChart(){
   const acts=Array.from({length:8},()=>Array(8).fill(''));
   const key=await persistMyChart({name,center:name,subs,acts,startDate:st||null,endDate:en||null});
   if(!key)return;
+  _saveLastPeriod(st,en);
   closeCmAddTask();
+  // 期間絞り込みが有効なままだと、新規チャートの期間が範囲外の場合に一覧から消えて選択できなくなるため解除する
+  // （clearCmDateFilter内でinitChartMgr()も実行されるため、絞り込みが無かった場合のみ別途呼ぶ）
+  if(_cmFromFilter||_cmToFilter)clearCmDateFilter();else initChartMgr();
   // 作成したチャートを選択して開く（CSF/KPIを記入できる状態）
-  initChartMgr();
   const sel=document.getElementById('cm-chart-sel');
   if(sel){[...sel.options].forEach(o=>{if(CHARTS[o.value]&&CHARTS[o.value].name===name)sel.value=o.value;});onCmChartChange();}
   alert('✅ チャート「'+name+'」を作成しました。KGI・CSF・KPIのセルをクリックして内容を記入できます。');
