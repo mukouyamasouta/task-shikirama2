@@ -841,6 +841,7 @@ async function asgSaveData(i,btn){
   if(hEl)hEl.value='';
   a.status=a.pct>=100?'done':a.pct>0?'wip':(a.dueRaw&&a.dueRaw<_epToday()?'late':'todo');
   const me=(document.getElementById('sb-uname')||{}).textContent;if(me&&me!=='（読み込み中）')a.editedBy=me;
+  if(typeof _syncTaskProgressToKpiEdits==='function')_syncTaskProgressToKpiEdits(a); // kpiEdits同期
   if(typeof _taskPersist==='function')_taskPersist(a);
   const old=btn.textContent;btn.textContent=`✓ 記録しました（+${hours}h／合計${a.hours}h）`;btn.style.background='var(--green)';
   // 作業時間の変更を CSF/KGI 合計（ダッシュボード・チャート・ガント）へ即反映
@@ -1492,6 +1493,14 @@ function saveRat(k,type,si,field,val){
       if(typeof renderProgressDash==='function')renderProgressDash();
     }
   }
+  // CSF更新時: KGI達成率（CSF平均）をreadonly inputに即時反映
+  if(type==='csf'){
+    const kgiInp=document.querySelector('#kgi-'+k+' input[type=number]');
+    if(kgiInp){
+      const _ce=Object.assign({},(CHARTS[k]&&CHARTS[k].memberKpiEdits)||{},kpiEdits[k]||{});
+      kgiInp.value=String(evalKgiProgress(_ce,k));
+    }
+  }
 }
 /* CSF達成率の初期値をKPI完了状況からシード */
 function getCsfPct(k,si){
@@ -1793,11 +1802,14 @@ async function renderEvalMndOverlay(k,d){
 }
 // KPI廃止: CSF進捗 = 紐付けタスクの平均（あれば）→ CSFセル記入progress → 旧KPIセル平均（互換）
 function evalCsfProgress(edits,si,k){
-  if(k&&typeof _chartTasks==='function'){
-    const tks=_chartTasks(k).filter(t=>t.csfIdx===si);
-    if(tks.length)return Math.round(tks.reduce((s,t)=>s+(+t.pct||0),0)/tks.length);
-  }
+  // kpiEdits['csf-N'].progressを最優先（全タブの正規ソース）
+  // タスク保存時に_syncTaskProgressToKpiEditsで自動更新されるため常に最新値
   const ce=edits['csf-'+si];if(ce&&ce.progress!=null)return Math.round(+ce.progress);
+  // kpiEditsに値がない場合のみタスク平均にフォールバック（初期値・旧データ互換）
+  if(k&&typeof _chartTasks==='function'){
+    const tks=_chartTasks(k).filter(t=>+t.csfIdx===si);
+    if(tks.length)return Math.round(tks.reduce((s,t)=>s+(t.pct!=null?+t.pct:100),0)/tks.length);
+  }
   let s=0;for(let ai=0;ai<8;ai++){const e=edits[si+'-'+ai];s+=e&&e.progress!=null?Math.round(+e.progress):0;}
   return Math.round(s/8);
 }
@@ -1868,8 +1880,8 @@ function closeEvalDetailModal(){const m=document.getElementById('eval-detail-mod
 
 function renderEvalBar(k){
   const d=getAllMnd()[k];const r=_rat(k);const yr=d.period||'';
-  // 常にkpiEdits/タスクから最新の達成率を取得（全タブで自動同期）
-  const _ce=_chartEdits(k);
+  // kpiEditsとmemberKpiEditsを両方マージ（kpiEdits優先）して最新の達成率を取得
+  const _ce=Object.assign({},(CHARTS[k]&&CHARTS[k].memberKpiEdits)||{},kpiEdits[k]||{});
   r.kgi.pct=String(evalKgiProgress(_ce,k));
   const kg=r.kgi;
   let h=`<div class="kgi-card"><div class="kgi-hd open" onclick="toggleEvalCsf('kgi-${k}',this)">
@@ -3442,6 +3454,18 @@ function _chartKeyOfTask(a){
     return String(d.name||'')===t||String((typeof _chartKgiText==='function'&&_chartKgiText(k))||'')===t;
   })||'';
 }
+// タスクのpct変更をkpiEdits['csf-N'].progressに即時反映（全タブ同期の正規ソース）
+function _syncTaskProgressToKpiEdits(a){
+  if(a.csfIdx==null||isNaN(+a.csfIdx)||!a.chart)return;
+  const k=_chartKeyOfTask(a);if(!k)return;
+  if(!kpiEdits[k])kpiEdits[k]={};
+  const ck='csf-'+a.csfIdx;
+  if(!kpiEdits[k][ck])kpiEdits[k][ck]={};
+  // このCSFに紐づく全タスクの平均進捗を計算（ASSIGN_HISTORYは完了=100扱い）
+  const all=_chartTasks(k).filter(t=>+t.csfIdx===+a.csfIdx);
+  const avg=all.length?Math.round(all.reduce((s,t)=>s+(t.pct!=null?+t.pct:100),0)/all.length):(+a.pct||0);
+  kpiEdits[k][ck].progress=avg;
+}
 /* 編集モーダル: ①チャート一覧（現在値selected） */
 function _fillTeChartSel(a){
   const sel=document.getElementById('te-chart-sel');if(!sel)return;
@@ -3544,6 +3568,7 @@ async function saveTaskEdit(){
   }else{a.hours=(a.hours||0)+hours;}
   a.status=pct>=100?'done':pct>0?'wip':(a.dueRaw&&a.dueRaw<_epToday()?'late':'todo');
   const me=(document.getElementById('sb-uname')||{}).textContent;if(me&&me!=='（読み込み中）')a.editedBy=me;
+  _syncTaskProgressToKpiEdits(a); // kpiEdits['csf-N'].progressを即時更新（全タブ同期）
   _taskPersist(a);
   closeTaskEdit();
   if(pct>=100&&arr==='A')processAssignCompletion();
@@ -4279,6 +4304,11 @@ function vexumLogout(){
     replArr(ASSIGNMENTS,d.ASSIGNMENTS); replArr(ASSIGN_HISTORY,d.ASSIGN_HISTORY); replArr(PREPORTS,d.PREPORTS);
     window._epTeam=d.TEAM; window._epKpis=d.KPIS; window._epStats=d.STATS;
     if(typeof restoreTasksFromLS==='function')restoreTasksFromLS();   // ローカル保存の進捗・工数を反映
+    // kpiEditsをDB値で初期化してから、タスクpct→kpiEditsで上書き同期（全タブ正規ソース構築）
+    if(typeof syncKpiEditsFromCharts==='function')syncKpiEditsFromCharts();
+    try{[...ASSIGNMENTS,...ASSIGN_HISTORY].forEach(function(a){
+      if(a.csfIdx!=null&&!isNaN(+a.csfIdx)&&a.chart&&typeof _syncTaskProgressToKpiEdits==='function')_syncTaskProgressToKpiEdits(a);
+    });}catch(e){}
     if(typeof renderProgressDash==='function') renderProgressDash();
     if(typeof renderTaskTable==='function') renderTaskTable();
     if(typeof renderEval==='function') renderEval();
