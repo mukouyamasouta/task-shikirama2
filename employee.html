@@ -1725,13 +1725,16 @@ function populateEvalChartSel(){
   const sel=document.getElementById('eval-chart-sel');if(!sel)return;
   let keys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
   // 日付フィルタ適用（チャートのstartDate/endDateが期間内のもののみ）
+  // 日付は'YYYY/MM/DD'と'YYYY-MM-DD'が混在するためハイフンに正規化して比較
   if(_evalFromFilter||_evalToFilter){
+    const norm=v=>(v||'').replace(/\//g,'-');
+    const fFrom=norm(_evalFromFilter);const fTo=norm(_evalToFilter);
     keys=keys.filter(k=>{
       const d=CHARTS[k];
-      const s=d.startDate||'';const e=d.endDate||'';
-      if(!s&&!e)return true; // 期間未設定は表示
-      if(_evalFromFilter&&e&&e<_evalFromFilter)return false;
-      if(_evalToFilter&&s&&s>_evalToFilter)return false;
+      const s=norm(d.startDate);const e=norm(d.endDate);
+      if(!s&&!e)return true; // 期間未設定は常に表示
+      if(fFrom&&e&&e<fFrom)return false;
+      if(fTo&&s&&s>fTo)return false;
       return true;
     });
   }
