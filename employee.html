@@ -2492,9 +2492,11 @@ function _chartTasks(k){
 // KPI廃止: CSFの合計時間 = CSF紐付け全タスクの合計（件数無制限・kpiIdx不問）
 //          ＋ CSFセル自身に記入した累計時間 ＋ 旧KPIセル時間（si-aiキー・旧データ互換の読み取りのみ）
 function _csfKpiHours(k,si){
-  let sum=_chartTasks(k).filter(t=>t.csfIdx===si).reduce((s,t)=>s+(+t.hours||0),0);
-  sum+=(+((_chartEdits(k)['csf-'+si]||{}).hoursTotal)||0);
-  const ed=_chartEdits(k);
+  // タスク時間: csfIdx型不一致を防ぐため数値強制+null除外
+  let sum=_chartTasks(k).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si).reduce((s,t)=>s+(+t.hours||0),0);
+  // kpiEditsとmemberKpiEditsをマージ（hoursTotal消失防止）
+  const ed=Object.assign({},(CHARTS[k]&&CHARTS[k].memberKpiEdits)||{},kpiEdits[k]||{});
+  sum+=(+((ed['csf-'+si]||{}).hoursTotal)||0);
   for(let ai=0;ai<8;ai++){const e=ed[si+'-'+ai];if(e&&e.hoursTotal)sum+=(+e.hoursTotal||0);}
   return Math.round(sum*10)/10;
 }
@@ -3462,7 +3464,7 @@ function _syncTaskProgressToKpiEdits(a){
   const ck='csf-'+a.csfIdx;
   if(!kpiEdits[k][ck])kpiEdits[k][ck]={};
   // このCSFに紐づく全タスクの平均進捗を計算（ASSIGN_HISTORYは完了=100扱い）
-  const all=_chartTasks(k).filter(t=>+t.csfIdx===+a.csfIdx);
+  const all=_chartTasks(k).filter(t=>t.csfIdx!=null&&+t.csfIdx===+a.csfIdx);
   const avg=all.length?Math.round(all.reduce((s,t)=>s+(t.pct!=null?+t.pct:100),0)/all.length):(+a.pct||0);
   kpiEdits[k][ck].progress=avg;
 }
@@ -4304,7 +4306,8 @@ function vexumLogout(){
     replArr(ASSIGNMENTS,d.ASSIGNMENTS); replArr(ASSIGN_HISTORY,d.ASSIGN_HISTORY); replArr(PREPORTS,d.PREPORTS);
     window._epTeam=d.TEAM; window._epKpis=d.KPIS; window._epStats=d.STATS;
     if(typeof restoreTasksFromLS==='function')restoreTasksFromLS();   // ローカル保存の進捗・工数を反映
-    // kpiEditsをDB値で初期化してから、タスクpct→kpiEditsで上書き同期（全タブ正規ソース構築）
+    // kpiEditsをリセットしてDB値で再初期化（staleなhoursTotal/progressを防止）
+    Object.keys(kpiEdits).forEach(function(k){delete kpiEdits[k];});
     if(typeof syncKpiEditsFromCharts==='function')syncKpiEditsFromCharts();
     try{[...ASSIGNMENTS,...ASSIGN_HISTORY].forEach(function(a){
       if(a.csfIdx!=null&&!isNaN(+a.csfIdx)&&a.chart&&typeof _syncTaskProgressToKpiEdits==='function')_syncTaskProgressToKpiEdits(a);
