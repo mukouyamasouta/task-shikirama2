@@ -2497,7 +2497,7 @@ function _csfKpiHours(k,si){
   // kpiEditsとmemberKpiEditsをマージ（hoursTotal消失防止）
   const ed=Object.assign({},(CHARTS[k]&&CHARTS[k].memberKpiEdits)||{},kpiEdits[k]||{});
   sum+=(+((ed['csf-'+si]||{}).hoursTotal)||0);
-  for(let ai=0;ai<8;ai++){const e=ed[si+'-'+ai];if(e&&e.hoursTotal)sum+=(+e.hoursTotal||0);}
+  // 旧KPIセル（si-aiキー）ループは削除: KPI廃止済みでstaleデータが混入するため
   return Math.round(sum*10)/10;
 }
 // CSFの作業時間: 上書き値（csf_hours_override[si]）があれば優先、なければKPI合計
