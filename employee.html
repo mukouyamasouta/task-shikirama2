@@ -3248,8 +3248,14 @@ function renderTaskTable(){
   const con=document.getElementById('task-groups');if(!con)return;
   const priMap={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低'],urgent:['s-hi','緊急']};
   const stMap={wip:['s-wip','進行中'],done:['s-done','完了'],late:['s-late','遅延'],todo:['s-todo','未着手']};
-  const stOf=t=>{if(t.done||t.pct>=100)return 'done';if(t.late)return 'late';return t.pct>0?'wip':'todo';};
   const today=_epToday();
+  // 完了(pct=100) > 遅延(期限超過+未完了) > 進行中(1〜99%) > 未着手(0%)
+  const stOf=t=>{
+    if(t.done||t.pct>=100)return 'done';
+    const dueRaw=(t.ref&&t.ref.dueRaw)||null;
+    if(dueRaw&&dueRaw<today&&t.pct<100)return 'late';
+    return t.pct>0?'wip':'todo';
+  };
   // ダッシュボードと同一の期限判定（di）。本日以前かつ未完了＝「本日対応すべき/遅延」→ ダッシュボードで表示
   const di=r=>{const a=r.ref||{};return a.dueRaw||(r.end&&/\d{4}\/\d{1,2}\/\d{1,2}/.test(r.end)?r.end.replace(/\//g,'-'):null);};
   const isTodayLate=r=>{const d=di(r);return !!(d&&d<=today&&(r.pct||0)<100);};
