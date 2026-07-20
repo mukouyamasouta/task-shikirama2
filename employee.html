@@ -723,6 +723,7 @@ function swTab(id,btn){
   if(btn)btn.classList.add('active');
   if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-path').textContent=TITLES[id][1];}
   updateTbNewBtn(id);
+  try{localStorage.setItem('vexum_last_tab',id);}catch(e){}
 }
 /* サイドバー項目をハイライトしてタブ切替 */
 function gotoTab(id){
@@ -3258,8 +3259,7 @@ function renderTaskTable(){
     ...ASSIGNMENTS.map((a,i)=>({kind:'task',ref:a,arr:'A',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,csfIdx:(a.csfIdx!=null&&!isNaN(a.csfIdx))?a.csfIdx:null,kpiIdx:(a.kpiIdx!=null&&!isNaN(a.kpiIdx))?a.kpiIdx:null,pct:a.pct||0,hours:a.hours!=null?a.hours:0,done:false,late:a.status==='late'})),
     ...ASSIGN_HISTORY.map((a,i)=>({kind:'task',ref:a,arr:'H',idx:i,name:a.name,kpi:a.kpi||'—',end:a.end,pri:a.pri||'md',chart:a.chart||null,cell:a.cell||null,csfIdx:(a.csfIdx!=null&&!isNaN(a.csfIdx))?a.csfIdx:null,kpiIdx:(a.kpiIdx!=null&&!isNaN(a.kpiIdx))?a.kpiIdx:null,pct:100,hours:a.hours!=null?a.hours:0,done:true}))
   ].filter(r=>own(r.ref));
-  // ★本日対応すべき/遅延（di<=today かつ未完了）はダッシュボードに表示 → タスク管理からは除外（二重表示回避）
-  taskRows=taskRows.filter(r=>!isTodayLate(r));
+  // ★タスク管理タブは全タスクを表示（今日期限タスクも除外しない。ダッシュボードでも表示される「二重表示」は仕様）
   // サイドバー「タスク管理」バッジ＝このタブの未完了件数（除外後・絞り込み前）
   (function(){const b=document.getElementById('tasks-badge');if(!b)return;const open=taskRows.filter(r=>!r.done&&r.pct<100).length;b.textContent=open;b.style.display=open?'':'none';})();
   // 絞り込みバー: ステータス＋チャート(KGI)＋開始日/期限（ダッシュボードと同形式）
@@ -3350,9 +3350,10 @@ function renderTaskTable(){
       const ck=g.chartKey;
       const csfs=_chartCsf(ck);
       const isRo=(CHARTS[ck]||{}).readonly;
-      const nocsf=grp.filter(t=>t.csfIdx==null);
+      // csfIdxがnullまたはどのCSFにも一致しないタスクをnocsf（CSF未指定）に集約
+      const nocsf=grp.filter(t=>t.csfIdx==null||!csfs.some(c=>c.si===+t.csfIdx));
       csfs.forEach(c=>{
-        const csfTasks=grp.filter(t=>t.csfIdx===c.si);
+        const csfTasks=grp.filter(t=>t.csfIdx!=null&&+t.csfIdx===c.si);
         // 全CSF（1〜8）を表示し、未入力のCSFにも「✏ 記入」からテキスト・進捗・工数を記入できるようにする
         const empty=!c.text&&!csfTasks.length;
         const csfH=_csfHours(ck,c.si);
@@ -4223,6 +4224,16 @@ function renderProgressDash(){
 restoreSavedFilters();  // 保存済みの絞り込みを復元（リセットするまで維持）
 renderProgressDash();
 renderTaskTable();
+// 直前に開いていたタブを復元（ページリロード後もダッシュボードに戻らない）
+try{
+  const _lt=localStorage.getItem('vexum_last_tab');
+  if(_lt&&document.getElementById('tc-'+_lt)){
+    gotoTab(_lt);
+    if(_lt==='chartmgr'&&typeof initChartMgr==='function')initChartMgr();
+    else if(_lt==='reviews'){if(typeof renderEval==='function')renderEval();if(typeof refreshSelfEvalStatusCard==='function')refreshSelfEvalStatusCard();}
+    else if(_lt==='inbox'&&typeof openInboxTab==='function')openInboxTab();
+  }
+}catch(e){}
 </script>
 
 <!-- ===== Supabase 連携（未設定時は内蔵デモのまま動作） ===== -->
