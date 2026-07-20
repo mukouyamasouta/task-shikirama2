@@ -4157,8 +4157,10 @@ function renderGantt(){
         ?`<button id="gantt-toggle-${ck}-${r.si}" onclick="event.stopPropagation();ganttCsfToggle('${ck}',${r.si})" style="background:none;border:none;cursor:pointer;font-size:10px;color:${color};padding:0 2px;line-height:1;flex:0 0 auto" title="${isCollapsed?'展開':'折りたたむ'}">${isCollapsed?'▶':'▼'}</button>`
         :'';
       const lblCell=`<td style="position:sticky;left:0;z-index:2;background:${lblBg};border:1px solid var(--border);border-left:3px solid ${color};font-size:11px;${isCsf?'font-weight:800;':'font-weight:600;'}padding:4px 8px;${indent}min-width:190px;width:190px;max-width:190px;cursor:pointer" title="${isCsf?'タスク管理タブのCSFへジャンプ':'クリックでタスクを編集'}" ${lblClick}><div style="display:flex;align-items:center;gap:4px;overflow:hidden">${arrow}${toggleBtn}<span style="flex:0 0 auto;font-size:8px;font-weight:800;color:#fff;background:${color};border-radius:4px;padding:1px 5px">${tag}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="${esc(r.label)}">${esc(r.label)}</span></div></td>`;
-      const pct=(r.task&&r.task.pct)||0;
-      const done=!!(r.task&&(r.task.status==='done'||pct>=100));
+      const pct=isCsf
+        ?(typeof evalCsfProgress==='function'?evalCsfProgress(edits,r.si,ck):(r.task&&r.task.pct)||0)
+        :(r.task&&r.task.pct)||0;
+      const done=isCsf?(pct>=100):!!(r.task&&(r.task.status==='done'||pct>=100));
       const barSolid=done?'#10B981':color;
       // 透明度付きの薄色（16進2桁=33≈20%、55≈33%）
       const barLight=done?'#10B98140':(color+'40');
