@@ -600,6 +600,7 @@ function swTab(id,btn){
   document.querySelectorAll('.sb-item').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-path').textContent=TITLES[id][1];}
+  try{localStorage.setItem('vexum_last_tab_leader',id);}catch(e){}
 }
 function gotoTab(id){
   const btn=[...document.querySelectorAll('.sb-item')].find(b=>{const o=b.getAttribute('onclick');return o&&o.includes("'"+id+"'");});
@@ -1695,6 +1696,8 @@ renderAssignedTasks();
 renderMemberEval();
 renderEvalRec();
 renderReports();
+// 直前に開いていたタブを復元
+try{const _lt=localStorage.getItem('vexum_last_tab_leader');if(_lt&&document.getElementById('tc-'+_lt))gotoTab(_lt);}catch(e){}
 </script>
 
 <!-- ===== 受信ボックス 振り分けモーダル ===== -->

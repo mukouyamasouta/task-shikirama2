@@ -766,6 +766,7 @@ function swTab(id,btn){
   document.querySelectorAll('.sb-item').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-path').textContent=TITLES[id][1];}
+  try{localStorage.setItem('vexum_last_tab_exec',id);}catch(e){}
 }
 function swEval(pane,btn){
   document.querySelectorAll('.epane').forEach(el=>el.classList.remove('active'));
@@ -2443,6 +2444,18 @@ function toggleExecEvalMnd(id,forceRerender){
 /* ========== 初期化 ========== */
 renderAccount();
 initExecDashboard();
+// 直前に開いていたタブを復元
+try{
+  const _lt=localStorage.getItem('vexum_last_tab_exec');
+  if(_lt&&document.getElementById('tc-'+_lt)){
+    const _btn=[...document.querySelectorAll('.sb-item')].find(b=>b.getAttribute('onclick')&&b.getAttribute('onclick').includes("'"+_lt+"'"));
+    swTab(_lt,_btn||null);
+    if(_lt==='send'){if(typeof initSendForm==='function')initSendForm();if(typeof renderSendHistory==='function')renderSendHistory();}
+    else if(_lt==='tasks'&&typeof initExecTasks==='function')initExecTasks();
+    else if(_lt==='eval'){if(typeof renderTeamEval==='function')renderTeamEval();if(typeof renderMemberEval==='function')renderMemberEval();}
+    else if(_lt==='report'&&typeof initExecReports==='function')initExecReports();
+  }
+}catch(e){}
 </script>
 
 <!-- ===== Supabase 連携（未設定時は上の内蔵デモデータのまま動作） ===== -->

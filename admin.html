@@ -478,6 +478,7 @@ function swTab(id,btn){
   document.querySelectorAll('.sb-item').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-path').textContent=TITLES[id][1];}
+  try{localStorage.setItem('vexum_last_tab_admin',id);}catch(e){}
 }
 function filterTasks(s,btn){
   document.querySelectorAll('.f-btn').forEach(b=>b.classList.remove('active'));
@@ -1046,7 +1047,12 @@ function adPopulateSelects(){
   const tpl=document.getElementById('mnd-tpl-sel');
   if(tpl)tpl.innerHTML='<option value="">— 空白から作成 —</option>'+Object.keys(MND).filter(k=>!k.startsWith('__')).map(k=>`<option value="${k}">${MND[k].name} テンプレート</option>`).join('');
 }
-function adRenderAll(){adRenderDashboard();adRenderTasks();adRenderGoals();adRenderReviews();adRenderEvalRecs();adRenderTeamGrid();adRenderUsers();adRenderUnassigned();adPopulateSelects();if(window.VexumUI)VexumUI.refresh();}
+let _adTabRestored=false;
+function adRenderAll(){
+  adRenderDashboard();adRenderTasks();adRenderGoals();adRenderReviews();adRenderEvalRecs();adRenderTeamGrid();adRenderUsers();adRenderUnassigned();adPopulateSelects();if(window.VexumUI)VexumUI.refresh();
+  // 初回レンダリング時のみ最後に開いたタブを復元
+  if(!_adTabRestored){_adTabRestored=true;try{const _lt=localStorage.getItem('vexum_last_tab_admin');if(_lt&&document.getElementById('tc-'+_lt)){const _b=[...document.querySelectorAll('.sb-item')].find(b=>b.getAttribute('onclick')&&b.getAttribute('onclick').includes("'"+_lt+"'"));swTab(_lt,_b||null);if(_lt==='mandala-send'&&typeof initMndSendForm==='function')initMndSendForm();else if(_lt==='mandala-list'&&typeof renderMandalaList==='function')renderMandalaList();}}catch(e){}}
+}
 /* 🔔 統括の通知: 未割当タスク・期限超過・最近の完了・最近の評価 */
 window.vxNotifSource=function(){
   if(!AD.ready||!AD.raw){
