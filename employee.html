@@ -3232,7 +3232,9 @@ function _taskChartMatch(a,chartKey){
   const cData=CHARTS[chartKey]||{};
   const kgiText=(typeof _chartKgiText==='function'?_chartKgiText(chartKey):'')||cData.center||'';
   const chartName=cData.name||'';const aChart=String(a.chart||'');
-  return !!((chartName&&aChart===chartName)||(kgiText&&aChart===kgiText)||(chartName&&aChart.includes(chartName))||(kgiText&&aChart.includes(kgiText)));
+  // 完全一致のみ（部分一致だと「Q3売上目標達成」等の名前が短い別チャート名を
+  // 含んでしまい、他チャート/他CSFのタスクが誤って混入するバグの原因になるため撤去）
+  return !!((chartName&&aChart===chartName)||(kgiText&&aChart===kgiText));
 }
 /* KGIチャート絞り込みselectのoptions（ダッシュボードと同じ_chartLabel表示） */
 function _chartFilterOptions(sel){
@@ -3774,12 +3776,10 @@ function _dashFilteredTasks(tasks){
       const kgiText=(typeof _chartKgiText==='function'?_chartKgiText(f.chart):'')||cData.center||'';
       const chartName=cData.name||'';
       const aChart=String(a.chart||'');
-      // source_chartにはchart名かKGIテキストが格納される
+      // source_chartにはchart名かKGIテキストが格納される（完全一致のみ。部分一致は他チャート混入の原因になるため撤去）
       ok=ok&&(
         (chartName&&aChart===chartName)||
-        (kgiText&&aChart===kgiText)||
-        (chartName&&aChart.includes(chartName))||
-        (kgiText&&aChart.includes(kgiText))
+        (kgiText&&aChart===kgiText)
       );
     }
     if(f.from||f.to){
