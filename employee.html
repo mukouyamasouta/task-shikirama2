@@ -248,7 +248,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
   <div class="g4">
     <div class="stat-card"><div class="s-lbl">本日までの達成率</div><div class="s-val" style="color:var(--accent)" id="ep-d-todayrate">—</div><div class="s-trend" style="color:var(--text3)" id="ep-d-todayrate-sub">期限到来分（タスク・KGI/CSF）の完了割合</div></div>
-    <div class="stat-card"><div class="s-lbl">本日対応すべき</div><div class="s-val" id="ep-d-due">—</div><div class="s-trend" style="color:var(--text3)">期限が本日まで・未完了（タスク・KGI/CSF）</div></div>
+    <div class="stat-card"><div class="s-lbl">本日対応すべき</div><div class="s-val" id="ep-d-due">—</div><div class="s-trend" style="color:var(--text3)">期限が本日・未完了（タスク・KGI/CSF）</div></div>
     <div class="stat-card"><div class="s-lbl">遅延タスク</div><div class="s-val" style="color:var(--red)" id="ep-d-late">—</div><div class="s-trend" style="color:var(--text3)">期限超過・未完了（タスク・KGI/CSF）</div></div>
     <div class="stat-card"><div class="s-lbl">合計作業時間</div><div class="s-val" style="color:var(--accent)" id="ep-d-hours">—</div><div class="s-trend" style="color:var(--text3)">全タスク累計工数</div></div>
   </div>
@@ -3323,15 +3323,17 @@ function renderTaskTable(){
     if(!inCsfSection&&t.csfIdx!=null){
       csfChip=`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px" title="${t.kpi}">CSF${t.csfIdx+1}</span>`;
     }
-    const db=dueBadge(t);
     const rid=t.arr+t.idx;
     const refObj=t.ref||{};
     // チャート紐付き（source_chart / source_send_id あり）は削除不可。チャート外タスクのみ削除可
     const isChartTask=!!(t.chart||refObj.chart||refObj.sendId);
     const deletable=!isChartTask;
+    const isLate=st==='late';
+    const endDisplay=(t.end&&t.end!=='—')?t.end:'—';
+    const infoLine=`<div style="font-size:10px;color:${isLate?'var(--red)':'var(--text3)'}">期限 ${endDisplay}${isLate?' ⚠ 超過':''} ／ 工数 ${t.hours}h</div>`;
     let s=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6;cursor:pointer" onclick="openTaskEdit('${rid}')" onmouseover="this.style.background='#F9FAFB'" onmouseout="this.style.background=''">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${csfChip}${db}${editor}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ 合計 ${t.hours}h</div></div>
+        <div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${csfChip}${editor}</div>${infoLine}</div>
         <div style="display:flex;gap:6px;align-items:center">${pcChip}<span class="chip ${sc[0]}">${sc[1]}</span><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${t.pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${t.pct}%</div></div></div>
       </div>`;
     let acts='';
@@ -4243,13 +4245,13 @@ function renderProgressDash(){
   // チャートのKGI/CSF（チャート管理で設定した期間・達成率）も統計に含める
   const cells=(typeof _dashCellItems==='function')?_dashCellItems():[];
   const cellLate=cells.filter(c=>c.due<today&&c.pct<100).length;
-  const cellDue=cells.filter(c=>c.due<=today&&c.pct<100).length;
+  const cellDue=cells.filter(c=>c.due===today&&c.pct<100).length;
   const cellPassed=cells.filter(c=>c.due<=today);
   let st;
   {
     // タスク＋KGI/CSFを合算して統計カードを計算（Supabase接続/デモ共通）
     const late=filtered.filter(a=>{const d=di(a);return d&&d<today&&a.pct<100;}).length+cellLate;
-    const due=filtered.filter(a=>{const d=di(a);return d&&d<=today&&a.pct<100;}).length+cellDue;
+    const due=filtered.filter(a=>{const d=di(a);return d&&d===today&&a.pct<100;}).length+cellDue;
     const hrs=_dashTotalHours(filteredAll);
     const duePassed=filtered.filter(a=>{const d=di(a);return d&&d<=today;});
     const passedTotal=duePassed.length+cellPassed.length;
