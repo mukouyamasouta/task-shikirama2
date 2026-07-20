@@ -4147,8 +4147,9 @@ function renderGantt(){
       let dayCells='';
       if(inMonth){
         const totalCells=barE-barS+1;
-        // 進捗%分のセル数（1セルも塗らない場合は0のまま）
         const pctCells=done?totalCells:Math.round(totalCells*pct/100);
+        // バー先頭セルに表示する進捗テキスト
+        const pctLabel=done?'✅':(pct+'%');
         for(let day=1;day<=daysInMonth;day++){
           const dow=new Date(year,mo,day).getDay();
           const isSun=dow===0,isSat=dow===6,isTod=day===todayD;
@@ -4158,10 +4159,18 @@ function renderGantt(){
             const barPos=day-barS;
             const inProg=barPos<pctCells;
             const isProgLast=barPos===pctCells-1;
+            // セル間ボーダーを消してバーを繋げる（上下のみ残す）
+            const cellBorder=`border-top:1px solid #EEF2F4;border-bottom:1px solid #EEF2F4;${isFirst?'border-left:1px solid #EEF2F4;':'border-left:none;'}${isLast?'border-right:1px solid #EEF2F4;':'border-right:none;'}`;
+            // border-radius: 両端のみ丸める
             const bgBr=`border-radius:${isFirst?'5px':'0'} ${isLast?'5px':'0'} ${isLast?'5px':'0'} ${isFirst?'5px':'0'}`;
             const pgBr=`border-radius:${isFirst?'5px':'0'} ${(isProgLast||isLast)?'5px':'0'} ${(isProgLast||isLast)?'5px':'0'} ${isFirst?'5px':'0'}`;
-            // 背景バー（薄色・全期間）＋進捗バー（濃色・pct%分）を重ねて表示
-            dayCells+=`<td style="border:1px solid #EEF2F4;position:relative;min-width:${CW}px;height:22px;padding:0;background:${wkBg};cursor:pointer" ${barClick}><div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:9px;background:${barLight};${bgBr}"></div>${inProg?`<div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:9px;background:${barSolid};${pgBr}"></div>`:''}</td>`;
+            // 先頭セルのみ進捗%テキストを表示
+            const label=isFirst?`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-start;padding-left:5px;font-size:8px;font-weight:700;color:#fff;pointer-events:none;white-space:nowrap;overflow:visible;z-index:1">${pctLabel}</div>`:'';
+            dayCells+=`<td style="${cellBorder}position:relative;min-width:${CW}px;height:22px;padding:0;background:${wkBg};cursor:pointer" ${barClick}>`
+              +`<div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:10px;background:${barLight};${bgBr}"></div>`
+              +(inProg?`<div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:10px;background:${barSolid};${pgBr}"></div>`:'')
+              +label
+              +`</td>`;
           }else{
             dayCells+=`<td style="border:1px solid #EEF2F4;min-width:${CW}px;height:22px;background:${wkBg}"></td>`;
           }
