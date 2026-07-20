@@ -3213,6 +3213,15 @@ updateInboxBadge();
 function _epShortMD(d){if(!d||d==='—')return'-';const p=String(d).split('/');return p.length===3?(+p[1])+'/'+(+p[2]):d;}
 let _tmFilter='all',_tmChartFilter='all',_tmCsfFilter='all',_tmFromFilter='',_tmToFilter='';
 let _tmFromPart=null,_tmToPart=null;
+let _tmCollapsed={};
+function tmCsfToggle(ck,si){
+  const key=ck+':'+si;
+  _tmCollapsed[key]=!_tmCollapsed[key];
+  const body=document.getElementById('task-csf-body-'+ck+'-'+si);
+  if(body)body.style.display=_tmCollapsed[key]?'none':'';
+  const btn=document.getElementById('tm-csf-toggle-'+ck+'-'+si);
+  if(btn)btn.textContent=_tmCollapsed[key]?'▶':'▼';
+}
 function tmFilterStatus(v){_tmFilter=v;_filtersSave({tm:v});renderTaskTable();}
 function tmFilterChart(v){_tmChartFilter=v||'all';_filtersSave({tmChart:_tmChartFilter});renderTaskTable();}
 function tmFilterDate(){_tmFromPart=_ymdGetPart('tm-from');_tmToPart=_ymdGetPart('tm-to');_tmFromFilter=ymdValue('tm-from')||'';_tmToFilter=ymdValue('tm-to')||'';_filtersSave({tmFrom:_tmFromFilter,tmTo:_tmToFilter});renderTaskTable();}
@@ -3394,16 +3403,21 @@ function renderTaskTable(){
         const csfBarCol=c.pct>=100?'var(--green)':c.pct>=40?'var(--accent)':'var(--amber)';
         const csfChipHtml=`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">CSF${c.si+1}</span>`;
         const csfTitle=c.text||'';
+        const csfCollapseKey=ck+':'+c.si;
+        const csfIsCollapsed=!!_tmCollapsed[csfCollapseKey];
+        const toggleBtn=`<button id="tm-csf-toggle-${ck}-${c.si}" onclick="event.stopPropagation();tmCsfToggle('${ck}',${c.si})" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--accent);padding:0 4px 0 0;line-height:1;flex:0 0 auto;font-weight:700" title="${csfIsCollapsed?'展開':'折りたたむ'}">${csfIsCollapsed?'▶':'▼'}</button>`;
         h+=`<div id="task-csf-${ck}-${c.si}" style="border-top:2px solid #E5E7EB">`;
-        h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6;background:#fff;cursor:pointer" onclick="openCellEdit('${ck}','csf',${c.si})">`;
+        h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6;background:#F8FAFC;cursor:pointer" onclick="openCellEdit('${ck}','csf',${c.si})">`;
         h+=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">`;
-        h+=`<div style="min-width:0"><div style="font-size:12px;font-weight:600">${csfTitle||'<span style="color:var(--text3)">（未入力）</span>'}${csfChipHtml}${csfDB}</div>`;
-        h+=`<div style="font-size:10px;color:var(--text3)">CSF${c.si+1}${csfTitle?' '+csfTitle:''} ／ 合計 ${Math.round(csfH*10)/10}h</div></div>`;
+        h+=`<div style="min-width:0;display:flex;flex-direction:column;gap:2px"><div style="font-size:12px;font-weight:600;display:flex;align-items:center">${toggleBtn}${csfTitle||'<span style="color:var(--text3)">（未入力）</span>'}${csfChipHtml}${csfDB}</div>`;
+        h+=`<div style="font-size:10px;color:var(--text3);padding-left:18px">CSF${c.si+1}${csfTitle?' '+csfTitle:''} ／ 合計 ${Math.round(csfH*10)/10}h ／ ${csfTasks.length}件</div></div>`;
         h+=`<div style="display:flex;gap:6px;align-items:center"><span class="chip ${csfSc[0]}">${csfSc[1]}</span><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${c.pct}%;background:${csfBarCol}"></div></div><div class="pp" style="font-size:10px;color:${csfBarCol}">${c.pct}%</div></div></div>`;
         h+=`</div>`;
         h+=`</div>`;
-        // KPI廃止: CSF配下は紐付けタスク行のみ（KPIスロット一覧は撤去）
+        // 折りたたみ対象コンテナ
+        h+=`<div id="task-csf-body-${ck}-${c.si}" style="${csfIsCollapsed?'display:none':''}">`;
         csfTasks.forEach(t=>h+=rowHtml(t,ck,true));
+        h+=`</div>`;
         h+=`</div>`;
       });
       if(nocsf.length){
