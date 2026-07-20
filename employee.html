@@ -4000,6 +4000,7 @@ let _ganttMo=new Date().getMonth();
 let _taskViewGantt=false;
 let _ganttGroups=null;
 let _ganttOrder=null;
+let _ganttCollapsed={};
 function _ganttDate(s){ if(!s)return null; const p=String(s).split(/[-/]/); if(p.length<3)return null; const d=new Date(+p[0],+p[1]-1,+p[2]); return isNaN(d.getTime())?null:d; }
 function ganttPrevMonth(){ _ganttMo--; if(_ganttMo<0){_ganttMo=11;_ganttYear--;} if(_ganttGroups)renderGantt();else if(typeof renderTaskTable==='function')renderTaskTable(); }
 function ganttNextMonth(){ _ganttMo++; if(_ganttMo>11){_ganttMo=0;_ganttYear++;} if(_ganttGroups)renderGantt();else if(typeof renderTaskTable==='function')renderTaskTable(); }
@@ -4027,6 +4028,15 @@ function ganttRowClick(k,si,ai){
     }
   },200);
 }
+function ganttCsfToggle(ck,si){
+  const key=ck+':'+si;
+  _ganttCollapsed[key]=!_ganttCollapsed[key];
+  const isCollapsed=_ganttCollapsed[key];
+  document.querySelectorAll('[data-gantt-csf="'+key+'"]').forEach(function(tr){tr.style.display=isCollapsed?'none':'';});
+  const btn=document.getElementById('gantt-toggle-'+ck+'-'+si);
+  if(btn)btn.textContent=isCollapsed?'▶':'▼';
+}
+function ganttTaskEdit(rid){if(typeof openTaskEdit==='function')openTaskEdit(rid);}
 // 月次・日単位ガントチャート（task-gantt-body に描画）— 全チャートを縦に並べて表示
 function renderGantt(){
   const con=document.getElementById('task-gantt-body');
@@ -4054,7 +4064,7 @@ function renderGantt(){
       <span style="font-size:13px;font-weight:800;min-width:90px;text-align:center">${monthLabel}</span>
       <button onclick="ganttNextMonth()" style="background:none;border:none;font-size:15px;cursor:pointer;color:var(--accent);line-height:1;padding:0 4px" title="次月">▶</button>
     </div>
-    <span style="font-size:10px;color:var(--text3)">行/バークリック → リストビューでCSF/KGIへジャンプ</span>
+    <span style="font-size:10px;color:var(--text3)">タスクバークリック → 編集 ／ CSF行クリック → リストへジャンプ ／ ▼ で折りたたみ</span>
   </div>`;
   // チャート1件分のセクション（KGIカード＋月次グリッド）を生成
   const buildSection=ck=>{
@@ -4065,7 +4075,9 @@ function renderGantt(){
     const csfText=si=>{const ed=edits['csf-'+si];return String(((ed&&ed.text!=null)?ed.text:(d.subs||[])[si])||'').trim();};
     const cn1=d.name||'',cn2=(typeof _chartKgiText==='function'?_chartKgiText(ck):'')||'';
     const kgiLabel=cn2||cn1||'(KGI未設定)';
-    const ftasks=(g.rows||[]).map(r=>r.ref).filter(Boolean);
+    // ridを保持するためrefだけでなくrow全体を持つ
+    const ftaskObjs=(g.rows||[]).filter(r=>r.ref).map(r=>({task:r.ref,rid:r.arr+r.idx}));
+    const ftasks=ftaskObjs.map(o=>o.task);
     const periodMap=edits.period||{};
     const rowPeriod=(si,ai,t)=>{
       if(t&&(t.startRaw||t.dueRaw)){const s=_ganttDate(t.startRaw)||_ganttDate(t.dueRaw),e=_ganttDate(t.dueRaw)||_ganttDate(t.startRaw);return{has:true,s:(s<e?s:e),e:(e>s?e:s),sRaw:t.startRaw||t.dueRaw,eRaw:t.dueRaw||t.startRaw};}
@@ -4079,18 +4091,18 @@ function renderGantt(){
     // KPI廃止: CSF行＋その配下の紐付けタスク行（件数無制限）を生成
     const rows=[];
     definedCsf.forEach(si=>{
-      const csfTasks=ftasks.filter(t=>((t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1)===si);
-      csfTasks.forEach(t=>usedTask.add(t));
-      const ct=csfTasks.find(t=>t.startRaw||t.dueRaw)||csfTasks[0]||null;
-      rows.push(Object.assign({kind:'csf',si,ai:null,label:csfText(si),task:ct||null},rowPeriod(si,null,ct)));
-      csfTasks.forEach(t=>rows.push(Object.assign({kind:'task',si,ai:null,label:(t.name||'タスク'),task:t},rowPeriod(si,null,t))));
+      const csfTaskObjs=ftaskObjs.filter(o=>((o.task.csfIdx!=null&&!isNaN(o.task.csfIdx))?o.task.csfIdx:-1)===si);
+      csfTaskObjs.forEach(o=>usedTask.add(o.task));
+      const ct=csfTaskObjs.find(o=>o.task.startRaw||o.task.dueRaw)||csfTaskObjs[0]||null;
+      rows.push(Object.assign({kind:'csf',si,ai:null,label:csfText(si),task:ct?ct.task:null,rid:null},rowPeriod(si,null,ct?ct.task:null)));
+      csfTaskObjs.forEach(o=>rows.push(Object.assign({kind:'task',si,ai:null,label:(o.task.name||'タスク'),task:o.task,rid:o.rid},rowPeriod(si,null,o.task))));
     });
-    ftasks.filter(t=>!usedTask.has(t)).forEach(t=>{
-      const si=(t.csfIdx!=null&&!isNaN(t.csfIdx))?t.csfIdx:-1;
-      rows.push(Object.assign({kind:'task',si,ai:null,label:(t.name||'タスク'),task:t,orphan:true},rowPeriod(si,null,t)));
+    ftaskObjs.filter(o=>!usedTask.has(o.task)).forEach(o=>{
+      const si=(o.task.csfIdx!=null&&!isNaN(o.task.csfIdx))?o.task.csfIdx:-1;
+      rows.push(Object.assign({kind:'task',si,ai:null,label:(o.task.name||'タスク'),task:o.task,rid:o.rid,orphan:true},rowPeriod(si,null,o.task)));
     });
     if(!rows.length)return '';
-    let thead=`<tr><th style="position:sticky;left:0;top:0;z-index:6;background:#fff;border:1px solid var(--border);min-width:180px;width:180px;padding:5px 8px;text-align:left;font-size:11px;font-weight:800">CSF / 紐付けタスク</th>`;
+    let thead=`<tr><th style="position:sticky;left:0;top:0;z-index:6;background:#fff;border:1px solid var(--border);min-width:190px;width:190px;padding:5px 8px;text-align:left;font-size:11px;font-weight:800">CSF / 紐付けタスク</th>`;
     for(let day=1;day<=daysInMonth;day++){
       const dow=new Date(year,mo,day).getDay();
       const isSun=dow===0,isSat=dow===6,isTod=day===todayD;
@@ -4104,40 +4116,61 @@ function renderGantt(){
       const color=r.si>=0?GANTT_COLORS[r.si%GANTT_COLORS.length]:'#9CA3AF';
       const isCsf=r.kind==='csf';
       const tag=isCsf?'CSF':'タスク';
-      const lblBg=isCsf?(color+'26'):(color+'0E');
+      const lblBg=isCsf?(color+'22'):(color+'0D');
       const indent=isCsf?'':'padding-left:20px;';
       const arrow=isCsf?'':`<span style="color:${color};font-weight:700;font-size:11px;flex:0 0 auto">└</span>`;
-      const rclick=`onclick="ganttRowClick('${ck}',${r.si},${r.ai==null?'null':r.ai})"`;
-      const lblCell=`<td style="position:sticky;left:0;z-index:2;background:${lblBg};border:1px solid var(--border);border-left:3px solid ${color};font-size:11px;${isCsf?'font-weight:800;':'font-weight:600;'}padding:4px 8px;${indent}min-width:180px;width:180px;max-width:180px;cursor:pointer" title="タスク管理タブのCSF/KGIへジャンプ" ${rclick}><div style="display:flex;align-items:center;gap:5px;overflow:hidden">${arrow}<span style="flex:0 0 auto;font-size:8px;font-weight:800;color:#fff;background:${color};border-radius:4px;padding:1px 5px">${tag}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="${esc(r.label)}">${esc(r.label)}</span></div></td>`;
+      const isCollapsed=!!_ganttCollapsed[ck+':'+r.si];
+      // CSF行: リストビューへジャンプ / タスク行: タスク編集モーダルを開く
+      const csfClick=`onclick="ganttRowClick('${ck}',${r.si},${r.ai==null?'null':r.ai})"`;
+      const taskClick=r.rid?`onclick="ganttTaskEdit('${r.rid}')"`:csfClick;
+      const lblClick=isCsf?csfClick:taskClick;
+      const barClick=isCsf?csfClick:taskClick;
+      // CSF行のみ折りたたみトグルボタン
+      const toggleBtn=isCsf
+        ?`<button id="gantt-toggle-${ck}-${r.si}" onclick="event.stopPropagation();ganttCsfToggle('${ck}',${r.si})" style="background:none;border:none;cursor:pointer;font-size:10px;color:${color};padding:0 2px;line-height:1;flex:0 0 auto" title="${isCollapsed?'展開':'折りたたむ'}">${isCollapsed?'▶':'▼'}</button>`
+        :'';
+      const lblCell=`<td style="position:sticky;left:0;z-index:2;background:${lblBg};border:1px solid var(--border);border-left:3px solid ${color};font-size:11px;${isCsf?'font-weight:800;':'font-weight:600;'}padding:4px 8px;${indent}min-width:190px;width:190px;max-width:190px;cursor:pointer" title="${isCsf?'タスク管理タブのCSFへジャンプ':'クリックでタスクを編集'}" ${lblClick}><div style="display:flex;align-items:center;gap:4px;overflow:hidden">${arrow}${toggleBtn}<span style="flex:0 0 auto;font-size:8px;font-weight:800;color:#fff;background:${color};border-radius:4px;padding:1px 5px">${tag}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="${esc(r.label)}">${esc(r.label)}</span></div></td>`;
       const pct=(r.task&&r.task.pct)||0;
       const done=!!(r.task&&(r.task.status==='done'||pct>=100));
-      const barColor=done?'#10B981':color;
+      const barSolid=done?'#10B981':color;
+      // 透明度付きの薄色（16進2桁=33≈20%、55≈33%）
+      const barLight=done?'#10B98140':(color+'40');
       const inMonth=r.has&&r.s&&r.e&&r.s<=monthEnd&&r.e>=monthStart;
       const barS=inMonth?(r.s>=monthStart?r.s.getDate():1):-1;
       const barE=inMonth?(r.e<=monthEnd?r.e.getDate():daysInMonth):-1;
       let dayCells='';
       if(inMonth){
+        const totalCells=barE-barS+1;
+        // 進捗%分のセル数（1セルも塗らない場合は0のまま）
+        const pctCells=done?totalCells:Math.round(totalCells*pct/100);
         for(let day=1;day<=daysInMonth;day++){
           const dow=new Date(year,mo,day).getDay();
           const isSun=dow===0,isSat=dow===6,isTod=day===todayD;
           const wkBg=isTod?'rgba(219,234,254,.25)':isSun?'rgba(254,226,226,.3)':isSat?'rgba(239,246,255,.5)':'';
           if(day>=barS&&day<=barE){
             const isFirst=day===barS,isLast=day===barE;
-            const br=`border-radius:${isFirst?'6px':'0'} ${isLast?'6px':'0'} ${isLast?'6px':'0'} ${isFirst?'6px':'0'}`;
-            const inner=isFirst?`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;pointer-events:none;overflow:hidden">${done?'✅':pct+'%'}</div>`:'';
-            dayCells+=`<td style="border:1px solid #EEF2F4;position:relative;min-width:${CW}px;height:22px;padding:0;background:${wkBg}" ${rclick}><div style="position:absolute;inset:2px;background:${barColor};opacity:.9;${br}"></div>${inner}</td>`;
+            const barPos=day-barS;
+            const inProg=barPos<pctCells;
+            const isProgLast=barPos===pctCells-1;
+            const bgBr=`border-radius:${isFirst?'5px':'0'} ${isLast?'5px':'0'} ${isLast?'5px':'0'} ${isFirst?'5px':'0'}`;
+            const pgBr=`border-radius:${isFirst?'5px':'0'} ${(isProgLast||isLast)?'5px':'0'} ${(isProgLast||isLast)?'5px':'0'} ${isFirst?'5px':'0'}`;
+            // 背景バー（薄色・全期間）＋進捗バー（濃色・pct%分）を重ねて表示
+            dayCells+=`<td style="border:1px solid #EEF2F4;position:relative;min-width:${CW}px;height:22px;padding:0;background:${wkBg};cursor:pointer" ${barClick}><div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:9px;background:${barLight};${bgBr}"></div>${inProg?`<div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:9px;background:${barSolid};${pgBr}"></div>`:''}</td>`;
           }else{
             dayCells+=`<td style="border:1px solid #EEF2F4;min-width:${CW}px;height:22px;background:${wkBg}"></td>`;
           }
         }
       }else if(r.has&&r.s&&r.e){
-        dayCells=`<td colspan="${daysInMonth}" style="border:1px solid #EEF2F4;padding:2px 8px;cursor:pointer" ${rclick}><span style="font-size:9px;color:#9CA3AF">📅 ${esc(r.sRaw||'—')} 〜 ${esc(r.eRaw||'—')}</span></td>`;
+        dayCells=`<td colspan="${daysInMonth}" style="border:1px solid #EEF2F4;padding:2px 8px;cursor:pointer" ${barClick}><span style="font-size:9px;color:#9CA3AF">📅 ${esc(r.sRaw||'—')} 〜 ${esc(r.eRaw||'—')}</span></td>`;
       }else if(r.task){
-        dayCells=`<td colspan="${daysInMonth}" style="border:1px solid #EEF2F4;padding:2px 8px;cursor:pointer" ${rclick}><span style="font-size:9px;font-weight:700;color:#6B7280;background:#F3F4F6;border:1px dashed #CBD5E1;border-radius:8px;padding:2px 10px">🕓 期間未設定</span></td>`;
+        dayCells=`<td colspan="${daysInMonth}" style="border:1px solid #EEF2F4;padding:2px 8px;cursor:pointer" ${barClick}><span style="font-size:9px;font-weight:700;color:#6B7280;background:#F3F4F6;border:1px dashed #CBD5E1;border-radius:8px;padding:2px 10px">🕓 期間未設定</span></td>`;
       }else{
         dayCells=`<td colspan="${daysInMonth}" style="border:1px solid #EEF2F4;padding:2px 8px"></td>`;
       }
-      tbody+=`<tr style="background:${isCsf?(color+'14'):'#fff'}">${lblCell}${dayCells}</tr>`;
+      // タスク行にdata-gantt-csfを付与して折りたたみ対象にする
+      const trStyle=isCsf?`background:${color+'14'}`:`background:#fff${isCollapsed?';display:none':''}`;
+      const trData=!isCsf?` data-gantt-csf="${ck}:${r.si}"`:'';
+      tbody+=`<tr${trData} style="${trStyle}">${lblCell}${dayCells}</tr>`;
     });
     const tableBlock=`<div style="overflow:auto;border:1px solid var(--border);border-radius:8px;max-height:60vh"><table style="border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content;min-width:100%"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
     const hc=GANTT_COLORS[definedCsf.length?definedCsf[0]%GANTT_COLORS.length:0]||GANTT_COLORS[0];
