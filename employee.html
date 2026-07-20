@@ -3282,11 +3282,19 @@ function renderTaskTable(){
   // 期限バッジ: 今日からの残日数で色分け（赤≤3日, アンバー≤7日, グレーそれ以外/未設定）
   const dueBadge=t=>{
     const d=di(t);
-    if(!d)return '<span style="font-size:9px;background:#F3F4F6;color:#9CA3AF;padding:2px 6px;border-radius:6px;margin-left:6px">期限未設定</span>';
+    const startRaw=(t.ref&&t.ref.startRaw)||t.startRaw||null;
+    const startFmt=startRaw?(startRaw.replace(/-/g,'/')):null;
+    if(!d){
+      if(startFmt)return `<span style="font-size:9px;background:#F3F4F6;color:#9CA3AF;padding:2px 6px;border-radius:6px;margin-left:6px;white-space:nowrap">📅 ${startFmt}〜</span>`;
+      return '<span style="font-size:9px;background:#F3F4F6;color:#9CA3AF;padding:2px 6px;border-radius:6px;margin-left:6px">期限未設定</span>';
+    }
     const diff=Math.ceil((new Date(d)-new Date(today))/(1000*60*60*24));
-    const col=diff<=3?'#DC2626':diff<=7?'#D97706':'#6B7280';
-    const bg=diff<=3?'#FEE2E2':diff<=7?'#FEF3C7':'#F3F4F6';
-    return `<span style="font-size:9px;background:${bg};color:${col};padding:2px 6px;border-radius:6px;font-weight:700;margin-left:6px;white-space:nowrap">📅 ${+d.slice(5,7)}/${+d.slice(8,10)}まで</span>`;
+    const late=diff<0;
+    const col=late||diff<=3?'#DC2626':diff<=7?'#D97706':'#6B7280';
+    const bg=late||diff<=3?'#FEE2E2':diff<=7?'#FEF3C7':'#F3F4F6';
+    const endFmt=d.replace(/-/g,'/');
+    const period=startFmt?`${startFmt}〜${endFmt}`:endFmt;
+    return `<span style="font-size:9px;background:${bg};color:${col};padding:2px 6px;border-radius:6px;font-weight:700;margin-left:6px;white-space:nowrap">📅 ${period}${late?' ⚠超過':''}</span>`;
   };
   // タスク1行のHTML。chartKey: 表示中のCHARTSキー / inCsfSection: CSFセクション内かどうか
   const rowHtml=(t,chartKey,inCsfSection)=>{
@@ -3361,14 +3369,15 @@ function renderTaskTable(){
         const csfPer=_cellPeriod(ck,'csf',c.si,null);
         const csfEnd=csfPer.end||'';
         const csfDB=(()=>{
-          if(!csfEnd)return '<span style="font-size:9px;background:#F3F4F6;color:#9CA3AF;padding:2px 6px;border-radius:6px;margin-left:6px">期限未設定</span>';
-          // KGI期間からの継承（CSF自体には期間未設定）の場合は、個別に迫っている/超過しているような
-          // 赤・黄の緊急色を出さず、中立色＋「(KGI)」表記に留める（CSF固有の遅延だと誤認させないため）
-          if(csfPer.fromChart)return `<span style="font-size:9px;background:#F3F4F6;color:#6B7280;padding:2px 6px;border-radius:6px;margin-left:6px;white-space:nowrap">📅 ${+csfEnd.slice(5,7)}/${+csfEnd.slice(8,10)}まで（KGI）</span>`;
-          const diff=Math.ceil((new Date(csfEnd)-new Date(today))/(1000*60*60*24));
-          const dc=diff<=3?'#DC2626':diff<=7?'#D97706':'#6B7280';
-          const dbg=diff<=3?'#FEE2E2':diff<=7?'#FEF3C7':'#F3F4F6';
-          return `<span style="font-size:9px;background:${dbg};color:${dc};padding:2px 6px;border-radius:6px;font-weight:700;margin-left:6px;white-space:nowrap">📅 ${+csfEnd.slice(5,7)}/${+csfEnd.slice(8,10)}まで</span>`;
+          const csfStart=(csfPer.start||'').replace(/-/g,'/')||null;
+          const csfEndFmt=csfEnd?csfEnd.replace(/-/g,'/'):null;
+          if(!csfStart&&!csfEndFmt)return '<span style="font-size:9px;background:#F3F4F6;color:#9CA3AF;padding:2px 6px;border-radius:6px;margin-left:6px">期限未設定</span>';
+          const overdue=csfEndFmt&&Math.ceil((new Date(csfEnd)-new Date(today))/(1000*60*60*24))<0;
+          // KGI継承の場合は中立色（CSF固有遅延と誤認させない）
+          const dc=csfPer.fromChart?'#6B7280':(overdue?'#DC2626':'#6B7280');
+          const dbg=csfPer.fromChart?'#F3F4F6':(overdue?'#FEE2E2':'#F3F4F6');
+          const period=csfStart&&csfEndFmt?`${csfStart}〜${csfEndFmt}`:csfStart?`${csfStart}〜`:csfEndFmt||'';
+          return `<span style="font-size:9px;background:${dbg};color:${dc};padding:2px 6px;border-radius:6px;font-weight:${overdue&&!csfPer.fromChart?'700':'600'};margin-left:6px;white-space:nowrap">📅 ${period}${overdue&&!csfPer.fromChart?' ⚠超過':''}${csfPer.fromChart?'（KGI）':''}</span>`;
         })();
         const csfSt=c.pct>=100?'done':c.pct>0?'wip':'todo';
         const csfSc=stMap[csfSt]||stMap.todo;
