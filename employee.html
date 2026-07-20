@@ -3359,6 +3359,8 @@ function renderTaskTable(){
   let h='';
   order.forEach(key=>{
     const g=groups[key],grp=g.rows,totH=grp.reduce((s,t)=>s+(t.hours||0),0);
+    // 絞り込み中: マッチするタスクが0件のチャートカードはスキップ
+    if(_tmFilter!=='all'&&grp.length===0)return;
     h+=`<div id="task-kgi-${key}" class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">🎯 ${g.label}</div><div class="card-sub">KGI紐付けタスク ／ ${grp.length}件 ／ 合計時間 ${Math.round(totH*10)/10}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
     if(g.chartKey&&CHARTS[g.chartKey]){
       const ck=g.chartKey;
@@ -3368,6 +3370,8 @@ function renderTaskTable(){
       const nocsf=grp.filter(t=>t.csfIdx==null||!csfs.some(c=>c.si===+t.csfIdx));
       csfs.forEach(c=>{
         const csfTasks=grp.filter(t=>t.csfIdx!=null&&+t.csfIdx===c.si);
+        // 絞り込み中: マッチするタスクが0件のCSFセクションはスキップ
+        if(_tmFilter!=='all'&&csfTasks.length===0)return;
         // 全CSF（1〜8）を表示し、未入力のCSFにも「✏ 記入」からテキスト・進捗・工数を記入できるようにする
         const empty=!c.text&&!csfTasks.length;
         const csfH=_csfHours(ck,c.si);
