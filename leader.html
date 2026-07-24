@@ -658,15 +658,17 @@ function _renderDashFilterBar(){
   const ids=DASH_IDS.filter(id=>MEMBERS[id]);
   const memOpts='<option value="">全員</option>'+ids.map(id=>`<option value="${id}"${id===memF?' selected':''}>${MEMBERS[id].name}</option>`).join('');
   const charts=_teamCharts();
-  const chartOpts='<option value="">全チャート</option>'+charts.map(c=>{
+  const visibleCharts=memF?charts.filter(c=>c.ownerId===memF):charts;
+  const validChartF=visibleCharts.some(c=>c.key===chartF)?chartF:'';
+  const chartOpts='<option value="">全チャート</option>'+visibleCharts.map(c=>{
     const kgiText=(c.center||c.kgi||c.label||'').replace(/\n/g,' ').trim()||c.label;
     const sd=c.startDate||'';const ed=c.endDate||'';
     const dateStr=(sd||ed)?` (${sd}${ed?'〜'+ed:''})`:'';
-    return `<option value="${c.key}"${c.key===chartF?' selected':''}>${kgiText}${dateStr}</option>`;
+    return `<option value="${c.key}"${c.key===validChartF?' selected':''}>${kgiText}${dateStr}</option>`;
   }).join('');
   const lbl='font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:5px';
   bar.innerHTML=`
-    <div><div style="${lbl}">従業員</div><select class="fs" id="dash-f-member" style="font-size:12px;padding:7px 10px;font-weight:600;min-width:150px">${memOpts}</select></div>
+    <div><div style="${lbl}">従業員</div><select class="fs" id="dash-f-member" onchange="onDashMemberSel()" style="font-size:12px;padding:7px 10px;font-weight:600;min-width:150px">${memOpts}</select></div>
     <div><div style="${lbl}">チャート</div><select class="fs" id="dash-f-chart" style="font-size:12px;padding:7px 10px;font-weight:600;min-width:200px">${chartOpts}</select></div>
     <div><div style="${lbl}">開始日</div><div id="ld-from-ymd"></div></div>
     <div style="align-self:flex-end;padding-bottom:6px;color:var(--text3)">〜</div>
@@ -689,6 +691,21 @@ function applyDashFilter(){
   renderDashboard();
 }
 function resetDashFilter(){window._dashMemberFilter='';window._dashChartFilter='';window._dashFromFilter='';window._dashToFilter='';ymdClear('ld-from');ymdClear('ld-to');_lfSave({member:'',chart:'',from:'',to:''});renderDashboard();}
+function onDashMemberSel(){
+  const memId=(document.getElementById('dash-f-member')||{}).value||'';
+  const charts=_teamCharts();
+  const visible=memId?charts.filter(c=>c.ownerId===memId):charts;
+  const chartSel=document.getElementById('dash-f-chart');
+  if(!chartSel)return;
+  const curChart=chartSel.value||'';
+  const validChart=visible.some(c=>c.key===curChart)?curChart:'';
+  chartSel.innerHTML='<option value="">全チャート</option>'+visible.map(c=>{
+    const kgiText=(c.center||c.kgi||c.label||'').replace(/\n/g,' ').trim()||c.label;
+    const sd=c.startDate||'';const ed=c.endDate||'';
+    const dateStr=(sd||ed)?` (${sd}${ed?'〜'+ed:''})`:'';
+    return `<option value="${c.key}"${c.key===validChart?' selected':''}>${kgiText}${dateStr}</option>`;
+  }).join('');
+}
 // 保存済みの絞り込みを復元（初回描画時に_renderDashFilterBarが反映する）
 try{const _sf=JSON.parse(localStorage.getItem('vexum_filters_leader')||'null');
   if(_sf){window._dashMemberFilter=_sf.member||'';window._dashChartFilter=_sf.chart||'';window._dashFromFilter=_sf.from||'';window._dashToFilter=_sf.to||'';}
