@@ -1163,15 +1163,14 @@ function resetReportForm(){
     <div style="background:#F9FAFB;border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:12px;font-size:11px;color:var(--text2)">元の内容: <span id="kpi-edit-orig" style="font-weight:600;color:var(--text)"></span></div>
     <div class="fg" id="kpi-edit-text-wrap"><label class="fl" id="kpi-edit-text-label">内容（書き換え可）</label>
       <input class="fi" id="kpi-edit-text" placeholder="内容を入力…"></div>
-    <div style="display:flex;gap:10px">
-      <div class="fg" style="flex:1"><label class="fl">進捗 <span id="kpi-edit-prog-val" style="color:var(--accent);font-weight:700">0%</span></label>
-        <input type="range" id="kpi-edit-prog" min="0" max="100" value="0" style="width:100%;accent-color:var(--accent)" oninput="document.getElementById('kpi-edit-prog-val').textContent=this.value+'%'"></div>
-      <div class="fg" style="width:130px"><label class="fl">本日の作業時間(h)</label>
-        <input class="fi" id="kpi-edit-hours" type="number" min="0" step="0.5" placeholder="0"></div>
-    </div>
-    <div style="background:#ECFEFF;border:1px solid #67E8F9;border-radius:6px;padding:8px 10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:11px;font-weight:700;color:#0E7490">⏱ 合計作業時間（累計）</span>
-      <span style="font-size:15px;font-weight:800;color:#0E7490"><span id="kpi-edit-hours-total">0</span>h</span>
+    <div class="fg"><label class="fl">進捗 <span id="kpi-edit-prog-val" style="color:var(--accent);font-weight:700">0%</span></label>
+      <input type="range" id="kpi-edit-prog" min="0" max="100" value="0" style="width:100%;accent-color:var(--accent)" oninput="document.getElementById('kpi-edit-prog-val').textContent=this.value+'%'"></div>
+    <div style="background:#ECFEFF;border:1px solid #67E8F9;border-radius:6px;padding:8px 10px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:11px;font-weight:700;color:#0E7490">⏱ 合計作業時間（紐付けタスクから自動計算）</span>
+        <span style="font-size:15px;font-weight:800;color:#0E7490"><span id="kpi-edit-hours-total">0</span>h</span>
+      </div>
+      <div style="font-size:10px;color:#0E7490;margin-top:4px">※ 作業時間はタスクの「作業時間」入力から自動集計されます</div>
     </div>
     <!-- CSF専用: 合計時間の変更（配下KPI合計を上書き。空欄で自動計算に戻る） -->
     <div id="kpi-edit-linked-wrap" style="display:none;margin-bottom:12px">
@@ -2440,9 +2439,14 @@ function syncKpiEditsFromCharts(){
   Object.entries(CHARTS).forEach(([k,c])=>{
     if(k.startsWith('__'))return;
     const e=c.memberKpiEdits;
-    if(e&&Object.keys(e).length&&(!kpiEdits[k]||!Object.keys(kpiEdits[k]).length)){
-      kpiEdits[k]=JSON.parse(JSON.stringify(e));
-    }
+    if(!e||!Object.keys(e).length)return;
+    if(!kpiEdits[k])kpiEdits[k]={};
+    // キー単位で未取込のレガシーキーだけ補完する（全件一致でしか同期しないと、
+    // 先に一部キーだけ書き込まれた場合に他セルのhoursTotal等が二度と取り込まれず、
+    // persistChart()の全列上書き保存でDB上から消えてしまう事故になるため）
+    Object.keys(e).forEach(key=>{
+      if(!(key in kpiEdits[k]))kpiEdits[k][key]=JSON.parse(JSON.stringify(e[key]));
+    });
   });
 }
 // KGIの期間[開始日,終了日]と絞り込み範囲[from,to]が重なるか（未設定側は無制限とみなす）
@@ -2521,16 +2525,27 @@ function updateCmEditCount(k){
 }
 
 // チャート管理の簡素表示（中心KGI + CSF8 の3x3）
-// CSF配下KPIの累計作業時間の合計（kpiEdits['si-ai'].hoursTotal）
 // このチャートに紐づくタスク（source_chart=チャート名 or KGI文言で照合）
 function _chartTasks(k){
   const d=CHARTS[k];if(!d)return [];
   const cn1=d.name||'',cn2=(typeof _chartKgiText==='function'?_chartKgiText(k):'')||'';
   return [...ASSIGNMENTS,...ASSIGN_HISTORY].filter(t=>t.chart&&((cn1&&String(t.chart)===String(cn1))||(cn2&&String(t.chart)===String(cn2))));
 }
-// KPI単位の作業時間: そのKPIに紐づくタスクのtotal_hours合計（タスクがあれば優先）。無ければ曼荼羅セルのhoursTotal
+/* ===== 工数の正典（全タブ共通・集計順序はこの1箇所でのみ定義） =====
+   工数の第一のソースはタスクの total_hours。
+   セルの hoursTotal は「本日の作業時間」欄が存在した時代のレガシーデータで、
+   読み取り互換のためだけに加算する（新規書き込みは廃止済み・削除禁止）。 */
+// KPI単位の作業時間 = そのKPIに紐づくタスクの合計 ＋ レガシーKPIセルhoursTotal
+function _kpiHours(k,si,ai){
+  const ts=_chartTasks(k).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si&&t.kpiIdx!=null&&+t.kpiIdx===+ai);
+  let sum=ts.reduce((s,t)=>s+(+t.hours||0),0);
+  const ed=Object.assign({},(CHARTS[k]&&CHARTS[k].memberKpiEdits)||{},kpiEdits[k]||{});
+  sum+=(+((ed[si+'-'+ai]||{}).hoursTotal)||0);   // レガシー読み取り（削除禁止）
+  return Math.round(sum*10)/10;
+}
 // CSFの合計時間 = CSF紐付け全タスクの合計（KPI配下タスクもcsfIdxが同じsiのため含まれる。二重計上なし）
 //          ＋ CSFセル自身に記入した累計時間 ＋ KPIセル自身（si-aiキー）に記入した累計時間
+// ※ Σ_kpiHours(k,si,ai) + CSF直下タスク + csf-siのhoursTotal と数学的に等価（重複計上なし）
 function _csfKpiHours(k,si){
   // タスク時間: csfIdx型不一致を防ぐため数値強制+null除外
   let sum=_chartTasks(k).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si).reduce((s,t)=>s+(+t.hours||0),0);
@@ -2548,11 +2563,19 @@ function _csfHours(k,si){
   return _csfKpiHours(k,si);
 }
 // KGIの作業時間 = 全CSFの作業時間（上書き優先）の総和 ＋ KGIセル自身に記入した累計時間
-function _kgiHours(k){let s=0;for(let si=0;si<8;si++)s+=_csfHours(k,si);s+=(+((_chartEdits(k)['center']||{}).hoursTotal)||0);return Math.round(s*10)/10;}
+function _kgiHours(k){
+  let s=0;for(let si=0;si<8;si++)s+=_csfHours(k,si);
+  // _kpiHours/_csfKpiHoursと同じくkpiEditsとmemberKpiEditsをマージして読む
+  // （_chartEdits単体だとkpiEdits[k]に他キーがある時点でmemberKpiEdits側のcenterレガシー値を拾えない）
+  const ed=Object.assign({},(CHARTS[k]&&CHARTS[k].memberKpiEdits)||{},kpiEdits[k]||{});
+  s+=(+((ed['center']||{}).hoursTotal)||0);
+  return Math.round(s*10)/10;
+}
 // 「合計時間の変更」をリセット（空欄に戻す→保存で自動計算=KPI合計に戻る）
 function resetCsfHours(){const ci=document.getElementById('kpi-edit-csfhours');if(ci)ci.value='';}
 // KGI/CSF/KPIセルの編集バッジ（✎記入者・進捗%・工数）。チャート管理の3x3/9x9両方で共用。
-function _cmBadge(ed){if(!ed)return'';const ec=ed.by?_editorColor(ed.by):'#D97706';let b=`<span style="position:absolute;top:3px;right:5px;font-size:9px;color:${ec}" title="${ed.by||''}">✎</span>`;if(ed.progress!=null)b+=`<span style="font-size:9px;font-weight:800;margin-top:3px;color:${ed.progress>=100?'#059669':ec}">${ed.progress}%${ed.hoursTotal?' / '+ed.hoursTotal+'h':''}</span>`;if(ed.by)b+=`<span style="font-size:7px;color:${ec};font-weight:700">${ed.by}</span>`;return b;}
+// hours: 正典関数（_kgiHours/_csfHours/_kpiHours）で計算した自動集計値を呼び出し元から渡す
+function _cmBadge(ed,hours){if(!ed)return'';const ec=ed.by?_editorColor(ed.by):'#D97706';let b=`<span style="position:absolute;top:3px;right:5px;font-size:9px;color:${ec}" title="${ed.by||''}">✎</span>`;if(ed.progress!=null)b+=`<span style="font-size:9px;font-weight:800;margin-top:3px;color:${ed.progress>=100?'#059669':ec}">${ed.progress}%${hours?' / '+hours+'h':''}</span>`;if(ed.by)b+=`<span style="font-size:7px;color:${ec};font-weight:700">${ed.by}</span>`;return b;}
 let _cmKpiOn=false;
 function toggleCmKpi(){
   _cmKpiOn=!_cmKpiOn;
@@ -2573,14 +2596,14 @@ function renderCmSimpleGrid(k){
       const ed=edits['center'];const eb=ed?'box-shadow:inset 0 0 0 2px #F59E0B;':'';
       const oc=ro?'':`onclick="openCellEdit('${k}','center')"`;
       const kgiH=_kgiHours(k);const kgiHov=kgiH>0?`<span style="position:absolute;bottom:3px;right:6px;font-size:8px;font-weight:700;color:rgba(255,255,255,.9)">⏱${kgiH}h</span>`:'';
-      h+=`<div ${oc} style="${ro?'cursor:default;':'cursor:pointer;'}position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:13px;font-weight:800;color:#fff;background:${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}">${((ed&&ed.text!=null?ed.text:d.center)||'').replace(/\n/g,'<br>')}${badge(ed)}${kgiHov}</div>`;
+      h+=`<div ${oc} style="${ro?'cursor:default;':'cursor:pointer;'}position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:13px;font-weight:800;color:#fff;background:${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}">${((ed&&ed.text!=null?ed.text:d.center)||'').replace(/\n/g,'<br>')}${badge(ed,kgiH)}${kgiHov}</div>`;
     }else{
       const ed=edits['csf-'+si];const label=(ed&&ed.text!=null?ed.text:(d.subs||[])[si])||'';
       const eb=ed?'box-shadow:inset 0 0 0 2px #F59E0B;background:#FEF3C7;':`background:${d.bg};`;
       const oc=ro?'':`onclick="openCellEdit('${k}','csf',${si})"`;
       const csfH=_csfHours(k,si);const ovSet=((_chartEdits(k).csf_hours_override||{})[si]!=null);
       const csfHov=csfH>0?`<span title="${ovSet?'直接入力（自動合計を上書き）':'CSF記入＋KPI・タスクの合計'}" style="position:absolute;bottom:3px;right:6px;font-size:8px;font-weight:700;color:${ovSet?'#B45309':'var(--text3)'}">⏱${csfH}h${ovSet?'*':''}</span>`:'';
-      h+=`<div ${oc} data-csf="${si}" style="${ro?'cursor:default;':'cursor:pointer;'}position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:${d.color};border:1.5px solid ${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}"><div style="font-size:8px;color:var(--text3);font-weight:600;margin-bottom:2px">CSF ${si+1}</div>${label}${badge(ed)}${csfHov}</div>`;
+      h+=`<div ${oc} data-csf="${si}" style="${ro?'cursor:default;':'cursor:pointer;'}position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:${d.color};border:1.5px solid ${d.color};border-radius:10px;padding:8px;line-height:1.4;${eb}"><div style="font-size:8px;color:var(--text3);font-weight:600;margin-bottom:2px">CSF ${si+1}</div>${label}${badge(ed,csfH)}${csfHov}</div>`;
     }
   });
   h+=ro
@@ -2630,7 +2653,7 @@ function renderCmFullGrid(k){
         if(ed)sty+='box-shadow:inset 0 0 0 2px #F59E0B;background:#FEF3C7;';
         sty+=ro?'cursor:default;':'cursor:pointer;';
         if(!ro)oc2=`onclick="openCellEdit('${k}','kpi',${p.si},${p.ai})"`;
-        badgeHtml=_cmBadge(ed);
+        badgeHtml=_cmBadge(ed,_kpiHours(k,p.si,p.ai));
       }else{
         tx=cell.tx||'';sty+='cursor:default;';
       }
@@ -2648,6 +2671,7 @@ function _cellOrig(d,kind,si,ai){return kind==='center'?(d.center||''):kind==='c
 function openCellEdit(k,kind,si,ai){
   const d0=CHARTS[k];
   if(d0&&d0.readonly){alert('チームチャートの内容（KGI/CSF/KPI）はリーダー・幹部が管理しており編集できません。\n進捗・工数は「割り当て」「タスク管理」から記入してください。');return;}
+  if(typeof syncKpiEditsFromCharts==='function')syncKpiEditsFromCharts(); // レガシーキーの取り込み漏れを補完してから開く
   _editingKpi={k,kind,si,ai};
   const d=CHARTS[k],edits=kpiEdits[k]||{},ekey=_cellKey(kind,si,ai),ed=edits[ekey];
   const orig=_cellOrig(d,kind,si,ai);
@@ -2660,8 +2684,9 @@ function openCellEdit(k,kind,si,ai){
   const pg=ed?(ed.progress||0):0;
   document.getElementById('kpi-edit-prog').value=pg;
   document.getElementById('kpi-edit-prog-val').textContent=pg+'%';
-  document.getElementById('kpi-edit-hours').value='';
-  document.getElementById('kpi-edit-hours-total').textContent=ed?(ed.hoursTotal||0):0;  // 累計時間
+  // 合計作業時間はタスク由来の自動計算値（レガシーhoursTotalは各正典関数の内部で読み取り継続）
+  const hoursVal=kind==='center'?_kgiHours(k):kind==='csf'?_csfHours(k,si):kind==='kpi'?_kpiHours(k,si,ai):0;
+  document.getElementById('kpi-edit-hours-total').textContent=hoursVal;
   document.getElementById('kpi-edit-note').value=ed?(ed.note||''):'';
   // CSFのみ: 作業時間の直接入力欄（紐付けタスク合計を上書き）＋紐付けタスク一覧
   const csfhWrap=document.getElementById('kpi-edit-csfhours-wrap');
@@ -2818,13 +2843,17 @@ function saveKpiEdit(){
   const{k,kind,si,ai}=_editingKpi;
   const newText=(document.getElementById('kpi-edit-text').value||'').trim();
   const pg=parseInt(document.getElementById('kpi-edit-prog').value)||0;
-  const hours=Math.max(0,parseFloat(document.getElementById('kpi-edit-hours').value)||0);
   const note=document.getElementById('kpi-edit-note').value||'';
   if(!kpiEdits[k])kpiEdits[k]={};
+  if(typeof syncKpiEditsFromCharts==='function')syncKpiEditsFromCharts(); // 保存直前にレガシーキーの取り込み漏れを補完（hoursTotal消失防止）
   const key=_cellKey(kind,si,ai);
-  const prev=kpiEdits[k][key]||{};
+  // prevはkpiEdits優先でmemberKpiEditsのレガシー値をフォールバックに使う
+  // （kpiEdits[k]にこのキーがまだ無い場合、hoursTotal等のレガシーデータを0で上書きしてしまう事故を防ぐ）
+  const legacyEd=(CHARTS[k]&&CHARTS[k].memberKpiEdits&&CHARTS[k].memberKpiEdits[key])||{};
+  const prev=Object.assign({},legacyEd,kpiEdits[k][key]||{});
   const by=(document.getElementById('sb-uname')||{}).textContent;
-  kpiEdits[k][key]={text:newText,note,progress:pg,kind,hoursTotal:(prev.hoursTotal||0)+hours,hoursToday:hours,by:(by&&by!=='（読み込み中）')?by:(prev.by||'')};
+  // hoursTotalは「本日の作業時間」欄の廃止に伴い新規加算しない。レガシー値をそのまま引き継ぐのみ（削除・0クリア禁止）
+  kpiEdits[k][key]={text:newText,note,progress:pg,kind,hoursTotal:(prev.hoursTotal||0),by:(by&&by!=='（読み込み中）')?by:(prev.by||'')};
   // CSFの作業時間 直接入力（KPI合計を上書き）。空欄ならKPI合計に戻す
   if(kind==='csf'){
     if(!kpiEdits[k].csf_hours_override)kpiEdits[k].csf_hours_override={};
@@ -3542,7 +3571,7 @@ function renderTaskTable(){
             const ke=kEdits[c.si+'-'+ai];
             const kTxt=((ke&&ke.text!=null)?ke.text:(((kD.acts||[])[c.si]||[])[ai]))||('KPI'+(c.si+1)+'-'+(ai+1));
             const kAvgPct=_kpiPct(ck,c.si,ai);
-            const kHours=kts.reduce((s,t)=>s+(+t.hours||0),0);
+            const kHours=_kpiHours(ck,c.si,ai);
             const kSt=kAvgPct>=100?'done':kAvgPct>0?'wip':'todo';
             const kSc=stMap[kSt]||stMap.todo;
             const kCol=kAvgPct>=100?'var(--green)':kAvgPct>=40?'var(--accent)':'var(--amber)';
@@ -3553,7 +3582,7 @@ function renderTaskTable(){
             h+=`<div style="padding:9px 14px 9px 26px;border-bottom:1px solid #F3F4F6;background:#FCFCFD;cursor:pointer" onclick="openCellEdit('${ck}','kpi',${c.si},${ai})">`;
             h+=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">`;
             h+=`<div style="min-width:0"><div style="font-size:11.5px;font-weight:600;display:flex;align-items:center">${kToggleBtn}${kTxt}</div>`;
-            h+=`<div style="font-size:9.5px;color:var(--text3);padding-left:14px">KPI${c.si+1}-${ai+1} ／ 合計 ${Math.round(kHours*10)/10}h ／ ${kts.length}件</div></div>`;
+            h+=`<div style="font-size:9.5px;color:var(--text3);padding-left:14px">KPI${c.si+1}-${ai+1} ／ 合計 ${kHours}h ／ ${kts.length}件</div></div>`;
             h+=`<div style="display:flex;gap:6px;align-items:center"><span class="chip ${kSc[0]}">${kSc[1]}</span><div class="pw" style="min-width:70px"><div class="pt"><div class="pf" style="width:${kAvgPct}%;background:${kCol}"></div></div><div class="pp" style="font-size:9px;color:${kCol}">${kAvgPct}%</div></div></div>`;
             h+=`</div></div>`;
             h+=`<div id="task-kpi-body-${ck}-${c.si}-${ai}" style="${kCollapsed?'display:none':''}">`;
