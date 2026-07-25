@@ -1914,6 +1914,7 @@
     var clickable = !!opts.onCellClick;          // CSF/KPIセルのクリック編集（リーダー個人DB等）
     var cz = clickable ? 'cursor:pointer;' : '';
     if (containerEl._kpiOn === undefined) containerEl._kpiOn = false;
+    if (opts.kpiOn != null) containerEl._kpiOn = !!opts.kpiOn;
     var SP_MAP = [
       { cr: 3, cc: 3, oc: [1, 1], si: 0 }, { cr: 3, cc: 4, oc: [1, 4], si: 1 }, { cr: 3, cc: 5, oc: [1, 7], si: 2 },
       { cr: 4, cc: 3, oc: [4, 1], si: 3 }, { cr: 4, cc: 5, oc: [4, 7], si: 4 },
@@ -1996,8 +1997,8 @@
       return h;
     }
     function paint() {
-      // KPI廃止: 常にKGI+CSF8項目のシンプル表示（「＋KPIを表示」トグル撤去）
-      containerEl.innerHTML = '<div style="overflow-x:auto">' + simpleHTML() + '</div>';
+      // 「＋KPIを表示」トグル(containerEl._kpiOn)でKGI+CSF8項目の3x3⇔9x9(KPIセル込み)を切替
+      containerEl.innerHTML = '<div style="overflow-x:auto">' + (containerEl._kpiOn ? fullHTML() : simpleHTML()) + '</div>';
       if (clickable) {
         var cells = containerEl.querySelectorAll('[data-mnd-cell]');
         Array.prototype.forEach.call(cells, function (el) {
@@ -2009,6 +2010,8 @@
         });
       }
     }
+    // 画面側からKPI表示をトグルできるよう公開する
+    containerEl.__toggleKpi = function () { containerEl._kpiOn = !containerEl._kpiOn; paint(); };
     paint();
   }
 
