@@ -1199,7 +1199,7 @@ function resetReportForm(){
       <textarea class="fi" id="kpi-edit-note" rows="3" placeholder="進捗状況・メモ・リーダーへの報告…" style="resize:vertical;font-size:12px"></textarea></div>
     <div style="display:flex;gap:8px;margin-top:4px">
       <button class="f-submit" style="flex:1;background:var(--text3)" onclick="clearKpiEdit()">元に戻す</button>
-      <button class="f-submit" style="flex:1" onclick="saveKpiEdit()">✓ 保存してリーダーに通知</button>
+      <button class="f-submit" style="flex:1" onclick="saveKpiEdit()">保存</button>
     </div>
     <!-- CSF編集時: 内容の削除（2段階確認） -->
     <div id="kpi-edit-del-wrap" style="display:none;margin-top:10px;border-top:1px dashed var(--border);padding-top:10px">
@@ -2900,7 +2900,7 @@ function saveKpiEdit(){
       API0.updateChart(d.dbId,{start_date:cps||null,end_date:cpe||null}).then(r=>{if(r&&r.error)console.warn('[VEXUM] チャート期間の保存に失敗:',r.error);}).catch(()=>{});
     }
   }
-  closeKpiEdit();onCmChartChange();
+  closeKpiEdit();showToast('保存しました');onCmChartChange();
   if(typeof renderTaskTable==='function')renderTaskTable();  // タスク管理のチャート行も更新
   if(typeof renderProgressDash==='function')renderProgressDash();  // ダッシュボード（統計カード・CSF内訳・KGI名横の期間）も更新
   if(typeof renderGantt==='function'&&_taskViewGantt)renderGantt();
@@ -2918,7 +2918,8 @@ async function persistChart(k){
     try{
       const res=await API.saveMemberKpiEdits(d.dbId,kpiEdits[k]||{},d.acts,{center:d.center,subs:d.subs});
       ok=res&&!res.error;
-      if(ok){try{await API.notifyLeaderChartEdit(d.name+'の曼荼羅チャートを更新');}catch(e){} _pendingChartDel(d.dbId);}
+      // 保存のみ（リーダーへの通知は行わない）
+      if(ok){_pendingChartDel(d.dbId);}
       else{console.warn('[VEXUM] チャート保存失敗→再送キューへ:',res&&res.error);}
     }catch(e){console.warn('[VEXUM] チャート保存例外→再送キューへ:',e);}
     if(!ok)_pendingChartAdd(d.dbId,k); // サーバー保存失敗→未送信として保持し後で再送

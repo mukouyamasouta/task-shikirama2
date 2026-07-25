@@ -989,6 +989,8 @@
     return { ok: true };
   }
   // 個人がチャート（KGI/CSF/KPI）を更新した旨を自チームのリーダーへ通知
+  // 現在は未使用（従業員画面の「保存」はリーダー通知を行わない仕様に変更済み）。
+  // 過去に送信された chart_edit 通知はリーダー受信ボックスに残るため、表示側の処理は維持。
   async function notifyLeaderChartEdit(summary) {
     if (!sb) return;
     var me = await currentProfile(); if (!me) return;
