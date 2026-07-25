@@ -546,7 +546,6 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <div><div class="card-title">曼荼羅チャート <span id="cm-mnd-period" style="font-size:11px;font-weight:700;color:var(--accent)"></span></div><div class="card-sub" id="cm-grid-sub">中心(KGI)＋CSF 8項目。CSFセルをクリックすると内容・進捗・工数と紐付けタスクを確認できます</div></div>
       <div style="display:flex;align-items:center;gap:8px">
         <button class="card-btn" id="cm-kpi-toggle" onclick="toggleCmKpi()">＋ KPIを表示</button>
-        <button class="card-btn" onclick="(function(){const k=document.getElementById('cm-chart-sel').value;if(k&&CHARTS[k])openMandala(k,false);})()">⛶ 全画面</button>
       </div>
     </div>
     <div class="card-body" style="padding:10px">
@@ -1176,7 +1175,7 @@ function resetReportForm(){
     </div>
     <!-- CSF専用: 合計時間の変更（配下KPI合計を上書き。空欄で自動計算に戻る） -->
     <div id="kpi-edit-linked-wrap" style="display:none;margin-bottom:12px">
-      <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">🔗 このCSFに紐付けられたタスク <span id="kpi-edit-linked-count" style="font-weight:400;color:var(--text3)"></span></div>
+      <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">🔗 <span id="kpi-edit-linked-label">このCSFに紐付けられたタスク</span> <span id="kpi-edit-linked-count" style="font-weight:400;color:var(--text3)"></span></div>
       <div id="kpi-edit-linked-list" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
     </div>
     <div class="fg" id="kpi-edit-csfhours-wrap" style="display:none;background:#FFFBEB;border:1px solid #FCD34D;border-radius:6px;padding:8px 10px;margin-bottom:12px">
@@ -1283,6 +1282,13 @@ function resetReportForm(){
 </div>
 
 <script>
+// kpiEdits/kpiOrigActsはチャート管理タブの<script>ブロック内で本来宣言されていたが、
+// 本ブロック内のrenderEvalBar/renderEval()（ページ読込時に即実行）が先に参照するため
+// ReferenceErrorでページ初期化が丸ごと止まっていた（renderTaskTable/renderProgressDashが
+// 未実行のまま＝タスク管理・ダッシュボードの表示が食い違う/更新されないバグの一因）。
+// 参照より前で宣言されるよう、この位置へ移設。
+let kpiEdits={};      // {chartKey:{'si-ai':{text,note,progress}}}
+let kpiOrigActs={};   // 初回ロード時の元データ
 /* ===== チャートデータ ===== */
 const CHARTS={
   self_q3:{name:'中村 健太',scopeLabel:'個人 Q3',period:'2025年 Q3',startDate:'2025/07/01',team:'営業チームA',color:'#0D9488',bg:'#CCEDE9',center:'Q3個人売上\n¥15M達成',
@@ -1814,12 +1820,12 @@ async function renderEvalMndOverlay(k,d){
     draw();
   }
 }
-// KPI廃止: CSF進捗 = 紐付けタスクの平均（あれば）→ CSFセル記入progress → 旧KPIセル平均（互換）
+// CSF進捗（正典 _csfPct へ委譲。全タブでこの1関数を使うことで%の食い違いを解消）
 function evalCsfProgress(edits,si,k){
-  // kpiEdits['csf-N'].progressを最優先（全タブの正規ソース）
-  // タスク保存時に_syncTaskProgressToKpiEditsで自動更新されるため常に最新値
+  // _csfPctは別<script>ブロックで定義されるため、ページ初期化直後（renderEval()の初回同期呼び出し）
+  // など読み込み順の都合でまだ存在しない場合がある。その場合は従来の自己完結ロジックへ安全にフォールバック
+  if(k&&typeof _csfPct==='function')return _csfPct(k,si);
   const ce=edits['csf-'+si];if(ce&&ce.progress!=null)return Math.round(+ce.progress);
-  // kpiEditsに値がない場合のみタスク平均にフォールバック（初期値・旧データ互換）
   if(k&&typeof _chartTasks==='function'){
     const tks=_chartTasks(k).filter(t=>+t.csfIdx===si);
     if(tks.length)return Math.round(tks.reduce((s,t)=>s+(t.pct!=null?+t.pct:100),0)/tks.length);
@@ -1827,7 +1833,10 @@ function evalCsfProgress(edits,si,k){
   let s=0;for(let ai=0;ai<8;ai++){const e=edits[si+'-'+ai];s+=e&&e.progress!=null?Math.round(+e.progress):0;}
   return Math.round(s/8);
 }
-function evalKgiProgress(edits,k){let s=0;for(let si=0;si<8;si++)s+=evalCsfProgress(edits,si,k);return Math.round(s/8);}
+function evalKgiProgress(edits,k){
+  if(k&&typeof _kgiPct==='function')return _kgiPct(k);
+  let s=0;for(let si=0;si<8;si++)s+=evalCsfProgress(edits,si,k);return Math.round(s/8);
+}
 function evalColorOf(pct){
   if(pct>=100)return{bg:'#D1FAE5',fg:'#065F46'};
   if(pct>=50)return{bg:'#DBEAFE',fg:'#1E40AF'};
@@ -2420,9 +2429,8 @@ if(typeof renderProgressDash==='function')renderProgressDash();
 
 <script>
 /* ===== チャート管理タブ ===== */
+// kpiEdits/kpiOrigActs は上のブロックの先頭（CHARTS定義の直前）へ移設済み
 
-let kpiEdits={};      // {chartKey:{'si-ai':{text,note,progress}}}
-let kpiOrigActs={};   // 初回ロード時の元データ
 const cmPersonalTasks=[];
 let cmTaskFilter='all';
 let _editingKpi=null;
@@ -2664,6 +2672,10 @@ function openCellEdit(k,kind,si,ai){
     const ci=document.getElementById('kpi-edit-csfhours');if(ci)ci.value=(ov[si]!=null&&ov[si]!=='')?ov[si]:'';
     const ca=document.getElementById('kpi-edit-csfhours-auto');if(ca)ca.textContent=_csfKpiHours(k,si);
     _renderCellLinkedTasks(k,si);
+  }else if(kind==='kpi'){
+    // KPIには工数の直接上書き欄は無い（CSF単位のみ）が、紐付けタスク一覧はKPI単位で表示する
+    if(csfhWrap)csfhWrap.style.display='none';
+    _renderCellLinkedTasks(k,si,ai);
   }else{if(csfhWrap)csfhWrap.style.display='none';if(linkedWrap)linkedWrap.style.display='none';}
   // CSFのみ: 内容の削除ボタン
   const delWrap2=document.getElementById('kpi-edit-del-wrap');
@@ -2719,18 +2731,23 @@ function _cellPeriod(k,kind,si,ai){
   }
   return {start:'',end:'',fromTask:false,taskCount:0};
 }
-// CSF編集モーダル内の「紐付けタスク一覧」を描画（タスク名・期限・進捗・工数、クリックでタスク編集へ）
-function _renderCellLinkedTasks(k,si){
+// CSF/KPI編集モーダル内の「紐付けタスク一覧」を描画（タスク名・期限・進捗・工数、クリックでタスク編集へ）
+// ai省略時=CSF直下含む全紐付けタスク／ai指定時=そのKPI配下のタスクのみに絞り込む
+function _renderCellLinkedTasks(k,si,ai){
   const wrap=document.getElementById('kpi-edit-linked-wrap');
   const list=document.getElementById('kpi-edit-linked-list');
   const cnt=document.getElementById('kpi-edit-linked-count');
+  const lbl=document.getElementById('kpi-edit-linked-label');
   if(!wrap||!list)return;
-  const linked=_cellLinkedTasks(k,'csf',si);
+  const isKpi=(ai!=null&&!isNaN(ai));
+  if(lbl)lbl.textContent=isKpi?'このKPIに紐付けられたタスク':'このCSFに紐付けられたタスク';
+  let linked=_cellLinkedTasks(k,'csf',si);
+  if(isKpi)linked=linked.filter(t=>t.kpiIdx!=null&&+t.kpiIdx===+ai);
   // rid（A/H+index）特定のため元配列を走査（linkedの要素は元配列への参照）
   const rows=[];
   ASSIGNMENTS.forEach((t,i)=>{if(linked.includes(t))rows.push({t,rid:'A'+i});});
   ASSIGN_HISTORY.forEach((t,i)=>{if(linked.includes(t))rows.push({t,rid:'H'+i});});
-  if(!rows.length){wrap.style.display='';cnt.textContent='（0件）';list.innerHTML='<div style="padding:10px;font-size:11px;color:var(--text3);text-align:center">紐付けタスクはありません。タスク管理の「＋タスク作成」でこのCSFに紐付けできます</div>';return;}
+  if(!rows.length){wrap.style.display='';cnt.textContent='（0件）';list.innerHTML=`<div style="padding:10px;font-size:11px;color:var(--text3);text-align:center">紐付けタスクはありません。タスク管理の「＋タスク作成」でこの${isKpi?'KPI':'CSF'}に紐付けできます</div>`;return;}
   wrap.style.display='';cnt.textContent='（'+rows.length+'件）';
   list.innerHTML=rows.map(({t,rid})=>`<div onclick="closeKpiEdit();gotoTab('tasks');setTimeout(()=>{if(typeof openTaskEdit==='function')openTaskEdit('${rid}')},250)" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #F3F4F6;cursor:pointer">
     <div style="min-width:0;flex:1"><div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.name}</div><div style="font-size:9px;color:var(--text3)">期限 ${t.end||'—'}</div></div>
@@ -3513,22 +3530,18 @@ function renderTaskTable(){
         // 折りたたみ対象コンテナ
         h+=`<div id="task-csf-body-${ck}-${c.si}" style="${csfIsCollapsed?'display:none':''}">`;
         // KPI階層: kpiIdxが定義されているタスクはKPI見出し配下へ、無いものはCSF直下（csfDirect）へ
-        const byKpi={},csfDirect=[];
-        csfTasks.forEach(t=>{
-          const ai=(t.kpiIdx!=null&&!isNaN(t.kpiIdx))?+t.kpiIdx:null;
-          if(ai==null)csfDirect.push(t);else (byKpi[ai]=byKpi[ai]||[]).push(t);
-        });
-        const kpiAis=Object.keys(byKpi).map(Number);
-        if(!kpiAis.length){
+        // タスク管理・ガント共通の _splitByKpi で振り分け（実装差異による表示不整合を防ぐ）
+        const {aiList:kpiAis,byKpi,direct:csfDirect,useKpi}=_splitByKpi(csfTasks);
+        if(!useKpi){
           // KPI未使用チャート: 従来通りフラットに列挙（余計な階層を挟まない＝改修前の見た目を維持）
           csfTasks.forEach(t=>h+=rowHtml(t,ck,true));
         }else{
           const kEdits=_chartEdits(ck),kD=CHARTS[ck]||{};
-          kpiAis.sort((a,b)=>a-b).forEach(ai=>{
+          kpiAis.forEach(ai=>{
             const kts=byKpi[ai];
             const ke=kEdits[c.si+'-'+ai];
             const kTxt=((ke&&ke.text!=null)?ke.text:(((kD.acts||[])[c.si]||[])[ai]))||('KPI'+(c.si+1)+'-'+(ai+1));
-            const kAvgPct=kts.length?Math.round(kts.reduce((s,t)=>s+(+t.pct||0),0)/kts.length):(ke&&ke.progress!=null?ke.progress:0);
+            const kAvgPct=_kpiPct(ck,c.si,ai);
             const kHours=kts.reduce((s,t)=>s+(+t.hours||0),0);
             const kSt=kAvgPct>=100?'done':kAvgPct>0?'wip':'todo';
             const kSc=stMap[kSt]||stMap.todo;
@@ -3626,16 +3639,39 @@ function _chartKeyOfTask(a){
     return String(d.name||'')===t||String((typeof _chartKgiText==='function'&&_chartKgiText(k))||'')===t;
   })||'';
 }
-// タスクのpct変更をkpiEdits['csf-N'].progressに即時反映（全タブ同期の正規ソース）
+// タスクのpct変更をkpiEdits[si+'-'+ai]（KPI）・kpiEdits['csf-N']（CSF）へ即時反映（全タブ同期の正規ソース）
 function _syncTaskProgressToKpiEdits(a){
   if(a.csfIdx==null||isNaN(+a.csfIdx)||!a.chart)return;
   const k=_chartKeyOfTask(a);if(!k)return;
   if(!kpiEdits[k])kpiEdits[k]={};
-  const ck='csf-'+a.csfIdx;
+  const si=+a.csfIdx;
+  const all=_chartTasks(k).filter(t=>t.csfIdx!=null&&+t.csfIdx===si);
+  // (1) KPI配下タスクなら、そのKPIセルの progress を配下タスク平均で更新（先に書く。
+  //     (2)がこの直後に_kpiPct経由で読み返すため、更新後の最新値がCSF集計に反映される）
+  if(a.kpiIdx!=null&&!isNaN(+a.kpiIdx)){
+    const ai=+a.kpiIdx;
+    const kts=all.filter(t=>t.kpiIdx!=null&&+t.kpiIdx===ai);
+    if(kts.length){
+      const kk=si+'-'+ai;
+      if(!kpiEdits[k][kk])kpiEdits[k][kk]={};
+      kpiEdits[k][kk].progress=Math.round(kts.reduce((s,t)=>s+_taskPctSafe(t),0)/kts.length);
+    }
+  }
+  // (2) CSFセルの progress を更新。KPI単位の値は_kpiPct()（_csfPctと同じ正典）経由で取得することで、
+  //     KPIセルへの手動上書きも尊重し、_csfPctが独自に計算する値と食い違わないようにする
+  const ck='csf-'+si;
   if(!kpiEdits[k][ck])kpiEdits[k][ck]={};
-  // このCSFに紐づく全タスクの平均進捗を計算（ASSIGN_HISTORYは完了=100扱い）
-  const all=_chartTasks(k).filter(t=>t.csfIdx!=null&&+t.csfIdx===+a.csfIdx);
-  const avg=all.length?Math.round(all.reduce((s,t)=>s+(t.pct!=null?+t.pct:100),0)/all.length):(+a.pct||0);
+  const aiSet=new Set(all.filter(t=>t.kpiIdx!=null&&!isNaN(t.kpiIdx)).map(t=>+t.kpiIdx));
+  const direct=all.filter(t=>t.kpiIdx==null||isNaN(t.kpiIdx));
+  let avg;
+  if(!aiSet.size){
+    avg=all.length?Math.round(all.reduce((s,t)=>s+_taskPctSafe(t),0)/all.length):(+a.pct||0);
+  }else{
+    const parts=[];
+    aiSet.forEach(ai=>parts.push(_kpiPct(k,si,ai)));
+    direct.forEach(t=>parts.push(_taskPctSafe(t)));
+    avg=Math.round(parts.reduce((s,v)=>s+v,0)/parts.length);
+  }
   kpiEdits[k][ck].progress=avg;
 }
 /* 編集モーダル: ①チャート一覧（現在値selected） */
@@ -3883,8 +3919,48 @@ function gotoAssignFromDashTask(idx){
 }
 /* チャートの編集データ（中心セルKGI等）。kpiEdits優先、なければCHARTSのmemberKpiEdits */
 function _chartEdits(k){return (kpiEdits[k]&&Object.keys(kpiEdits[k]).length)?kpiEdits[k]:((CHARTS[k]&&CHARTS[k].memberKpiEdits)||{});}
-/* チャートのKGI（中心セル）達成率 */
-function _chartKgiPct(k){const ed=_chartEdits(k)['center'];return (ed&&ed.progress!=null)?ed.progress:0;}
+/* ===== 進捗の正典（全タブ共通・優先順位はこの1箇所でのみ定義） =====
+   優先順位（CSF・KPI共通で統一）:
+     1) セルに明示保存された progress があればそれを使う（人が入力した値が最優先）
+     2) 無ければ配下タスクの平均
+     3) それも無ければ 0
+   ※ CSFとKPIで優先順位を変えないこと。変えるとタブ間で%が食い違う（KPI階層復活時のバグの元凶） */
+// タスクのpct取得: 値が無い(null/undefined)場合はASSIGN_HISTORY(完了済み)の慣例に合わせ100%扱い。
+// 値が明示的に入っていればその値（0も含む）をそのまま使う。全ての進捗集計で必ずこれを通すこと。
+function _taskPctSafe(t){return t.pct!=null?+t.pct:100;}
+// KPI単位の進捗（k=チャートキー, si=CSF番号, ai=KPI番号）
+function _kpiPct(k,si,ai){
+  const ed=_chartEdits(k)[si+'-'+ai];
+  if(ed&&ed.progress!=null)return Math.round(+ed.progress);
+  const ts=_chartTasks(k).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si&&t.kpiIdx!=null&&+t.kpiIdx===+ai);
+  if(ts.length)return Math.round(ts.reduce((s,t)=>s+_taskPctSafe(t),0)/ts.length);
+  return 0;
+}
+// CSF単位の進捗（配下KPIとCSF直下タスクを公平に平均する）
+function _csfPct(k,si){
+  const ed=_chartEdits(k)['csf-'+si];
+  if(ed&&ed.progress!=null)return Math.round(+ed.progress);
+  const all=_chartTasks(k).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si);
+  if(!all.length)return 0;
+  // KPIが使われている場合: KPI単位で平均を取ってからKPI間で平均（タスク数の偏りで歪まないよう）
+  const aiSet=new Set(all.filter(t=>t.kpiIdx!=null&&!isNaN(t.kpiIdx)).map(t=>+t.kpiIdx));
+  const direct=all.filter(t=>t.kpiIdx==null||isNaN(t.kpiIdx));
+  if(!aiSet.size)return Math.round(all.reduce((s,t)=>s+_taskPctSafe(t),0)/all.length);
+  const parts=[];
+  aiSet.forEach(ai=>parts.push(_kpiPct(k,si,ai)));
+  direct.forEach(t=>parts.push(_taskPctSafe(t)));
+  return Math.round(parts.reduce((s,v)=>s+v,0)/parts.length);
+}
+// KGI単位の進捗（テキストが入っているCSFのみを対象に平均。空CSFで薄めない）
+function _kgiPct(k){
+  const ed=_chartEdits(k)['center'];
+  if(ed&&ed.progress!=null)return Math.round(+ed.progress);
+  const cs=_chartCsf(k).filter(c=>c.text);
+  if(!cs.length)return 0;
+  return Math.round(cs.reduce((s,c)=>s+_csfPct(k,c.si),0)/cs.length);
+}
+/* チャートのKGI（中心セル）達成率（正典 _kgiPct へ委譲） */
+function _chartKgiPct(k){return _kgiPct(k);}
 /* チャートのKGIテキスト（編集後を優先） */
 function _chartKgiText(k){const d=CHARTS[k]||{};const ed=_chartEdits(k)['center'];return ((ed&&ed.text!=null)?ed.text:(d.center||'')).replace(/\n/g,' ');}
 /* チャートのCSF一覧（subs[si]＝CSF文言、進捗は edits['csf-si'].progress） */
@@ -3892,8 +3968,20 @@ function _chartCsf(k){
   const d=CHARTS[k]||{};const edits=_chartEdits(k);
   return (d.subs||[]).map((s,si)=>{
     const ed=edits['csf-'+si]||{};
-    return {si,text:((ed.text!=null?ed.text:s)||'').replace(/\n/g,' '),pct:ed.progress||0};
+    return {si,text:((ed.text!=null?ed.text:s)||'').replace(/\n/g,' '),pct:_csfPct(k,si)};
   });
+}
+/* CSF配下のタスクを KPI別 / CSF直下 に振り分ける（タスク管理・ガント共通）
+   戻り値: {aiList:[昇順のKPI番号], byKpi:{ai:[task]}, direct:[task], useKpi:bool} */
+function _splitByKpi(tasks){
+  const byKpi={},direct=[];
+  (tasks||[]).forEach(t=>{
+    const src=t.kpiIdx!=null?t.kpiIdx:(t.task&&t.task.kpiIdx);
+    const ai=(src!=null&&!isNaN(src))?+src:null;
+    if(ai==null)direct.push(t);else (byKpi[ai]=byKpi[ai]||[]).push(t);
+  });
+  const aiList=Object.keys(byKpi).map(Number).sort((a,b)=>a-b);
+  return {aiList,byKpi,direct,useKpi:aiList.length>0};
 }
 /* CSF達成率→色（0=グレー / 1-49=黄 / 50-99=水色 / 100=緑） */
 function _csfColor(p){return p>=100?'var(--green)':p>=50?'var(--cyan)':p>=1?'var(--amber)':'#9CA3AF';}
@@ -4289,17 +4377,13 @@ function renderGantt(){
       const ct=csfTaskObjs.find(o=>o.task.startRaw||o.task.dueRaw)||csfTaskObjs[0]||null;
       rows.push(Object.assign({kind:'csf',si,ai:null,label:csfText(si),task:ct?ct.task:null,rid:null},rowPeriod(si,null,ct?ct.task:null)));
       // KPI階層: kpiIdxが定義されているタスクはKPI行の配下へ、無いものは従来通りCSF直下へ
-      const byKpi={},csfDirect=[];
-      csfTaskObjs.forEach(o=>{
-        const ai=(o.task.kpiIdx!=null&&!isNaN(o.task.kpiIdx))?+o.task.kpiIdx:null;
-        if(ai==null)csfDirect.push(o);else (byKpi[ai]=byKpi[ai]||[]).push(o);
-      });
-      const kpiAis=Object.keys(byKpi).map(Number);
-      if(!kpiAis.length){
+      // タスク管理・ガント共通の _splitByKpi で振り分け（実装差異による表示不整合を防ぐ）
+      const {aiList:kpiAis,byKpi,direct:csfDirect,useKpi}=_splitByKpi(csfTaskObjs);
+      if(!useKpi){
         // KPI未使用チャート: 従来通りCSF直下にタスク行のみ（行構成・行順を改修前と完全一致させる）
         csfTaskObjs.forEach(o=>rows.push(Object.assign({kind:'task',si,ai:null,label:(o.task.name||'タスク'),task:o.task,rid:o.rid},rowPeriod(si,null,o.task))));
       }else{
-        kpiAis.sort((a,b)=>a-b).forEach(ai=>{
+        kpiAis.forEach(ai=>{
           const kts=byKpi[ai];
           const kct=kts.find(o=>o.task.startRaw||o.task.dueRaw)||kts[0]||null;
           rows.push(Object.assign({kind:'kpi',si,ai,label:kpiText(si,ai),task:kct?kct.task:null,rid:null},rowPeriod(si,ai,kct?kct.task:null)));
@@ -4349,13 +4433,9 @@ function renderGantt(){
         :'';
       const lblCell=`<td style="position:sticky;left:0;z-index:2;background:${lblBg};border:1px solid var(--border);border-left:3px solid ${color};font-size:11px;${isCsf?'font-weight:800;':'font-weight:600;'}padding:4px 8px;${indent}min-width:190px;width:190px;max-width:190px;cursor:pointer" title="${isCsf?'タスク管理タブのCSFへジャンプ':isKpi?'クリックでKPIを編集':'クリックでタスクを編集'}" ${lblClick}><div style="display:flex;align-items:center;gap:4px;overflow:hidden">${arrow}${toggleBtn}<span style="flex:0 0 auto;font-size:8px;font-weight:800;color:#fff;background:${color};border-radius:4px;padding:1px 5px">${tag}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="${esc(r.label)}">${esc(r.label)}</span></div></td>`;
       const pct=isCsf
-        ?(typeof evalCsfProgress==='function'?evalCsfProgress(edits,r.si,ck):(r.task&&r.task.pct)||0)
+        ?_csfPct(ck,r.si)
         :isKpi
-        ?(()=>{
-            const kts=rows.filter(rr=>rr.kind==='task'&&rr.si===r.si&&rr.ai===r.ai);
-            if(kts.length)return Math.round(kts.reduce((s,rr)=>s+((rr.task&&rr.task.pct)||0),0)/kts.length);
-            const ke=edits[r.si+'-'+r.ai];return (ke&&ke.progress!=null)?ke.progress:0;
-          })()
+        ?_kpiPct(ck,r.si,r.ai)
         :(r.task&&r.task.pct)||0;
       const done=(isCsf||isKpi)?(pct>=100):!!(r.task&&(r.task.status==='done'||pct>=100));
       const barSolid=done?'#10B981':color;
