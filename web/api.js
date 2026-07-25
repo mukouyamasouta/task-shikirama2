@@ -208,13 +208,24 @@
     // 「一致するCSF行が無いため一覧からも未紐付けバケットからも漏れて消える」事故を防ぐ
     return (n >= 0 && n <= 7) ? n : null;
   }
-  // 書き込み前の正規化: 'csf-N'/'N-M' 等どんな形式で渡されても、判別できればCSFインデックスの
-  // 素の数字文字列に矯正して保存する（呼び出し側の書式ミスが将来また「タスク消失」を再発させないための防御）。
+  // tasks.source_cell → KPIインデックス（0-7）の復元。'N-M'形式のときのみ値を持つ。
+  // KPI階層復活（KGI→CSF→KPI→タスク / KGI→CSF→タスク の2パターン対応）に伴い新設。
+  function kpiIdxFromCell(cell) {
+    if (cell == null) return null;
+    var m = /^(?:csf-)?(\d+)-(\d+)$/.exec(String(cell));
+    if (!m) return null;
+    var n = +m[2];
+    return (n >= 0 && n <= 7) ? n : null;
+  }
+  // 書き込み前の正規化: 'csf-N'/'N-M' 等どんな形式で渡されても、判別できればCSF(+KPI)インデックスの
+  // 素の数字文字列（'N' または 'N-M'）に矯正して保存する。KPI部分は保持する（潰すとKPI紐付けが消える）。
   // 判別できない値（想定外の形式）はそのまま残し、情報を失わない。
   function normalizeCell(cell) {
     if (cell == null) return null;
-    var idx = csfIdxFromCell(cell);
-    return idx != null ? String(idx) : cell;
+    var csf = csfIdxFromCell(cell);
+    if (csf == null) return cell;                 // 判別不能な値は情報を失わせない
+    var kpi = kpiIdxFromCell(cell);
+    return kpi != null ? (csf + '-' + kpi) : String(csf);
   }
 
   // ===== リーダー画面 用アダプタ（引数なし＝ログイン中リーダーの担当チームを自動判定） =====
@@ -303,7 +314,8 @@
       (MEMBER_TASKS[key] = MEMBER_TASKS[key] || []).push({
         id: t.id, name: t.title, kpi: t.related_kgi || '—', start: fmtMD(t.start_date), due: fmtMD(t.due_date), dueRaw: t.due_date || null, pri: t.priority, status: t.status,
         pct: t.progress || 0, hours: (t.total_hours != null ? +t.total_hours : 0), period: t.period || '', chart: t.source_chart || null, sendId: t.source_send_id || null, cell: t.source_cell || null,
-        csfIdx: csfIdxFromCell(t.source_cell)
+        csfIdx: csfIdxFromCell(t.source_cell),
+        kpiIdx: kpiIdxFromCell(t.source_cell)
       });
     });
 
@@ -506,10 +518,16 @@
     if (o.period) row.period = o.period;            // 対象期間（評価連携・19_task_period.sql）
     if (o.plannedHours != null) row.planned_hours = o.plannedHours; // 予定工数
     // 受信チャート由来のタスク: どのチャートのどのセルか（個人画面チップ表示・進捗の逆反映用）
-    if (o.sendId) { row.source_send_id = o.sendId; row.source_cell = normalizeCell(o.cell); row.source_chart = o.chartTitle || null; }
+    if (o.sendId) {
+      row.source_send_id = o.sendId; row.source_cell = normalizeCell(o.cell); row.source_chart = o.chartTitle || null;
+      var _k1 = kpiIdxFromCell(o.cell); if (_k1 != null) row.source_kpi = _k1;
+    }
     // 受信チャート以外でも、個人画面でKGI（チャート）に紐付けて作成した場合の関連付け
-    else if (o.chartTitle) { row.source_chart = o.chartTitle; if (o.cell != null) row.source_cell = normalizeCell(o.cell); }
-    // KPI廃止: source_kpi への書き込みは停止（カラムは後方互換のため残置）
+    else if (o.chartTitle) {
+      row.source_chart = o.chartTitle; if (o.cell != null) row.source_cell = normalizeCell(o.cell);
+      var _k2 = kpiIdxFromCell(o.cell); if (_k2 != null) row.source_kpi = _k2;
+    }
+    // source_kpi は後方互換の従属列（書き込みのみ。読み取りは source_cell のみを正とする）
     var r = await sb.from('tasks').insert(row).select().single();
     if (r.error && /source_send_id|source_cell|source_chart|source_kpi|period|planned_hours/.test(r.error.message)) {
       // 拡張列が未適用のDB: 拡張列なしで作成（後方互換）
@@ -546,7 +564,10 @@
     // チャート紐付けの変更（タスク編集モーダルの①②③）
     if (patch.sourceChart !== undefined) up.source_chart = patch.sourceChart;
     if (patch.sourceCell !== undefined) up.source_cell = normalizeCell(patch.sourceCell);
-    // KPI廃止: sourceKpi パッチは無視（source_kpi カラムは残置・読み書き停止）
+    if (patch.sourceCell !== undefined) {
+      var _uk = kpiIdxFromCell(patch.sourceCell);
+      up.source_kpi = (_uk != null ? _uk : null);
+    }
     if (patch.relatedKgi !== undefined) up.related_kgi = patch.relatedKgi;
     var r = await sb.from('tasks').update(up).eq('id', id).select('id');
     if (r.error) return { error: friendlyErr(r.error.message) };
@@ -1135,9 +1156,9 @@
         : '関連KGI: ' + (t.related_kgi || '—') + ' ／ カテゴリ: ' + (t.category || '—');
       var from = self ? '🙋 自分で作成' : ('📌 ' + (exec ? '幹部' : '上長') + ' · ' + (assigner.full_name || ''));
       if (t.status === 'done' || (t.progress || 0) >= 100) {
-        ASSIGN_HISTORY.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', assignerId: t.assigner_id || null, assignerName: assigner.full_name || '', assignerRole: exec ? '幹部' : '上長', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), startRaw: t.start_date || null, dueRaw: t.due_date || null, comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '', pri: t.priority || 'md', self: self, chart: chart, cell: t.source_cell || null, csfIdx: csfIdxFromCell(t.source_cell), kpiIdx: null /* KPI廃止 */, hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
+        ASSIGN_HISTORY.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', assignerId: t.assigner_id || null, assignerName: assigner.full_name || '', assignerRole: exec ? '幹部' : '上長', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), startRaw: t.start_date || null, dueRaw: t.due_date || null, comment: t.comment || '', completed: t.completed_date ? fmtYMD(t.completed_date) : '', pri: t.priority || 'md', self: self, chart: chart, cell: t.source_cell || null, csfIdx: csfIdxFromCell(t.source_cell), kpiIdx: kpiIdxFromCell(t.source_cell), hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
       } else {
-        ASSIGNMENTS.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', assignerId: t.assigner_id || null, assignerName: assigner.full_name || '', assignerRole: exec ? '幹部' : '上長', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), startRaw: t.start_date || null, dueRaw: t.due_date || null, pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: self, chart: chart, sendId: t.source_send_id || null, cell: t.source_cell || null, csfIdx: csfIdxFromCell(t.source_cell), kpiIdx: null /* KPI廃止 */, hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
+        ASSIGNMENTS.push({ id: t.id, name: t.title, kpi: t.related_kgi || '—', meta: meta, from: from, fromClass: exec ? 'exec' : '', assignerId: t.assigner_id || null, assignerName: assigner.full_name || '', assignerRole: exec ? '幹部' : '上長', start: fmtYMD(t.start_date), end: fmtYMD(t.due_date), startRaw: t.start_date || null, dueRaw: t.due_date || null, pct: t.progress || 0, comment: t.comment || '', status: t.status, pri: t.priority || 'md', self: self, chart: chart, sendId: t.source_send_id || null, cell: t.source_cell || null, csfIdx: csfIdxFromCell(t.source_cell), kpiIdx: kpiIdxFromCell(t.source_cell), hours: (t.total_hours != null ? +t.total_hours : 0), planned: (t.planned_hours != null ? +t.planned_hours : null) });
       }
     });
 
@@ -1748,7 +1769,7 @@
         hours: (t.total_hours != null ? +t.total_hours : 0), period: t.period || '', teamUuid: t.team_id,
         chart: t.source_chart || null, sendId: t.source_send_id || null, cell: t.source_cell || null,
         csfIdx: csfIdxFromCell(t.source_cell),
-        kpiIdx: null /* KPI廃止 */
+        kpiIdx: kpiIdxFromCell(t.source_cell)
       });
     });
     var memberPid = {};
