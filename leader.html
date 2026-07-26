@@ -151,7 +151,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="sb-item" onclick="swTab('evalin',this);renderMemberEval();renderEvalPeriodTasks()"><span class="sb-icon">📝</span>メンバー評価入力</button>
     <button class="sb-item" onclick="swTab('evalrec',this);renderEvalRec()"><span class="sb-icon">📊</span>評価記録</button>
     <button class="sb-item" onclick="swTab('report',this);renderReports()"><span class="sb-icon">📒</span>日報<span class="sb-badge">6</span></button>
-    <button class="sb-item" onclick="swTab('submissions',this);renderSubmissions()"><span class="sb-icon">📥</span>提出物（日報・工数）</button>
+    <button class="sb-item" onclick="swTab('submissions',this);renderSubmissions()"><span class="sb-icon">📥</span>提出物（工数）</button>
   </div>
   <div class="sb-footer">v2.4.1 © 2025 VEXUM Inc.</div>
 </aside>
@@ -310,10 +310,10 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- 受信ボックス -->
 <div id="tc-inbox" class="tab-content">
-  <div class="sec-title">受信ボックス <span style="font-size:11px;font-weight:400;color:var(--text3)">メンバーの記入（日報・タスク進捗・チャート更新）と幹部/統括からの受信チャート</span></div>
+  <div class="sec-title">受信ボックス <span style="font-size:11px;font-weight:400;color:var(--text3)">日報の提出と、自分が割り当てたタスクの進捗、幹部/統括からの受信チャート</span></div>
   <!-- メンバーからの記入通知 -->
   <div class="card" style="margin-bottom:16px">
-    <div class="card-hd"><div><div class="card-title">🔔 メンバーからの記入・提出</div><div class="card-sub">日報の提出・タスク完了・チャート更新がここに届きます</div></div><span id="inbox-notif-count" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div>
+    <div class="card-hd"><div><div class="card-title">🔔 メンバーからの記入・提出</div><div class="card-sub">日報の提出と、自分が割り当てたタスクの進捗がここに届きます</div></div><span id="inbox-notif-count" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div>
     <div class="card-body" id="inbox-notif-list" style="padding:0"><div style="padding:14px;text-align:center;color:var(--text3);font-size:12px">まだ通知はありません</div></div>
   </div>
   <div class="sec-title" style="font-size:13px;margin-top:4px">📥 幹部・統括からの受信チャート</div>
@@ -388,11 +388,10 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- 提出物（日報・工数履歴） -->
 <div id="tc-submissions" class="tab-content">
-  <div class="sec-title">提出物（日報・工数） <span style="font-size:11px;font-weight:400;color:var(--text3)">自チームのメンバーの日報・作業時間履歴を確認</span></div>
+  <div class="sec-title">提出物（工数） <span style="font-size:11px;font-weight:400;color:var(--text3)">自チームのメンバーが更新したタスクの作業時間を確認</span></div>
   <div class="card" style="margin-bottom:14px">
     <div class="card-body" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
       <div><div class="fl" style="margin-bottom:4px">メンバー</div><select class="fs" id="sub-member" style="min-width:160px" onchange="renderSubmissions()"></select></div>
-      <div><div class="fl" style="margin-bottom:4px">表示</div><select class="fs" id="sub-view" onchange="renderSubmissions()"><option value="both">日報＋工数</option><option value="report">日報のみ</option><option value="hours">工数のみ</option></select></div>
       <div><div class="fl" style="margin-bottom:4px">提出日（開始）</div><div id="sub-from-ymd"></div></div>
       <div style="align-self:flex-end;padding-bottom:6px;color:var(--text3)">〜</div>
       <div><div class="fl" style="margin-bottom:4px">提出日（期限）</div><div id="sub-to-ymd"></div></div>
@@ -401,10 +400,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="sub-summary"></div>
     </div>
   </div>
-  <div class="g2">
-    <div class="card"><div class="card-hd"><div class="card-title">📒 日報履歴</div></div><div class="card-body" id="sub-reports" style="padding:0"><div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">メンバーを選択してください</div></div></div>
-    <div class="card"><div class="card-hd"><div><div class="card-title">🕐 工数履歴</div><div class="card-sub" id="sub-hours-total"></div></div></div><div class="card-body" id="sub-hours" style="padding:0"><div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">—</div></div></div>
-  </div>
+  <div class="card"><div class="card-hd"><div><div class="card-title">🕐 従業員が更新したタスク</div><div class="card-sub">作業時間の記録・到達進捗をタスクごとに表示します</div></div><span id="sub-hours-total" style="font-size:11px;font-weight:700;color:var(--accent)"></span></div><div class="card-body" id="sub-hours" style="padding:0"><div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">—</div></div></div>
 </div>
 
   </div><!-- /content -->
@@ -686,7 +682,7 @@ function inDateRange(targetIso, fromIso, toIso){
   return true;
 }
 /* ===== タブ切替・共通 ===== */
-const TITLES={dashboard:['チームダッシュボード','チームリーダーメニュー / チームDB'],assign:['タスク割当','チームリーダーメニュー / タスク割当'],inbox:['受信ボックス','チームリーダーメニュー / 受信ボックス'],evalin:['メンバー評価入力','チームリーダーメニュー / 評価入力'],evalrec:['評価記録','チームリーダーメニュー / 評価記録'],report:['日報','チームリーダーメニュー / 日報'],teamedit:['チーム編集','チームリーダーメニュー / チーム編集'],submissions:['提出物（日報・工数）','チームリーダーメニュー / 提出物']};
+const TITLES={dashboard:['チームダッシュボード','チームリーダーメニュー / チームDB'],assign:['タスク割当','チームリーダーメニュー / タスク割当'],inbox:['受信ボックス','チームリーダーメニュー / 受信ボックス'],evalin:['メンバー評価入力','チームリーダーメニュー / 評価入力'],evalrec:['評価記録','チームリーダーメニュー / 評価記録'],report:['日報','チームリーダーメニュー / 日報'],teamedit:['チーム編集','チームリーダーメニュー / チーム編集'],submissions:['提出物（工数）','チームリーダーメニュー / 提出物']};
 function swTab(id,btn){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.getElementById('tc-'+id).classList.add('active');
@@ -2154,6 +2150,15 @@ let _repSelDate='';
 function repList(id){return REPORTS[id]||[];}
 function repByDate(id,date){return repList(id).find(r=>r.date===date);}
 function renderReports(){
+  // 日報タブを開くたびに当月へ戻す（別の月を見たまま残らないように）。
+  // ただし jumpToReportFromSub からの遷移中（_repJumping）は、既にセットされた
+  // 対象日の年月を上書きしてしまうため一度だけ抑止する。
+  if(!window._repJumping){
+    const _n=new Date();
+    _repYear=_n.getFullYear();_repMonth=_n.getMonth();
+    _repSelDate='';
+    const _rd=document.getElementById('report-detail');if(_rd)_rd.innerHTML='';
+  }
   if(!_repMember||!MEMBERS[_repMember]){const f=_lfLoad();if(f.repMember&&MEMBERS[f.repMember])_repMember=f.repMember;}
   if(!_repMember||!MEMBERS[_repMember])_repMember=EVAL_IDS[0];
   renderReportMembers();
@@ -2184,12 +2189,12 @@ async function renderSubmissions(){
     sel.innerHTML=ids.map(id=>`<option value="${id}">${MEMBERS[id].name}（${MEMBERS[id].role}）</option>`).join('');
     sel.dataset.n=String(ids.length);
   }
-  if(!window._subRestored){const f=_lfLoad();const vv=document.getElementById('sub-view');
-    if(!f.subMember||ids.indexOf(f.subMember)>=0){window._subRestored=true;if(f.subMember)sel.value=f.subMember;if(f.subView&&vv)vv.value=f.subView;if(f.subFrom)ymdSet('sub-from',f.subFrom);if(f.subTo)ymdSet('sub-to',f.subTo);}}
+  // 表示切替（subView）は廃止したが、既存の保存データとの読み取り互換は残す（保存はしない）
+  if(!window._subRestored){const f=_lfLoad();
+    if(!f.subMember||ids.indexOf(f.subMember)>=0){window._subRestored=true;if(f.subMember)sel.value=f.subMember;if(f.subFrom)ymdSet('sub-from',f.subFrom);if(f.subTo)ymdSet('sub-to',f.subTo);}}
   const mid=sel.value||ids[0];if(sel&&!sel.value&&ids[0])sel.value=ids[0];
   const m=MEMBERS[mid]; if(!m)return;
-  const view=(document.getElementById('sub-view')||{}).value||'both';
-  _lfSave({subMember:mid,subView:view,subFrom:ymdValue('sub-from')||'',subTo:ymdValue('sub-to')||''});
+  _lfSave({subMember:mid,subFrom:ymdValue('sub-from')||'',subTo:ymdValue('sub-to')||''});
   const API=window.VexumAPI;
   // 工数ログ取得（接続時のみ）
   let logs=[];
@@ -2203,34 +2208,18 @@ async function renderSubmissions(){
   // 提出日（YYYY-MM-DD）でのフロントエンド絞り込み
   const fromD=ymdValue('sub-from')||'';
   const toD=ymdValue('sub-to')||'';
-  // 日報
-  const rep=document.getElementById('sub-reports');
-  const reps=repList(mid).filter(r=>inDateRange(r.date,fromD,toD)).sort((a,b)=>b.date.localeCompare(a.date));
-  if(view==='hours'){rep.parentElement.style.display='none';}
-  else{
-    rep.parentElement.style.display='';
-    rep.innerHTML=reps.length?reps.map(r=>{
-      const c=(typeof PCOND!=='undefined'&&PCOND[r.cond])||['📝','',''];
-      const morningOnly=!r.submitted&&_hasMorningDataLd(r);
-      return `<div onclick="jumpToReportFromSub('${mid}','${r.date}')" onmouseover="this.style.background='#FAFCFC'" onmouseout="this.style.background=''" style="cursor:pointer;padding:10px 14px;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between"><div style="font-size:12px;font-weight:700">${r.date} ${c[0]||''}</div><div style="font-size:10px;color:var(--text3)">稼働 ${r.hours||'—'}</div></div>${morningOnly?`<div style="font-size:10px;color:#C2410C;font-weight:700;margin-top:3px">🌅 始業のみ（予定・終業未提出）</div>`:`<div style="font-size:11px;color:var(--text2);margin-top:3px">${(r.done||'').slice(0,80)}</div>`}${(!morningOnly&&r.goal)?`<div style="font-size:10px;color:var(--text3);margin-top:2px">実績 ${r.goal}</div>`:''}</div>`;
-    }).join(''):'<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">日報はまだありません</div>';
-  }
-  // 工数履歴
+  // 工数履歴（従業員が更新したタスクの記録。task_time_logs 由来）
   const hrsEl=document.getElementById('sub-hours');
   const flogs=logs.filter(l=>inDateRange(l.date,fromD,toD));
   const totalEl=document.getElementById('sub-hours-total');
-  if(view==='report'){hrsEl.parentElement.style.display='none';}
+  if(!(API&&API.ready)){hrsEl.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">工数履歴はSupabase接続時に表示されます</div>';if(totalEl)totalEl.textContent='';}
+  else if(!flogs.length){hrsEl.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">工数の記録はまだありません</div>';if(totalEl)totalEl.textContent='';}
   else{
-    hrsEl.parentElement.style.display='';
-    if(!(API&&API.ready)){hrsEl.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">工数履歴はSupabase接続時に表示されます</div>';if(totalEl)totalEl.textContent='';}
-    else if(!flogs.length){hrsEl.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">工数の記録はまだありません</div>';if(totalEl)totalEl.textContent='';}
-    else{
-      const total=flogs.reduce((a,l)=>a+(l.hours||0),0);
-      if(totalEl)totalEl.textContent='合計 '+Math.round(total*10)/10+'h'+(period?'（'+period+'）':'');
-      hrsEl.innerHTML=flogs.map(l=>`<div onclick="jumpToTaskFromSub('${l.taskId||''}')" onmouseover="this.style.background='#FAFCFC'" onmouseout="this.style.background=''" style="cursor:pointer;padding:9px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${l.taskTitle}</div><div style="font-size:10px;color:var(--text3)">${l.date}${l.period?' ／ '+l.period:''}${l.progress!=null?' ／ 到達 '+l.progress+'%':''}</div></div><div style="font-size:13px;font-weight:800;color:var(--accent);flex-shrink:0">${l.hours}h</div></div>`).join('');
-    }
+    const total=flogs.reduce((a,l)=>a+(l.hours||0),0);
+    if(totalEl)totalEl.textContent='合計 '+Math.round(total*10)/10+'h';
+    hrsEl.innerHTML=flogs.map(l=>`<div onclick="jumpToTaskFromSub('${l.taskId||''}')" onmouseover="this.style.background='#FAFCFC'" onmouseout="this.style.background=''" style="cursor:pointer;padding:9px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${l.taskTitle}</div><div style="font-size:10px;color:var(--text3)">${l.date}${l.period?' ／ '+l.period:''}${l.progress!=null?' ／ 到達 '+l.progress+'%':''}</div></div><div style="font-size:13px;font-weight:800;color:var(--accent);flex-shrink:0">${l.hours}h</div></div>`).join('');
   }
-  const sm=document.getElementById('sub-summary');if(sm)sm.textContent=m.name+(dFrom||dTo?'（'+(dFrom||'…')+' 〜 '+(dTo||'…')+'）':'')+' ／ 日報 '+reps.length+'件 ／ 工数記録 '+flogs.length+'件';
+  const sm=document.getElementById('sub-summary');if(sm)sm.textContent=m.name+(fromD||toD?'（'+(fromD||'…')+' 〜 '+(toD||'…')+'）':'')+' ／ 工数記録 '+flogs.length+'件';
 }
 function clearSubDateFilter(){
   ymdClear('sub-from');ymdClear('sub-to');
@@ -2239,7 +2228,11 @@ function clearSubDateFilter(){
 function jumpToReportFromSub(mid,date){
   _repMember=mid;_repSelDate='';
   const p=date.split('-');_repYear=+p[0];_repMonth=+p[1]-1;
-  gotoTab('report');
+  // gotoTab('report')経由でrenderReports()が同期的に呼ばれ、直前にセットした年月を
+  // 当月へ戻してしまうのを1回だけ抑止する（gotoTabは同期関数なのでここで解除してよい）。
+  // gotoTab内で例外が起きてもフラグが true のまま残らないよう finally で必ず解除する。
+  window._repJumping=true;
+  try{ gotoTab('report'); } finally { window._repJumping=false; }
   setTimeout(()=>showReportDetail(date),60);
 }
 function jumpToTaskFromSub(taskId){
@@ -2268,11 +2261,19 @@ function renderReportCalendar(){
     const sel=ds===_repSelDate;
     if(r){
       const c=COND[r.cond]||COND.normal;
-      const morningOnly=!r.submitted&&_hasMorningDataLd(r);
-      h+=`<div onclick="showReportDetail('${ds}')" style="min-height:64px;border:1.5px solid ${sel?c[2]:'var(--border)'};border-radius:8px;padding:5px;cursor:pointer;background:${sel?c[2]+'1A':'#fff'};transition:.12s" title="${morningOnly?'始業のみ（予定）':r.done}">
+      const hasMorning=_hasMorningDataLd(r);
+      // 始業（今日やること）と終業（達成タスク）を分けて冒頭のみ表示し、全文はtitle属性に入れる
+      let rows='';
+      if(hasMorning)rows+=`<div style="font-size:8.5px;color:#C2410C;font-weight:700;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🌅 ${(r.planTasks||'（未記入）').replace(/\n/g,' ')}</div>`;
+      if(r.submitted)rows+=`<div style="font-size:8.5px;color:var(--text2);line-height:1.3;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">✅ ${(r.done||'（未記入）').replace(/\n/g,' ')}</div>`;
+      const titleParts=[];
+      if(hasMorning)titleParts.push('🌅 今日やること: '+(r.planTasks||'（未記入）'));
+      if(r.submitted)titleParts.push('✅ 達成タスク: '+(r.done||'（未記入）'));
+      const titleText=titleParts.length?titleParts.join('\n'):(r.done||'');
+      h+=`<div onclick="showReportDetail('${ds}')" style="min-height:64px;border:1.5px solid ${sel?c[2]:'var(--border)'};border-radius:8px;padding:5px;cursor:pointer;background:${sel?c[2]+'1A':'#fff'};transition:.12s" title="${titleText}">
         <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;font-weight:700;color:var(--text2)">${day}</span><span style="font-size:13px">${c[0]}</span></div>
         <div style="font-size:8.5px;color:var(--text3);margin-top:1px">${r.hours}</div>
-        ${morningOnly?'<div style="font-size:8.5px;color:#C2410C;font-weight:700;margin-top:2px">🌅 始業のみ（予定）</div>':`<div style="font-size:8.5px;color:var(--text2);line-height:1.3;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${r.done}</div>`}
+        ${rows}
       </div>`;
     }else{
       h+=`<div style="min-height:64px;border:1px solid #F3F4F6;border-radius:8px;padding:5px;background:#FAFCFC"><span style="font-size:10px;color:var(--text3)">${day}</span></div>`;
@@ -2301,22 +2302,24 @@ function showReportDetail(ds){
   if(!r){document.getElementById('report-detail').innerHTML='';return;}
   const c=COND[r.cond]||COND.normal;
   const p=ds.split('-');const dow=['日','月','火','水','木','金','土'][new Date(+p[0],+p[1]-1,+p[2]).getDay()];
-  // 始業（予定: plan_tasks/plan_hours）と終業（実績: done/plan/issue/actual_hours）を判別して表示する。
+  // 始業（予定: plan_tasks/plan_hours）と終業（実績: done/plan/issue/actual_hours・goal=出退勤実績）を判別して表示する。
   // employee.html側の始業のみ提出（終業前）の日報が、リーダー側でも「始業のみ（予定）」として見える。
   const pt=String(r.planHours||'').split('~');
+  const at=String(r.goal||'').split('~');  // 出退勤の実績（employee.html _prepGather の actualTimes と同じ形式）
   const hasMorning=_hasMorningDataLd(r);
   const morningOnly=!r.submitted&&hasMorning;
   const statusLabel=r.submitted?'終業提出済み':(hasMorning?'始業のみ（予定・終業未提出）':'—');
   const morning=hasMorning?`<div style="grid-column:1/2;background:#FFF7ED;border:1px solid #FDBA74;border-radius:6px;padding:8px 10px">
       <div style="font-size:10px;font-weight:800;color:#C2410C;margin-bottom:4px">🌅 始業（予定）</div>
       ${(pt[0]||pt[1])?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>出退勤予定:</b> ${pt[0]||'—'}〜${pt[1]||'—'}${_workHoursLd(pt[0],pt[1])!=null?'（'+_workHoursLd(pt[0],pt[1])+'h）':''}</div>`:''}
-      ${r.planTasks?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>今日やること:</b> ${r.planTasks}</div>`:''}
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;white-space:pre-wrap"><b>今日やること:</b> ${r.planTasks||'—'}</div>
     </div>`:'';
   const evening=r.submitted?`<div style="grid-column:${hasMorning?'2/3':'1/3'}">
-      <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:3px">✅ 本日の達成タスク</div><div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px">${r.done}</div>
-      <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:3px">📅 明日の予定</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.plan}</div>
+      ${(at[0]||at[1])?`<div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:6px"><b>出退勤実績:</b> ${at[0]||'—'}〜${at[1]||'—'}${_workHoursLd(at[0],at[1])!=null?'（'+_workHoursLd(at[0],at[1])+'h）':''}</div>`:''}
+      <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:3px">✅ 本日の達成タスク</div><div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px;white-space:pre-wrap">${r.done||'—'}</div>
+      <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:3px">📅 明日の予定</div><div style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${r.plan||'—'}</div>
     </div>`:(hasMorning?`<div style="grid-column:2/3;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:11px;text-align:center;background:#FAFAFA;border:1px dashed var(--border);border-radius:6px">終業（実績）はまだ提出されていません</div>`:'');
-  const issue=(r.submitted&&r.issue)?`<div style="grid-column:1/3"><div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:3px">⚠ 課題・相談事項</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.issue}</div></div>`:'';
+  const issue=r.submitted?`<div style="grid-column:1/3"><div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:3px">⚠ 課題・相談事項</div><div style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${r.issue||'—'}</div></div>`:'';
   const h=`<div class="card"><div class="card-hd" style="border-left:4px solid ${m.color}">
       <div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:8px;background:${m.color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px">${m.name.charAt(0)}</div><div><div class="card-title">${m.name} <span class="badge ${m.role==='リーダー'?'b-manager':'b-employee'}" style="margin-left:2px">${m.role}</span></div><div class="card-sub">${+p[0]}/${+p[1]}/${+p[2]} (${dow}) ／ 稼働 ${r.hours} ／ ${statusLabel}</div></div></div>
       <span style="font-size:12px;font-weight:700;color:${c[2]}">${c[0]} ${c[1]}</span>
@@ -2528,18 +2531,21 @@ const INBOX=(()=>{ // デモ用: Supabase接続時は実データで置換
     sent_by_name:'木村 雅人（幹部）',sent_at:'2025-06-01',status:'sent',progress:0,cell_status:{},edited_by:{}}];
 })();
 let _ibCur=null,_ibSel=null;
+// リーダー受信ボックスに出す通知の種別（日報 と 自分が割り当てたタスクの進捗のみ）。
+// task_done を含めるのは、過去にDBへ入った完了通知を引き続き閲覧できるようにするため（今後は生成されない）。
+const LDR_NOTIF_TYPES=['report_submitted','report_started','task_progress','task_done'];
 function updateInboxBadge(){
   const b=document.getElementById('inbox-badge');if(!b)return;
-  const n=INBOX.filter(s=>s.status!=='done').length+((window._leaderNotifs||[]).filter(x=>!x.read).length);
+  const n=INBOX.filter(s=>s.status!=='done').length+((window._leaderNotifs||[]).filter(x=>LDR_NOTIF_TYPES.includes(x.type)&&!x.read).length);
   b.textContent=n;b.style.display=n?'':'none';
 }
-// メンバーからの記入（日報提出・タスク完了・チャート更新）を受信ボックスに表示
+// メンバーからの記入（日報提出・自分が割り当てたタスクの進捗）を受信ボックスに表示
 function renderLeaderNotifs(){
   const con=document.getElementById('inbox-notif-list');if(!con)return;
-  const ns=window._leaderNotifs||[];
+  const ns=(window._leaderNotifs||[]).filter(n=>LDR_NOTIF_TYPES.includes(n.type));
   const cnt=document.getElementById('inbox-notif-count');if(cnt)cnt.textContent=ns.length?ns.length+'件':'';
   if(!ns.length){con.innerHTML='<div style="padding:14px;text-align:center;color:var(--text3);font-size:12px">まだ通知はありません</div>';return;}
-  const meta={task_done:['✅','#D1FAE5','var(--green)','assign'],report_submitted:['📓','#EDE9FE','#7C3AED','report'],report_started:['🌅','#FFF7ED','#C2410C','report'],task_assigned:['📋','#DBEAFE','#1D4ED8','assign'],task_late:['⚠','#FEE2E2','var(--red)','assign'],chart_edit:['✏','#FEF3C7','#D97706','dashboard'],evaluation_received:['⭐','#FDF4FF','#7E22CE','dashboard']};
+  const meta={task_done:['✅','#D1FAE5','var(--green)','assign'],task_progress:['📈','#DBEAFE','#1D4ED8','assign'],report_submitted:['📓','#EDE9FE','#7C3AED','report'],report_started:['🌅','#FFF7ED','#C2410C','report'],task_assigned:['📋','#DBEAFE','#1D4ED8','assign'],task_late:['⚠','#FEE2E2','var(--red)','assign'],chart_edit:['✏','#FEF3C7','#D97706','dashboard'],evaluation_received:['⭐','#FDF4FF','#7E22CE','dashboard']};
   con.innerHTML=ns.slice(0,30).map(n=>{
     const mt=meta[n.type]||['🔔','#F3F4F6','var(--text3)','dashboard'];
     return `<div onclick="gotoTab('${mt[3]}')" style="display:flex;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='#FAFCFC'" onmouseout="this.style.background=''">
@@ -2741,12 +2747,14 @@ window.VEXUM_PAGE_ROLE='leader';  // 複数ロール時に currentProfile がリ
 /* 🔔 リーダーの通知: 受信チャート（要振り分け）・メンバーの日報提出 */
 window.vxNotifSource=function(){
   const out=[];
-  // メンバーからの通知（完了/遅延/日報提出）= notifications テーブル由来（最優先で表示）
+  // メンバーからの通知（日報提出・自分が割り当てたタスクの進捗）= notifications テーブル由来（最優先で表示）
+  // ★ 受信ボックスタブ（renderLeaderNotifs）と同じ LDR_NOTIF_TYPES で絞り込む。
+  //   ここだけ絞り込みを忘れると、タブでは非表示の通知がヘッダーの🔔には残るという食い違いになる。
   if(Array.isArray(window._leaderNotifs)){
-    const ntfMeta={task_done:['✅','#D1FAE5','var(--green)','assign'],report_submitted:['📓','#EDE9FE','#7C3AED','report'],report_started:['🌅','#FFF7ED','#C2410C','report'],task_assigned:['📋','#DBEAFE','#1D4ED8','assign'],task_late:['⚠','#FEE2E2','var(--red)','assign'],chart_edit:['✏','#FEF3C7','#D97706','dashboard'],evaluation_received:['⭐','#FDF4FF','#7E22CE','dashboard']};
+    const ntfMeta={task_done:['✅','#D1FAE5','var(--green)','assign'],task_progress:['📈','#DBEAFE','#1D4ED8','assign'],report_submitted:['📓','#EDE9FE','#7C3AED','report'],report_started:['🌅','#FFF7ED','#C2410C','report'],task_assigned:['📋','#DBEAFE','#1D4ED8','assign'],task_late:['⚠','#FEE2E2','var(--red)','assign'],chart_edit:['✏','#FEF3C7','#D97706','dashboard'],evaluation_received:['⭐','#FDF4FF','#7E22CE','dashboard']};
     // 通知クリックで該当メンバーの画面へ直接遷移（従業員画面のntfGoto相当）
     const keyByPid=id=>{if(!id)return null;const ks=Object.keys(MEMBERS||{});return ks.find(k=>(MEMBERS[k]||{}).pid===id)||null;};
-    window._leaderNotifs.slice(0,8).forEach(n=>{
+    window._leaderNotifs.filter(n=>LDR_NOTIF_TYPES.includes(n.type)).slice(0,8).forEach(n=>{
       const mt=ntfMeta[n.type]||['🔔','#F3F4F6','var(--text3)','dashboard'];
       const tab=mt[3];const mk=keyByPid(n.actor_id);
       out.push({icon:mt[0],bg:mt[1],color:mt[2],

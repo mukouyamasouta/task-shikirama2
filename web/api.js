@@ -580,14 +580,29 @@
       up.source_kpi = (_uk != null ? _uk : null);
     }
     if (patch.relatedKgi !== undefined) up.related_kgi = patch.relatedKgi;
+    // 進捗変化判定のため更新前の値を取得（値が変わったときだけ notifyTaskProgress を呼ぶ。
+    // 工数やタイトルだけの更新で毎回通知が飛ぶノイズを防ぐ）。
+    // status のみで 'done' にする呼び出し（progress未指定）も完了として拾えるよう、
+    // status も一緒に読んでおく。
+    var prevProg = null, prevStatus = null;
+    if (up.progress != null || up.status) {
+      try {
+        var pr = await sb.from('tasks').select('progress,status').eq('id', id).maybeSingle();
+        if (pr.data) { prevProg = pr.data.progress; prevStatus = pr.data.status; }
+      } catch (e) {}
+    }
     var r = await sb.from('tasks').update(up).eq('id', id).select('id');
     if (r.error) return { error: friendlyErr(r.error.message) };
     if (!r.data || r.data.length === 0) return { error: '更新できませんでした（権限不足の可能性）' };
     // 受信チャート由来のタスクなら、チャート（chart_sends）の該当セルと全体進捗へ自動反映
     try { await propagateTaskToSend(id); } catch (e) {}
-    // 完了時にリーダーへ通知（setTaskProgress経由でないupdateTask完了パスでも通知を発火）
-    var done = (up.progress != null && up.progress >= 100) || up.status === 'done';
-    if (done) { try { await notifyTaskDone(id); } catch (e) {} }
+    // 進捗が変化した、または status のみの指定で新たに完了になったときだけ、割当者本人へ通知
+    // （setTaskProgress経由でないupdateTask完了パスでも発火）
+    var progChanged = up.progress != null && prevProg !== up.progress;
+    var becameDone = up.status === 'done' && prevStatus !== 'done';
+    if (progChanged || becameDone) {
+      try { await notifyTaskProgress(id, up.progress != null ? up.progress : 100); } catch (e) {}
+    }
     return { ok: true };
   }
   // タスクを削除（本人のタスクのみ。RLSで保護）。返り値で削除行数を検証。
@@ -668,6 +683,7 @@
     if (cur.error) return { error: friendlyErr((cur.error && cur.error.message) || '読込失敗') };
     if (!cur.data) return { error: 'タスクが見つかりません' };
     var prevHours = (+cur.data.total_hours) || 0;
+    var prevProg = cur.data ? cur.data.progress : null;
     var newProg = (prog != null) ? prog : (cur.data ? cur.data.progress : 0);
     var done = newProg >= 100;
     var late = !done && cur.data && cur.data.due_date && cur.data.due_date < new Date().toISOString().slice(0, 10);
@@ -684,7 +700,8 @@
     if (r.error) return { error: friendlyErr(r.error.message) };
     if (!r.data || r.data.length === 0) return { error: '更新できませんでした（RLS/権限の可能性）' };
     try { await propagateTaskToSend(taskId); } catch (e) {}
-    if (done) { try { await notifyTaskDone(taskId); } catch (e) {} }
+    // 進捗を変えず工数だけ追記した場合（prog未指定でnewProgが現状維持）は通知しない
+    if (prevProg !== newProg) { try { await notifyTaskProgress(taskId, newProg); } catch (e) {} }
     return { ok: true, progress: newProg, done: done, totalHours: prevHours + hours };
   }
 
@@ -699,6 +716,11 @@
     if (o.totalHours != null) up.total_hours = Math.max(0, +o.totalHours);
     if (done) { up.completed_date = new Date().toISOString().slice(0, 10); up.completed_at = new Date().toISOString(); }
     if (!Object.keys(up).length) return { ok: true };
+    // 進捗変化判定のため更新前の値を取得（値が変わったときだけ notifyTaskProgress を呼ぶ）
+    var prevProg = null;
+    if (prog != null) {
+      try { var cur = await sbRetry(function () { return sb.from('tasks').select('progress').eq('id', taskId).maybeSingle(); }); prevProg = cur.data ? cur.data.progress : null; } catch (e) {}
+    }
     var r = await sbRetry(function () { return sb.from('tasks').update(up).eq('id', taskId).select('id'); });
     if (r.error && /total_hours|completed_at/.test(r.error.message)) {
       delete up.total_hours; delete up.completed_at;
@@ -708,7 +730,7 @@
     if (r.error) return { error: friendlyErr(r.error.message) };
     if (!r.data || r.data.length === 0) return { error: '更新できませんでした（RLS/権限の可能性）' };
     try { await propagateTaskToSend(taskId); } catch (e) {}
-    if (done) { try { await notifyTaskDone(taskId); } catch (e) {} }
+    if (prog != null && prevProg !== prog) { try { await notifyTaskProgress(taskId, prog); } catch (e) {} }
     return { ok: true };
   }
 
@@ -725,7 +747,34 @@
     return { leaderId: leaderId || null, teamId: tmRow.team_id };
   }
 
+  // タスクの進捗が変化したとき、そのタスクを割り当てた本人（tasks.assigner_id）へ通知する。
+  // チームリーダー宛ではなく割当者本人宛てにする点が notifyTaskDone との決定的な違い
+  // （「自分が割り当てたタスク」の進捗だけをリーダーの受信ボックスに限定するため）。
+  // 呼び出し元で「進捗が実際に変化したときだけ」呼ぶこと（工数だけの追記等で通知が増えないように）。
+  async function notifyTaskProgress(taskId, progress) {
+    if (!sb) return;
+    var t = await sb.from('tasks').select('id,title,assigner_id,assignee_id,total_hours').eq('id', taskId).limit(1);
+    var tRow = t.data && t.data[0]; if (!tRow) return;
+    if (!tRow.assigner_id) return;             // 自作タスク（割当者なし）は通知不要
+    var me = await currentProfile();
+    if (me && tRow.assigner_id === me.id) return; // 自分の操作で自分に通知しない
+    var teamId = null;
+    try { var ldr = await _getLeaderForProfile(tRow.assigner_id); teamId = ldr.teamId; } catch (e) {}
+    var hrs = (tRow.total_hours != null) ? (' / 合計 ' + tRow.total_hours + 'h') : '';
+    var prog = Math.max(0, Math.min(100, Math.round(+progress || 0)));
+    var body = (prog >= 100)
+      ? ('「' + tRow.title + '」が完了しました' + hrs)
+      : ('「' + tRow.title + '」の進捗が ' + prog + '% になりました' + hrs);
+    try {
+      await sb.from('notifications').insert({
+        to_user_id: tRow.assigner_id, to_team_id: teamId || null, type: 'task_progress',
+        title: 'タスク進捗', body: body,
+        actor_id: me ? me.id : null, actor_name: me ? me.full_name : '', ref_id: taskId
+      });
+    } catch (e) { console.warn('[VEXUM notify] notifications insert失敗 (task_progress):', e); }
+  }
   // タスク完了時、担当チームのリーダーへ完了通知
+  // 現在は notifyTaskProgress に統合。未使用（呼び出しのみ停止・定義は互換のため維持）。
   async function notifyTaskDone(taskId) {
     if (!sb) return;
     var t = await sb.from('tasks').select('id,title,assignee_id,team_id,total_hours').eq('id', taskId).limit(1);
