@@ -918,6 +918,10 @@ function renderDashboard(){
 }
 async function openMemberDash(id){
   const m=MEMBERS[id];
+  // 同一メンバーの再描画か（realtime購読が個人DBを開いたまま自動で叩き直すケース）。
+  // 別メンバーを開いたときだけ表示モード・折りたたみ状態をリセットし、
+  // 同一メンバーの自動再描画では現在の表示状態を維持する（勝手にモードが戻る事故を防ぐ）
+  const isSameMember=(window._mdMemberId===id);
   document.getElementById('md-name').textContent=m.name+'（'+m.role+'）';
   document.getElementById('md-team').textContent=m.team+' ／ 達成率 '+m.rate+'%';
   // そのメンバーの全チャートを取得（mandala_charts WHERE owner_user_id=pid）
@@ -925,7 +929,7 @@ async function openMemberDash(id){
   if(API&&API.ready&&m.pid){ try{charts=window._chartsCache[m.pid]||await API.loadChartsFor(m.pid);window._chartsCache[m.pid]=charts;}catch(e){charts=[];} }
   // 接続なし/チャート未取得時は、MEMBERSの主チャートを1件分の擬似チャートとして使う
   if(!charts.length&&(m.subs&&m.subs.length)){charts=[{id:'__main__',name:m.name+' のチャート',center:m.center||'',subs:m.subs||[],acts:m.acts||[],color:m.color,bg:'#CCEDE9',member_kpi_edits:m.memberKpiEdits||{},period:''}];}
-  // 状態を毎回リセット（別メンバーを開いたときに前のデータが残らない）
+  // タスク/チャートデータは同一メンバーでも毎回最新に差し替える（realtime反映のため）
   window._mdCharts=charts;window._mdMemberId=id;window._mdTasks=(MEMBER_TASKS[id]||[]).slice();
   // 個人DBの骨組み：①統計カード ②【タスクビュー】割り当てタスク一覧（初期表示・チャート未紐付けも含む全タスク）
   //   ③【チャートビュー】曼荼羅（プルダウン＋インライングリッド、KPI表示トグル付き）。①②を1つのボタンで切替
@@ -937,13 +941,40 @@ async function openMemberDash(id){
   const taskSel=`<select class="fs" id="md-task-chart-sel" style="min-width:200px" onchange="onMdTaskChartChange()"><option value="">全チャート</option>${charts.filter(c=>c.id!=='__main__').map(c=>`<option value="${c.id}">${mdChartLabel(c)}</option>`).join('')}</select>`;
   let h=`<div class="g4" id="md-stat-cards" style="margin-bottom:14px"></div>`;
   h+=`<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="card-btn" id="md-mnd-toggle" onclick="toggleMdMnd()">🧿 曼荼羅チャートを見る</button></div>`;
-  h+=`<div id="md-view-tasks"><div class="card"><div class="card-hd" style="gap:10px;flex-wrap:wrap"><div><div class="card-title">割り当てタスクの状況</div><div class="card-sub">チャートに紐づかないタスクも含む全タスクが対象です</div></div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:10px;color:var(--text3)">チャート絞り込み</span>${taskSel}</div></div><div class="card-body" style="padding:0"><div id="md-task-list"></div></div></div></div>`;
+  h+=`<div id="md-view-tasks"><div class="card"><div class="card-hd" style="gap:10px;flex-wrap:wrap"><div>
+    <select class="fs" id="md-task-view-sel" onchange="onMdTaskViewChange()" style="font-size:13px;font-weight:700;padding:6px 10px;min-width:190px;width:auto"><option value="assigned">割り当てタスクの状況</option><option value="all">全てのタスク</option></select>
+    <div class="card-sub" id="md-task-view-sub">チャートに紐づかないタスクも含む全タスクが対象です</div>
+  </div><div id="md-task-chart-filter-wrap" style="display:flex;align-items:center;gap:8px"><span style="font-size:10px;color:var(--text3)">チャート絞り込み</span>${taskSel}</div></div><div class="card-body" style="padding:0"><div id="md-task-list"></div></div></div></div>`;
   h+=`<div id="md-view-chart" style="display:none"><div class="card"><div class="card-hd" style="gap:10px;flex-wrap:wrap"><div><div class="card-title">🧿 曼荼羅チャート</div><div class="card-sub">${charts.length>1?'プルダウンでチャートを切り替え':'メンバーの曼荼羅チャート'}</div></div><button class="card-btn" id="md-mnd-kpi-toggle" onclick="toggleMdMndKpi()">＋ KPIを表示</button></div><div class="card-body"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">${mndSel}</div><div id="md-mnd-wrap" style="overflow-x:auto"></div></div></div></div>`;
   document.getElementById('md-body').innerHTML=h;
   document.getElementById('member-modal').style.display='flex';
-  // 初期表示：タスクビューを表示（全チャート）。チャートビューはボタンで切り替えるまで描画しない
-  window._mdMndOpen=false;
-  mdRenderTasks('');
+  if(!isSameMember){
+    // 別メンバーを開いたときだけ、表示モード・チャートビュー開閉・折りたたみ状態をリセットする
+    // （初期表示：タスクビュー／割り当てタスクの状況。チャートビューはボタンで切り替えるまで描画しない）
+    window._mdMndOpen=false;
+    _mdTaskView='assigned';
+    window._mdCollapsed={};
+  }
+  // 骨組みHTMLは毎回作り直すため、保持している表示状態をDOMへ反映し直す
+  const viewSel=document.getElementById('md-task-view-sel');if(viewSel)viewSel.value=_mdTaskView;
+  const filterWrap=document.getElementById('md-task-chart-filter-wrap');if(filterWrap)filterWrap.style.display=(_mdTaskView==='all')?'none':'';
+  const viewSub=document.getElementById('md-task-view-sub');
+  if(viewSub)viewSub.textContent=(_mdTaskView==='all')
+    ?'チャートごとにKGI→CSF→KPI→タスクの階層で表示します（従業員画面のタスク管理と同じ）'
+    :'チャートに紐づかないタスクも含む全タスクが対象です';
+  if(window._mdMndOpen){
+    const viewTasks=document.getElementById('md-view-tasks'),viewChart=document.getElementById('md-view-chart'),btn=document.getElementById('md-mnd-toggle');
+    if(viewTasks)viewTasks.style.display='none';
+    if(viewChart)viewChart.style.display='';
+    if(btn)btn.textContent='📋 タスク一覧に戻る';
+    const sel=document.getElementById('md-chart-sel');
+    const cid=(sel&&sel.value)||(charts[0]&&charts[0].id);
+    if(cid)mdRenderMnd(cid);
+  }else if(_mdTaskView==='all'){
+    mdRenderAllTasks();
+  }else{
+    mdRenderTasks((document.getElementById('md-task-chart-sel')||{}).value||'');
+  }
 }
 // 個人DBの表示を「タスク一覧」⇄「曼荼羅チャート」で切り替える（関数名は既存のまま維持。id="md-mnd-toggle"も既存参照を維持）
 function toggleMdMnd(){
@@ -1000,12 +1031,297 @@ function mdFilterTasks(chartId){
   return all.filter(t=>mdTaskMatchesChart(t,c));
 }
 function onMdTaskChartChange(){const v=(document.getElementById('md-task-chart-sel')||{}).value||'';mdRenderTasks(v);}
+
+/* ===== 個人DB「全てのタスク」表示（従業員画面のタスク管理タブと同じKGI→CSF→KPI→タスク階層） =====
+   進捗%・工数の計算式は employee.html の正典関数（_kpiPct/_csfPct/_kgiPct・
+   _kpiHours/_csfHours/_kgiHours・_splitByKpi）をそのまま移植する。
+   leader.html には CHARTS/kpiEdits グローバルが無いため、チャートオブジェクトと
+   タスク配列を引数で受け取る形に書き換えている。優先順位・丸めは変えないこと
+   （変えるとタブ間で%が食い違う＝KPI階層復活時に一度起きた実バグ）。 */
+let _mdTaskView='assigned';  // 'assigned'=割り当てタスクの状況 / 'all'=全てのタスク
+// チャートの member_kpi_edits を取り出す（memberKpiEdits 表記ゆれに両対応）
+function _mdEdits(c){ return (c && (c.member_kpi_edits || c.memberKpiEdits)) || {}; }
+// そのチャートに紐づくタスク（既存の mdTaskMatchesChart を流用。新規に判定を書かない）
+function _mdChartTasks(c, tasks){ return (tasks||[]).filter(t=>mdTaskMatchesChart(t,c)); }
+// タスクのpct取得: 値が無い場合は完了扱い（employee.html の _taskPctSafe と同じ）
+function _mdTaskPctSafe(t){return t.pct!=null?+t.pct:100;}
+// KPI単位の進捗（employee.html _kpiPct と同じ優先順位: 1)編集値 2)配下タスク平均 3)0）
+function _mdKpiPct(c, tasks, si, ai){
+  const ed=_mdEdits(c)[si+'-'+ai];
+  if(ed&&ed.progress!=null)return Math.round(+ed.progress);
+  const ts=_mdChartTasks(c,tasks).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si&&t.kpiIdx!=null&&+t.kpiIdx===+ai);
+  if(ts.length)return Math.round(ts.reduce((s,t)=>s+_mdTaskPctSafe(t),0)/ts.length);
+  return 0;
+}
+// CSF単位の進捗（employee.html _csfPct と同じ: KPI単位平均とCSF直下タスクを公平に平均）
+function _mdCsfPct(c, tasks, si){
+  const ed=_mdEdits(c)['csf-'+si];
+  if(ed&&ed.progress!=null)return Math.round(+ed.progress);
+  const all=_mdChartTasks(c,tasks).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si);
+  if(!all.length)return 0;
+  const aiSet=new Set(all.filter(t=>t.kpiIdx!=null&&!isNaN(t.kpiIdx)).map(t=>+t.kpiIdx));
+  const direct=all.filter(t=>t.kpiIdx==null||isNaN(t.kpiIdx));
+  if(!aiSet.size)return Math.round(all.reduce((s,t)=>s+_mdTaskPctSafe(t),0)/all.length);
+  const parts=[];
+  aiSet.forEach(ai=>parts.push(_mdKpiPct(c,tasks,si,ai)));
+  direct.forEach(t=>parts.push(_mdTaskPctSafe(t)));
+  return Math.round(parts.reduce((s,v)=>s+v,0)/parts.length);
+}
+// KGI単位の進捗（employee.html _kgiPct と同じ: テキストのあるCSFのみ平均。空CSFで薄めない）
+function _mdKgiPct(c, tasks){
+  const ed=_mdEdits(c)['center'];
+  if(ed&&ed.progress!=null)return Math.round(+ed.progress);
+  const edits=_mdEdits(c);
+  const cs=(c.subs||[]).map((s,si)=>{
+    const e=edits['csf-'+si]||{};
+    return {si,text:((e.text!=null?e.text:s)||'').replace(/\n/g,' ')};
+  }).filter(x=>x.text);
+  if(!cs.length)return 0;
+  return Math.round(cs.reduce((s,x)=>s+_mdCsfPct(c,tasks,x.si),0)/cs.length);
+}
+// KPI単位の工数（employee.html _kpiHours と同じ: 配下タスク合計＋レガシーhoursTotal）
+function _mdKpiHours(c, tasks, si, ai){
+  const ts=_mdChartTasks(c,tasks).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si&&t.kpiIdx!=null&&+t.kpiIdx===+ai);
+  let sum=ts.reduce((s,t)=>s+(+t.hours||0),0);
+  const ed=_mdEdits(c);
+  sum+=(+((ed[si+'-'+ai]||{}).hoursTotal)||0);   // レガシー読み取り（削除禁止）
+  return Math.round(sum*10)/10;
+}
+// CSF単位の工数（employee.html _csfKpiHours と同じ: タスク合計＋CSF自身/KPI自身のhoursTotal）
+function _mdCsfKpiHours(c, tasks, si){
+  let sum=_mdChartTasks(c,tasks).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si).reduce((s,t)=>s+(+t.hours||0),0);
+  const ed=_mdEdits(c);
+  sum+=(+((ed['csf-'+si]||{}).hoursTotal)||0);
+  for(let ai=0;ai<8;ai++)sum+=(+((ed[si+'-'+ai]||{}).hoursTotal)||0);
+  return Math.round(sum*10)/10;
+}
+// CSFの工数: 上書き値（csf_hours_override）があれば優先（employee.html _csfHours と同じ）
+function _mdCsfHours(c, tasks, si){
+  const ov=(_mdEdits(c).csf_hours_override||{});
+  if(ov[si]!=null&&ov[si]!=='')return Math.round((+ov[si])*10)/10;
+  return _mdCsfKpiHours(c,tasks,si);
+}
+// KGI単位の工数（employee.html _kgiHours と同じ: 全CSF工数の総和＋KGIセル自身のhoursTotal）
+function _mdKgiHours(c, tasks){
+  let s=0;for(let si=0;si<8;si++)s+=_mdCsfHours(c,tasks,si);
+  const ed=_mdEdits(c);
+  s+=(+((ed['center']||{}).hoursTotal)||0);
+  return Math.round(s*10)/10;
+}
+// KPI別/CSF直下の振り分け（employee.html _splitByKpi と同じ）
+function _mdSplitByKpi(tasks){
+  const byKpi={},direct=[];
+  (tasks||[]).forEach(t=>{
+    const ai=(t.kpiIdx!=null&&!isNaN(t.kpiIdx))?+t.kpiIdx:null;
+    if(ai==null)direct.push(t);else (byKpi[ai]=byKpi[ai]||[]).push(t);
+  });
+  const aiList=Object.keys(byKpi).map(Number).sort((a,b)=>a-b);
+  return {aiList,byKpi,direct,useKpi:aiList.length>0};
+}
+// CSF/KPIの期間バッジ用データ（employee.html _cellPeriod と同じ優先順位:
+// 1)紐づくタスクの期間 2)明示的なperiod編集 3)チャート(KGI)全体期間の継承）
+function _mdCellPeriod(c,kind,si,ai){
+  const linked=_mdLinkedTasks(c,kind,si,ai);
+  if(linked.length){
+    const withP=linked.find(t=>t.startRaw||t.dueRaw)||linked[0];
+    return {start:withP.startRaw||'',end:withP.dueRaw||'',fromTask:true,taskCount:linked.length};
+  }
+  const pmap=(_mdEdits(c).period)||{};const per=pmap[_mdCellKey(kind,si,ai)]||{};
+  if(per.start||per.end)return {start:per.start||'',end:per.end||'',fromTask:false,taskCount:0};
+  if(kind!=='center'){
+    const cs=c.start_date||c.startDate||'';const ce=c.end_date||c.endDate||'';
+    if(cs||ce)return {start:cs,end:ce,fromTask:false,fromChart:true,taskCount:0};
+  }
+  return {start:'',end:'',fromTask:false,taskCount:0};
+}
+// CSF/KPI見出しクリック→期間設定モーダル。openMdPeriodEdit は window._mdCurChart を
+// 参照するため、モードBでは複数チャートを跨ぐので必ず対象チャートを先にセットする
+function _mdOpenPeriodFor(chartId,kind,si,ai){
+  const c=(window._mdCharts||[]).find(x=>String(x.id)===String(chartId));
+  if(!c)return;
+  window._mdCurChart=c;
+  openMdPeriodEdit(kind,si,ai);
+}
+function mdCsfToggle(cid,si){
+  window._mdCollapsed=window._mdCollapsed||{};
+  const key=cid+':'+si;
+  window._mdCollapsed[key]=!window._mdCollapsed[key];
+  const body=document.getElementById('md-csf-body-'+cid+'-'+si);
+  if(body)body.style.display=window._mdCollapsed[key]?'none':'';
+  const btn=document.getElementById('md-csf-toggle-'+cid+'-'+si);
+  if(btn)btn.textContent=window._mdCollapsed[key]?'▶':'▼';
+}
+function mdKpiToggle(cid,si,ai){
+  window._mdCollapsed=window._mdCollapsed||{};
+  const key=cid+':'+si+':'+ai;
+  window._mdCollapsed[key]=!window._mdCollapsed[key];
+  const body=document.getElementById('md-kpi-body-'+cid+'-'+si+'-'+ai);
+  if(body)body.style.display=window._mdCollapsed[key]?'none':'';
+  const btn=document.getElementById('md-kpi-toggle-'+cid+'-'+si+'-'+ai);
+  if(btn)btn.textContent=window._mdCollapsed[key]?'▶':'▼';
+}
+// タスク1行のHTML（employee.html rowHtml相当）。クリックで既存の編集モーダルを開く
+function _mdTaskRowHtml(t){
+  const sch=statusChip(effStatus(t)),pc=priChip(t.pri);
+  const pct=t.pct!=null?t.pct:0;
+  const col=pct>=100?'var(--green)':pct>=40?'var(--accent)':'var(--amber)';
+  const today=new Date().toISOString().slice(0,10);
+  const isLate=!!(t.dueRaw&&t.dueRaw<today&&pct<100);
+  const dueDisp=t.dueRaw?t.dueRaw.replace(/-/g,'/'):((t.due&&t.due!=='-')?t.due:'—');
+  const infoLine=`<div style="font-size:10px;color:${isLate?'var(--red)':'var(--text3)'}">期限 ${dueDisp}${isLate?' ⚠ 超過':''} ／ 工数 ${t.hours||0}h</div>`;
+  const rawIdx=(MEMBER_TASKS[window._mdMemberId]||[]).indexOf(t);
+  return `<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6;cursor:pointer" onclick="openLdrEditTask(${rawIdx},'${window._mdMemberId}')">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${selfChip(t)}</div>${infoLine}</div>
+      <div style="display:flex;gap:6px;align-items:center"><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sch[0]}">${sch[1]}</span><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${pct}%</div></div></div>
+    </div>
+  </div>`;
+}
+// 見出しモードの切り替え（割り当てタスクの状況 ⇄ 全てのタスク）
+function onMdTaskViewChange(){
+  _mdTaskView=(document.getElementById('md-task-view-sel')||{}).value||'assigned';
+  const wrap=document.getElementById('md-task-chart-filter-wrap');
+  if(wrap)wrap.style.display=(_mdTaskView==='all')?'none':'';
+  const sub=document.getElementById('md-task-view-sub');
+  if(sub)sub.textContent=(_mdTaskView==='all')
+    ? 'チャートごとにKGI→CSF→KPI→タスクの階層で表示します（従業員画面のタスク管理と同じ）'
+    : 'チャートに紐づかないタスクも含む全タスクが対象です';
+  if(_mdTaskView==='all')mdRenderAllTasks();
+  else mdRenderTasks((document.getElementById('md-task-chart-sel')||{}).value||'');
+}
+// 「全てのタスク」= 従業員画面のタスク管理タブと同じKGI→CSF→KPI→タスク階層で全チャートを表示
+function mdRenderAllTasks(){
+  const tasks=window._mdTasks||[];
+  const charts=window._mdCharts||[];
+  // ①統計カードはモードAと同じ「全タスク」基準（モードで件数が変わる混乱を避ける）
+  const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length;
+  const wip=tasks.filter(t=>t.status==='wip').length;
+  const late=tasks.filter(t=>effStatus(t)==='late').length;
+  const totalH=tasks.reduce((a,t)=>a+(t.hours||0),0);
+  const sc=document.getElementById('md-stat-cards');
+  if(sc)sc.innerHTML=`<div class="stat-card" style="padding:14px"><div class="s-lbl">タスク</div><div class="s-val" style="font-size:22px;color:var(--accent)">${tasks.length}</div></div>
+    <div class="stat-card" style="padding:14px"><div class="s-lbl">完了</div><div class="s-val" style="font-size:22px;color:var(--green)">${done}</div></div>
+    <div class="stat-card" style="padding:14px"><div class="s-lbl">進行中</div><div class="s-val" style="font-size:22px">${wip}</div></div>
+    <div class="stat-card" style="padding:14px"><div class="s-lbl">遅延</div><div class="s-val" style="font-size:22px;color:var(--red)">${late}</div></div>`;
+
+  const el=document.getElementById('md-task-list');if(!el)return;
+  const noChart=tasks.filter(t=>!t.chart);
+  if(!charts.length&&!noChart.length){el.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートがありません</div>';return;}
+  if(!tasks.length){el.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">タスクはありません</div>';return;}
+
+  let h='';
+  charts.forEach(c=>{
+    const cid=c.id;
+    const chartTasks=_mdChartTasks(c,tasks);
+    const totH=_mdKgiHours(c,tasks);
+    const kgiText=(c.center||'').replace(/\n/g,' ').trim()||c.name||'チャート';
+    const sd=c.start_date||c.startDate||'';const ed=c.end_date||c.endDate||'';
+    const dateStr=(sd||ed)?` (${sd}〜${ed||'?'})`:'';
+    h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">🎯 ${kgiText}${dateStr}</div><div class="card-sub">KGI紐付けタスク ／ ${chartTasks.length}件 ／ 合計時間 ${totH}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
+
+    const edits=_mdEdits(c);
+    const csfs=(c.subs||[]).map((s,si)=>{
+      const e=edits['csf-'+si]||{};
+      return {si,text:((e.text!=null?e.text:s)||'').replace(/\n/g,' ')};
+    });
+    const nocsf=chartTasks.filter(t=>t.csfIdx==null||!csfs.some(x=>x.si===+t.csfIdx&&x.text));
+    csfs.filter(x=>x.text).forEach(cf=>{
+      const si=cf.si;
+      const csfTasks=chartTasks.filter(t=>t.csfIdx!=null&&+t.csfIdx===si);
+      const csfPct=_mdCsfPct(c,tasks,si);
+      const csfH=_mdCsfHours(c,tasks,si);
+      const per=_mdCellPeriod(c,'csf',si,null);
+      const csfStart=(per.start||'').replace(/-/g,'/')||null;
+      const csfEndFmt=per.end?per.end.replace(/-/g,'/'):null;
+      let csfDB;
+      if(!csfStart&&!csfEndFmt){
+        csfDB='<span style="font-size:9px;background:#F3F4F6;color:#9CA3AF;padding:2px 6px;border-radius:6px;margin-left:6px">期限未設定</span>';
+      }else{
+        const today=new Date().toISOString().slice(0,10);
+        const overdue=!!(per.end&&per.end<today);
+        const dc=per.fromChart?'#6B7280':(overdue?'#DC2626':'#6B7280');
+        const dbg=per.fromChart?'#F3F4F6':(overdue?'#FEE2E2':'#F3F4F6');
+        const period=csfStart&&csfEndFmt?`${csfStart}〜${csfEndFmt}`:csfStart?`${csfStart}〜`:csfEndFmt||'';
+        csfDB=`<span style="font-size:9px;background:${dbg};color:${dc};padding:2px 6px;border-radius:6px;font-weight:${overdue&&!per.fromChart?'700':'600'};margin-left:6px;white-space:nowrap">📅 ${period}${overdue&&!per.fromChart?' ⚠超過':''}${per.fromChart?'（KGI）':''}</span>`;
+      }
+      const csfSt=csfPct>=100?'done':csfPct>0?'wip':'todo';
+      const csfSc=statusChip(csfSt);
+      const csfBarCol=csfPct>=100?'var(--green)':csfPct>=40?'var(--accent)':'var(--amber)';
+      const csfChipHtml=`<span style="font-size:9px;background:#DBEAFE;color:#1D4ED8;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">CSF${si+1}</span>`;
+      const collapseKey=cid+':'+si;
+      const isCollapsed=!!(window._mdCollapsed||{})[collapseKey];
+      const toggleBtn=`<button id="md-csf-toggle-${cid}-${si}" onclick="event.stopPropagation();mdCsfToggle('${cid}',${si})" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--accent);padding:0 4px 0 0;line-height:1;flex:0 0 auto;font-weight:700">${isCollapsed?'▶':'▼'}</button>`;
+      h+=`<div style="border-top:2px solid #E5E7EB">`;
+      h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6;background:#F8FAFC;cursor:pointer" onclick="_mdOpenPeriodFor('${cid}','csf',${si},null)">`;
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">`;
+      h+=`<div style="min-width:0;display:flex;flex-direction:column;gap:2px"><div style="font-size:12px;font-weight:600;display:flex;align-items:center">${toggleBtn}${cf.text}${csfChipHtml}${csfDB}</div>`;
+      h+=`<div style="font-size:10px;color:var(--text3);padding-left:18px">CSF${si+1} ${cf.text} ／ 合計 ${csfH}h ／ ${csfTasks.length}件</div></div>`;
+      h+=`<div style="display:flex;gap:6px;align-items:center"><span class="chip ${csfSc[0]}">${csfSc[1]}</span><div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${csfPct}%;background:${csfBarCol}"></div></div><div class="pp" style="font-size:10px;color:${csfBarCol}">${csfPct}%</div></div></div>`;
+      h+=`</div></div>`;
+      h+=`<div id="md-csf-body-${cid}-${si}" style="${isCollapsed?'display:none':''}">`;
+      const {aiList,byKpi,direct,useKpi}=_mdSplitByKpi(csfTasks);
+      if(!useKpi){
+        csfTasks.forEach(t=>h+=_mdTaskRowHtml(t));
+      }else{
+        const acts=c.acts||[];
+        aiList.forEach(ai=>{
+          const kts=byKpi[ai];
+          const ke=edits[si+'-'+ai]||{};
+          const kTxt=((ke.text!=null)?ke.text:((acts[si]||[])[ai]))||('KPI'+(si+1)+'-'+(ai+1));
+          const kPct=_mdKpiPct(c,tasks,si,ai);
+          const kHours=_mdKpiHours(c,tasks,si,ai);
+          const kSt=kPct>=100?'done':kPct>0?'wip':'todo';
+          const kSc=statusChip(kSt);
+          const kCol=kPct>=100?'var(--green)':kPct>=40?'var(--accent)':'var(--amber)';
+          const kKey=cid+':'+si+':'+ai;
+          const kCollapsed=!!(window._mdCollapsed||{})[kKey];
+          const kToggleBtn=`<button id="md-kpi-toggle-${cid}-${si}-${ai}" onclick="event.stopPropagation();mdKpiToggle('${cid}',${si},${ai})" style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--text3);padding:0 4px 0 0;line-height:1;flex:0 0 auto;font-weight:700">${kCollapsed?'▶':'▼'}</button>`;
+          h+=`<div style="border-top:1px solid #F3F4F6">`;
+          h+=`<div style="padding:9px 14px 9px 26px;border-bottom:1px solid #F3F4F6;background:#FCFCFD;cursor:pointer" onclick="_mdOpenPeriodFor('${cid}','kpi',${si},${ai})">`;
+          h+=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">`;
+          h+=`<div style="min-width:0"><div style="font-size:11.5px;font-weight:600;display:flex;align-items:center">${kToggleBtn}${kTxt}</div>`;
+          h+=`<div style="font-size:9.5px;color:var(--text3);padding-left:14px">KPI${si+1}-${ai+1} ／ 合計 ${kHours}h ／ ${kts.length}件</div></div>`;
+          h+=`<div style="display:flex;gap:6px;align-items:center"><span class="chip ${kSc[0]}">${kSc[1]}</span><div class="pw" style="min-width:70px"><div class="pt"><div class="pf" style="width:${kPct}%;background:${kCol}"></div></div><div class="pp" style="font-size:9px;color:${kCol}">${kPct}%</div></div></div>`;
+          h+=`</div></div>`;
+          h+=`<div id="md-kpi-body-${cid}-${si}-${ai}" style="${kCollapsed?'display:none':''}">`;
+          kts.forEach(t=>h+=_mdTaskRowHtml(t));
+          h+=`</div></div>`;
+        });
+        if(direct.length){
+          h+=`<div style="padding:6px 14px 6px 26px;background:#FAFAFA;font-size:10px;color:var(--text3);font-weight:700;border-top:1px solid #F3F4F6">KPI未指定</div>`;
+          direct.forEach(t=>h+=_mdTaskRowHtml(t));
+        }
+      }
+      h+=`</div></div>`;
+    });
+    if(nocsf.length){
+      h+=`<div style="border-bottom:2px solid #E5E7EB">`;
+      h+=`<div style="padding:8px 14px;background:#FFFBEB;display:flex;justify-content:space-between;align-items:center">`;
+      h+=`<div style="font-size:11px;font-weight:700;color:#92400E">CSF未指定</div>`;
+      h+=`<div style="font-size:10px;color:var(--text3)">${nocsf.length}件</div>`;
+      h+=`</div>`;
+      nocsf.forEach(t=>h+=_mdTaskRowHtml(t));
+      h+=`</div>`;
+    }
+    h+=`</div></div>`;
+  });
+
+  if(noChart.length){
+    const totH=Math.round(noChart.reduce((s,t)=>s+(+t.hours||0),0)*10)/10;
+    h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">☰ チャート以外のタスク</div><div class="card-sub">${noChart.length}件 ／ 合計時間 ${totH}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
+    noChart.forEach(t=>h+=_mdTaskRowHtml(t));
+    h+=`</div></div>`;
+  }
+
+  el.innerHTML=h;
+}
+
 // タスク一覧＋KPIサマリを再描画
 function mdRenderTasks(chartId){
   const tasks=mdFilterTasks(chartId);
   const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length;
   const wip=tasks.filter(t=>t.status==='wip').length;
-  const late=tasks.filter(t=>t.status==='late').length;
+  const late=tasks.filter(t=>effStatus(t)==='late').length;
   const totalH=tasks.reduce((a,t)=>a+(t.hours||0),0);
   const sc=document.getElementById('md-stat-cards');
   if(sc)sc.innerHTML=`<div class="stat-card" style="padding:14px"><div class="s-lbl">タスク</div><div class="s-val" style="font-size:22px;color:var(--accent)">${tasks.length}</div></div>
@@ -1097,7 +1413,9 @@ async function saveMdPeriodEdit(){
   }
   closeMdPeriodEdit();
   if(typeof mdRenderMnd==='function')mdRenderMnd(c.id);
-  if(typeof mdRenderTasks==='function')mdRenderTasks((document.getElementById('md-task-chart-sel')||{}).value||'');
+  // 現在の表示モードに応じて再描画を呼び分ける（モードB中に上書きしてモードAへ戻さない）
+  if(_mdTaskView==='all'){if(typeof mdRenderAllTasks==='function')mdRenderAllTasks();}
+  else if(typeof mdRenderTasks==='function')mdRenderTasks((document.getElementById('md-task-chart-sel')||{}).value||'');
 }
 // 全画面で曼荼羅を表示（現在選択中のチャート）
 function mdViewChart(){
