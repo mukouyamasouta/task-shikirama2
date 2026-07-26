@@ -312,10 +312,12 @@
     raw.tasks.forEach(function (t) {
       var key = pidToKey[t.assignee_id]; if (!key || !MEMBERS[key]) return;
       (MEMBER_TASKS[key] = MEMBER_TASKS[key] || []).push({
-        id: t.id, name: t.title, kpi: t.related_kgi || '—', start: fmtMD(t.start_date), due: fmtMD(t.due_date), dueRaw: t.due_date || null, pri: t.priority, status: t.status,
+        id: t.id, name: t.title, kpi: t.related_kgi || '—', start: fmtMD(t.start_date), due: fmtMD(t.due_date), dueRaw: t.due_date || null, startRaw: t.start_date || null, pri: t.priority, status: t.status,
         pct: t.progress || 0, hours: (t.total_hours != null ? +t.total_hours : 0), period: t.period || '', chart: t.source_chart || null, sendId: t.source_send_id || null, cell: t.source_cell || null,
         csfIdx: csfIdxFromCell(t.source_cell),
-        kpiIdx: kpiIdxFromCell(t.source_cell)
+        kpiIdx: kpiIdxFromCell(t.source_cell),
+        self: t.source === 'self', assignerId: t.assigner_id || null,
+        planned: (t.planned_hours != null ? +t.planned_hours : null)
       });
     });
 
@@ -528,6 +530,15 @@
       var _k2 = kpiIdxFromCell(o.cell); if (_k2 != null) row.source_kpi = _k2;
     }
     // source_kpi は後方互換の従属列（書き込みのみ。読み取りは source_cell のみを正とする）
+    // team_id 未指定なら担当者の所属チームで補完する。
+    // NULL のままだと RLS(tasks_select_scoped) でリーダーから閲覧できず、
+    // 「従業員の自作タスクがリーダー画面に出ない」不具合になる。
+    if (!row.team_id && row.assignee_id) {
+      try {
+        var _tm = await _getLeaderForProfile(row.assignee_id);
+        if (_tm && _tm.teamId) row.team_id = _tm.teamId;
+      } catch (e) { console.warn('[VEXUM] team_id自動補完に失敗（登録は継続）:', e); }
+    }
     var r = await sb.from('tasks').insert(row).select().single();
     if (r.error && /source_send_id|source_cell|source_chart|source_kpi|period|planned_hours/.test(r.error.message)) {
       // 拡張列が未適用のDB: 拡張列なしで作成（後方互換）
@@ -703,7 +714,8 @@
 
   // チームリーダーIDを取得するユーティリティ（maybeSingle問題を修正: 複数チーム所属でも最初の1件を使用）
   async function _getLeaderForProfile(profileId) {
-    var tm = await sb.from('team_members').select('team_id').eq('profile_id', profileId).limit(1);
+    // team_id昇順で決定（45_task_team_backfill.sqlの補完ルールと一致させ、複数チーム所属時の選択を安定させる）
+    var tm = await sb.from('team_members').select('team_id').eq('profile_id', profileId).order('team_id').limit(1);
     var tmRow = tm.data && tm.data[0];
     if (!tmRow) { console.warn('[VEXUM notify] team_members に profile_id=' + profileId + ' の行がありません。チーム設定を確認してください。'); return { leaderId: null, teamId: null }; }
     var tr = await sb.from('teams').select('leader_id').eq('id', tmRow.team_id).limit(1);
@@ -1771,7 +1783,9 @@
         hours: (t.total_hours != null ? +t.total_hours : 0), period: t.period || '', teamUuid: t.team_id,
         chart: t.source_chart || null, sendId: t.source_send_id || null, cell: t.source_cell || null,
         csfIdx: csfIdxFromCell(t.source_cell),
-        kpiIdx: kpiIdxFromCell(t.source_cell)
+        kpiIdx: kpiIdxFromCell(t.source_cell),
+        self: t.source === 'self', assignerId: t.assigner_id || null,
+        planned: (t.planned_hours != null ? +t.planned_hours : null)
       });
     });
     var memberPid = {};
