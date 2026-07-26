@@ -186,41 +186,124 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- タスク割当 -->
 <div id="tc-assign" class="tab-content">
-  <div class="sec-title">タスク割当 <span style="font-size:11px;font-weight:400;color:var(--text3)">タスクを作成しチームメンバーに割り当てる</span></div>
-  <div class="g2">
-    <div>
-      <div class="form-card">
-        <h3 style="font-size:14px;font-weight:700;margin-bottom:18px">新規タスクを作成・割当</h3>
-        <div class="fg"><label class="fl">タスク名</label><input class="fi" id="asg-name" placeholder="例: Q3 提案書作成"></div>
-        <div class="fg"><label class="fl">割り当てるメンバー</label><select class="fs" id="asg-member"></select></div>
-        <div class="fg"><label class="fl">関連KPI（任意）</label><input class="fi" id="asg-kpi" placeholder="例: 訪問件数30件"></div>
-        <div class="fr">
-          <div class="fg"><label class="fl">開始日</label><input class="fi" id="asg-start" type="date"></div>
-          <div class="fg"><label class="fl">期限</label><input class="fi" id="asg-due" type="date"></div>
-        </div>
-        <div class="fg"><label class="fl">予定工数（h・任意）</label><input class="fi" id="asg-planhours" type="number" min="0" step="0.5" placeholder="例: 8"></div>
-        <div class="fg"><label class="fl">優先度</label><select class="fs" id="asg-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select></div>
-        <button class="f-submit" onclick="submitAssign()">タスクを割り当てる</button>
-        <span class="toast" id="asg-saved">✅ 保存しました</span>
-      </div>
-      <div class="card" style="margin-top:16px">
-        <div class="card-hd"><div><div class="card-title">個人チャートに記入して割当</div><div class="card-sub">KGI/CSFを直接書き込み「この内容を任せる」</div></div></div>
-        <div class="card-body">
-          <div class="fg"><label class="fl">対象メンバー</label><select class="fs" id="chartedit-member"></select></div>
-          <button class="f-submit" style="width:100%;background:var(--text3)" onclick="openChartEditor(document.getElementById('chartedit-member').value)">🧿 チャートを開いて記入</button>
-        </div>
+  <div class="sec-title">タスク割当
+    <span style="font-size:11px;font-weight:400;color:var(--text3)">タスクを作成しチームメンバーに割り当てる</span>
+    <button class="f-submit" onclick="openLdrTaskModal()" style="font-size:12px;padding:7px 16px;margin-left:10px">＋ 新規タスクを作成・割当</button>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-hd"><div><div class="card-title">割り当て済みタスク</div>
+      <div class="card-sub">メンバー・ステータス・作成者・期間で絞り込み</div></div></div>
+    <div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--border)">
+      <div><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">メンバー</div>
+        <select class="fs" id="asgf-member" style="min-width:130px" onchange="renderAssignedTasks()"><option value="">全メンバー</option></select></div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">ステータス</div>
+        <select class="fs" id="asgf-status" onchange="renderAssignedTasks()"><option value="">全ステータス</option><option value="todo">未着手</option><option value="wip">進行中</option><option value="done">完了</option><option value="late">遅延</option></select></div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">作成者</div>
+        <select class="fs" id="asgf-source" onchange="renderAssignedTasks()"><option value="">全て</option><option value="leader">リーダー割当</option><option value="self">本人作成</option></select></div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">開始日</div>
+        <div id="asgf-from-ymd"></div></div>
+      <div style="align-self:flex-end;padding-bottom:6px;color:var(--text3);font-size:12px">〜</div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">期限</div>
+        <div id="asgf-to-ymd"></div></div>
+      <div style="align-self:flex-end">
+        <button class="f-btn active" onclick="applyAsgFilter()">絞り込む</button>
+        <button class="f-btn" onclick="resetAsgFilter()" style="margin-left:4px">リセット</button>
       </div>
     </div>
-    <div>
-      <div class="card">
-        <div class="card-hd"><div><div class="card-title">割り当て済みタスク</div><div class="card-sub">自チームのメンバー別・ステータスで絞り込み</div></div></div>
-        <div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
-          <select class="fs" id="asgf-member" style="min-width:130px" onchange="renderAssignedTasks()"><option value="">全メンバー</option></select>
-          <select class="fs" id="asgf-status" onchange="renderAssignedTasks()"><option value="">全ステータス</option><option value="todo">未着手</option><option value="wip">進行中</option><option value="done">完了</option><option value="late">遅延</option></select>
-          <select class="fs" id="asgf-source" onchange="renderAssignedTasks()"><option value="">全て</option><option value="leader">リーダー割当</option><option value="self">本人作成</option></select>
+    <div class="card-body" id="assigned-list" style="padding:0"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd"><div><div class="card-title">個人チャートに記入して割当</div>
+      <div class="card-sub">KGI/CSFを直接書き込み「この内容を任せる」</div></div></div>
+    <div class="card-body">
+      <div class="fg"><label class="fl">対象メンバー</label><select class="fs" id="chartedit-member"></select></div>
+      <button class="f-submit" style="width:100%;background:var(--text3)" onclick="openChartEditor(document.getElementById('chartedit-member').value)">🧿 チャートを開いて記入</button>
+    </div>
+  </div>
+  <span class="toast" id="asg-saved">✅ 保存しました</span>
+</div>
+
+<!-- リーダー新規タスク作成モーダル -->
+<div id="ldr-task-modal" onclick="if(event.target===this)closeLdrTaskModal()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:460px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+      <div>
+        <div style="font-size:16px;font-weight:800;color:var(--accent)">新規タスク作成</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">
+          <span id="ldr-tm-sub-text">KGI紐付けでタスクを作成します　</span>
+          <span id="ldr-tm-link-toggle" onclick="toggleLdrChartLink()"
+                style="color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline">チャート以外のタスクはこちら →</span>
         </div>
-        <div class="card-body" id="assigned-list" style="padding:0"></div>
       </div>
+      <button onclick="closeLdrTaskModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+
+    <div class="fg"><label class="fl">割り当てるメンバー *</label>
+      <select class="fs" id="ldr-tm-member" onchange="onLdrMemberSel()"><option value="">メンバーを選択</option></select></div>
+
+    <div id="ldr-tm-chart-link" style="background:var(--accent-l);border-radius:8px;padding:10px 12px;margin-bottom:14px">
+      <div class="fg" style="margin-bottom:8px"><label class="fl">① チャート（KGI）を選択</label>
+        <select class="fs" id="ldr-tm-chart" onchange="onLdrChartSel()"><option value="">チャートを選択</option></select></div>
+      <div class="fg" style="margin-bottom:8px"><label class="fl">② 紐付けるCSFを選択</label>
+        <select class="fs" id="ldr-tm-csf" onchange="onLdrCsfSel()"><option value="">（先にチャートを選択）</option></select>
+        <div id="ldr-tm-csf-warn" style="display:none;font-size:10px;color:var(--red);font-weight:700;margin-top:4px"></div></div>
+      <div class="fg" style="margin-bottom:4px"><label class="fl">③ 紐付けるKPIを選択（任意）</label>
+        <select class="fs" id="ldr-tm-kpi"><option value="">KPIに紐付けない（CSF直下）</option></select>
+        <div style="font-size:10px;color:var(--text2);margin-top:4px">未選択ならCSF直下のタスクになります。</div></div>
+      <div style="font-size:10px;color:var(--text2);margin-top:6px;line-height:1.5">※ 選択したCSFに紐づくタスクとして登録されます（同じCSFに何件でも作成できます）。</div>
+    </div>
+
+    <div class="fg"><label class="fl">タスク名 *</label>
+      <input class="fi" id="ldr-tm-name" placeholder="例: 新規顧客 訪問アポ獲得"></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">開始日</label><input class="fi" id="ldr-tm-start" type="date"></div>
+      <div class="fg"><label class="fl">期限</label><input class="fi" id="ldr-tm-due" type="date"></div>
+    </div>
+    <div class="fg"><label class="fl">優先度</label>
+      <select class="fs" id="ldr-tm-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select></div>
+    <div class="fg"><label class="fl">予定工数（h・任意）</label>
+      <input class="fi" id="ldr-tm-planhours" type="number" min="0" step="0.5" placeholder="例: 8"></div>
+
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button class="f-submit" style="flex:1;background:#9CA3AF" onclick="closeLdrTaskModal()">キャンセル</button>
+      <button class="f-submit" style="flex:1" id="ldr-tm-create-btn" onclick="submitLdrTask()">タスクを作成</button>
+    </div>
+  </div>
+</div>
+
+<!-- リーダー タスク編集モーダル -->
+<div id="ldr-edit-modal" onclick="if(event.target===this)closeLdrEditModal()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10001;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:440px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:800;color:var(--accent)">✏ タスクを編集</div>
+      <button onclick="closeLdrEditModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div id="ldr-edit-meta" style="font-size:10px;color:var(--text3);margin-bottom:12px">—</div>
+    <div class="fg"><label class="fl">タスク名</label><input class="fi" id="ldr-edit-name"></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">開始日</label><input class="fi" id="ldr-edit-start" type="date"></div>
+      <div class="fg"><label class="fl">期限</label><input class="fi" id="ldr-edit-due" type="date"></div>
+    </div>
+    <div class="fg"><label class="fl">優先度</label>
+      <select class="fs" id="ldr-edit-pri"><option value="hi">高</option><option value="md">中</option><option value="lo">低</option></select></div>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button class="f-submit" style="flex:1;background:#9CA3AF" onclick="closeLdrEditModal()">キャンセル</button>
+      <button class="f-submit" style="flex:1" onclick="saveLdrEditTask()">保存</button>
+    </div>
+    <div id="ldr-edit-del-confirm" style="display:none;margin-top:12px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:10px">
+      <div style="font-size:12px;color:#991B1B;font-weight:700;margin-bottom:8px" id="ldr-edit-del-msg">このタスクを削除しますか？元に戻せません。</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="card-btn" onclick="document.getElementById('ldr-edit-del-confirm').style.display='none'">キャンセル</button>
+        <button class="card-btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="doLdrDeleteTask(this)">削除する</button>
+      </div>
+    </div>
+    <div style="margin-top:10px;border-top:1px dashed var(--border);padding-top:10px">
+      <button class="card-btn" style="width:100%;background:#FEE2E2;color:var(--red);border-color:#FCA5A5"
+              onclick="document.getElementById('ldr-edit-del-confirm').style.display='block'">🗑 このタスクを削除</button>
     </div>
   </div>
 </div>
@@ -1196,7 +1279,230 @@ function chartEditClickCsf(si){
   if(si<0)CHARTEDIT.center=v;else CHARTEDIT.subs[si]=v;
   renderChartEdit();
 }
+/* ===== リーダー新規タスク作成モーダル（従業員画面の task-modal と同じ構成） ===== */
+let _ldrKgiMode=true;      // true=チャート紐付けあり / false=チャート以外
+function openLdrTaskModal(){
+  const ids=EVAL_IDS.filter(id=>MEMBERS[id]);
+  const sel=document.getElementById('ldr-tm-member');
+  if(sel){const cur=sel.value;
+    sel.innerHTML='<option value="">メンバーを選択</option>'+ids.map(id=>`<option value="${id}">${MEMBERS[id].name}</option>`).join('');
+    if(cur&&ids.includes(cur))sel.value=cur;}
+  _ldrKgiMode=true;
+  const box=document.getElementById('ldr-tm-chart-link');if(box)box.style.display='block';
+  _updateLdrLinkLabel();
+  ['ldr-tm-name','ldr-tm-start','ldr-tm-due','ldr-tm-planhours'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const pr=document.getElementById('ldr-tm-pri');if(pr)pr.value='md';
+  onLdrMemberSel();
+  document.getElementById('ldr-task-modal').style.display='flex';
+}
+function closeLdrTaskModal(){document.getElementById('ldr-task-modal').style.display='none';}
+
+// チャート紐付けあり／なしの切り替え（従業員画面の toggleTmChartLink と同じ挙動）
+function toggleLdrChartLink(){
+  _ldrKgiMode=!_ldrKgiMode;
+  const box=document.getElementById('ldr-tm-chart-link');
+  if(box)box.style.display=_ldrKgiMode?'block':'none';
+  if(_ldrKgiMode)onLdrMemberSel();
+  _updateLdrLinkLabel();
+}
+function _updateLdrLinkLabel(){
+  const sub=document.getElementById('ldr-tm-sub-text');
+  const tg=document.getElementById('ldr-tm-link-toggle');
+  if(sub)sub.textContent=_ldrKgiMode?'KGI紐付けでタスクを作成します　':'チャートに紐付けないタスクを作成します　';
+  if(tg)tg.textContent=_ldrKgiMode?'チャート以外のタスクはこちら →':'← KGI紐付けに戻す';
+}
+
+// ①②③のカスケード中に_teamCharts()を都度再計算しないためのスナップショット。
+// メンバー選択のたびに更新し、以降のチャート/CSF選択ではこれを参照する。
+let _ldrChartsSnapshot=[];
+// メンバー選択 → そのメンバーのチャートのみを①に出す
+function onLdrMemberSel(){
+  const id=(document.getElementById('ldr-tm-member')||{}).value||'';
+  _ldrChartsSnapshot=_teamCharts();
+  const charts=_ldrChartsSnapshot.filter(c=>!id||c.ownerId===id);
+  const cs=document.getElementById('ldr-tm-chart');
+  if(cs)cs.innerHTML='<option value="">チャートを選択</option>'+charts.map(c=>{
+    const kgi=(c.center||c.label||'').replace(/\n/g,' ').trim()||c.label;
+    return `<option value="${c.key}">${kgi}</option>`;}).join('');
+  onLdrChartSel();
+}
+
+// チャート選択 → ②CSF（テキストがあるものだけ）
+function onLdrChartSel(){
+  const ck=(document.getElementById('ldr-tm-chart')||{}).value||'';
+  const chart=_ldrChartsSnapshot.find(c=>c.key===ck);
+  const cf=document.getElementById('ldr-tm-csf');
+  const warn=document.getElementById('ldr-tm-csf-warn');
+  if(!cf)return;
+  if(!chart){cf.innerHTML='<option value="">（先にチャートを選択）</option>';if(warn)warn.style.display='none';onLdrCsfSel();return;}
+  const opts=[];(chart.subs||[]).forEach((s,si)=>{const t=String(s||'').trim();if(t)opts.push({si,t});});
+  if(!opts.length){
+    cf.innerHTML='<option value="">CSFが設定されていません</option>';
+    if(warn){warn.style.display='block';warn.textContent='このチャートにCSFが設定されていません。';}
+  }else{
+    cf.innerHTML='<option value="">CSFを選択</option>'+opts.map(o=>`<option value="${o.si}">CSF${o.si+1} ${o.t}</option>`).join('');
+    if(warn)warn.style.display='none';
+  }
+  onLdrCsfSel();
+}
+
+// CSF選択 → ③KPI（記入済みのものだけ・任意）
+function onLdrCsfSel(){
+  const ck=(document.getElementById('ldr-tm-chart')||{}).value||'';
+  const siV=(document.getElementById('ldr-tm-csf')||{}).value;
+  const sel=document.getElementById('ldr-tm-kpi');
+  if(!sel)return;
+  const base='<option value="">KPIに紐付けない（CSF直下）</option>';
+  const chart=_ldrChartsSnapshot.find(c=>c.key===ck);
+  if(!chart||siV===''||siV==null){sel.innerHTML=base;return;}
+  const si=+siV;const acts=(chart.acts||[])[si]||[];
+  let opts='';
+  for(let ai=0;ai<8;ai++){
+    const txt=String(acts[ai]||'').trim();
+    if(!txt)continue;
+    opts+=`<option value="${ai}">KPI${si+1}-${ai+1} ${txt}</option>`;
+  }
+  sel.innerHTML=base+opts;
+}
+
+async function submitLdrTask(){
+  const id=(document.getElementById('ldr-tm-member')||{}).value||'';
+  if(!id){alert('メンバーを選択してください');return;}
+  const name=val('ldr-tm-name');
+  if(!name){alert('タスク名を入力してください');return;}
+  const API=window.VexumAPI;
+  if(API&&API.ready&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pidOf(id))){
+    alert('データ読み込み中です。少し待ってから再度お試しください。');return;
+  }
+  const startV=val('ldr-tm-start')||null,dueV=val('ldr-tm-due')||null;
+  const startD=fmtDate('ldr-tm-start'),dueD=fmtDate('ldr-tm-due');
+  const pri=(document.getElementById('ldr-tm-pri')||{}).value||'md';
+  const planHours=parseFloat(val('ldr-tm-planhours'))||null;
+
+  let chartName=null,csfIdx=null,csfText='',kpiIdx=null;
+  if(_ldrKgiMode){
+    const ck=(document.getElementById('ldr-tm-chart')||{}).value||'';
+    if(ck){
+      const chart=_teamCharts().find(c=>c.key===ck);
+      if(chart){
+        chartName=(chart.center||'').split('\n')[0].trim()||chart.label;
+        const siV=(document.getElementById('ldr-tm-csf')||{}).value;
+        if(siV===''||siV==null){alert('紐付けるCSFを選択してください');return;}
+        csfIdx=+siV;
+        csfText=(chart.subs||[])[csfIdx]||('CSF'+(csfIdx+1));
+        const kpiV=(document.getElementById('ldr-tm-kpi')||{}).value;
+        if(kpiV!==''&&kpiV!=null)kpiIdx=+kpiV;
+      }
+    }
+  }
+  const cellStr=(csfIdx!=null)?(kpiIdx!=null?(csfIdx+'-'+kpiIdx):String(csfIdx)):null;
+
+  let newId=null;
+  if(API&&API.ready){
+    const res=await API.assignTask({title:name,kpi:chartName?csfText:'—',assigneePid:pidOf(id),teamUuid:teamMeta.uid,
+      start:startV,due:dueV,priority:pri,plannedHours:planHours,chartTitle:chartName,cell:cellStr});
+    if(res&&res.error){alert('割当失敗: '+res.error);return;}
+    if(res&&res.data)newId=res.data.id;
+  }
+  if(!MEMBER_TASKS[id])MEMBER_TASKS[id]=[];
+  MEMBER_TASKS[id].push({id:newId,name,kpi:chartName?csfText:'—',start:startD,due:dueD,startRaw:startV,dueRaw:dueV,
+    pri,status:'todo',pct:0,hours:0,planned:planHours,chart:chartName,cell:cellStr,
+    csfIdx:csfIdx!=null?csfIdx:null,kpiIdx:kpiIdx!=null?kpiIdx:null,self:false,assignerId:(window._meProfile&&window._meProfile.id)||null});
+  renderAssignedTasks();
+  closeLdrTaskModal();
+  showToast('asg-saved');
+}
+
+/* ===== リーダー タスク編集・削除 ===== */
+let _ldrEditingTask=null;  // {id, idx, memberId} … idが無いタスク(API未接続時に作成)やリアルタイム更新で
+                           // 配列が丸ごと入れ替わった場合にも対応できるよう、オブジェクト参照ではなく
+                           // id優先・indexフォールバックで都度 MEMBER_TASKS から引き直す
+function _findLdrTask(ctx){
+  if(!ctx)return null;
+  const tasks=MEMBER_TASKS[ctx.memberId]||[];
+  if(ctx.id!=null){const byId=tasks.find(x=>String(x.id)===String(ctx.id));if(byId)return byId;}
+  return tasks[ctx.idx]||null;
+}
+function openLdrEditTask(idx,memberId){
+  const tasks=MEMBER_TASKS[memberId]||[];
+  const t=tasks[idx];
+  if(!t){alert('タスクが見つかりません');return;}
+  _ldrEditingTask={id:(t.id!=null?t.id:null),idx,memberId};
+  const m=MEMBERS[memberId];
+  document.getElementById('ldr-edit-name').value=t.name||'';
+  document.getElementById('ldr-edit-start').value=t.startRaw||'';
+  document.getElementById('ldr-edit-due').value=t.dueRaw||'';
+  document.getElementById('ldr-edit-pri').value=t.pri||'md';
+  const who=t.self?'🙋 本人作成':'リーダー割当';
+  document.getElementById('ldr-edit-meta').textContent=
+    (m?m.name:'')+' ／ '+(t.kpi||'—')+' ／ 期限 '+(t.due||'—')+' ／ 作成: '+who;
+  const delConfirm=document.getElementById('ldr-edit-del-confirm');if(delConfirm)delConfirm.style.display='none';
+  const delMsg=document.getElementById('ldr-edit-del-msg');
+  if(delMsg)delMsg.textContent=t.self
+    ?'このタスクは本人が作成したものです。削除しますか？元に戻せません。'
+    :'このタスクを削除しますか？元に戻せません。';
+  document.getElementById('ldr-edit-modal').style.display='flex';
+}
+function closeLdrEditModal(){document.getElementById('ldr-edit-modal').style.display='none';_ldrEditingTask=null;}
+async function saveLdrEditTask(){
+  const ctx=_ldrEditingTask;if(!ctx)return;
+  const t=_findLdrTask(ctx);if(!t){alert('タスクが見つかりません（更新済みの可能性があります）');closeLdrEditModal();renderAssignedTasks();return;}
+  const name=val('ldr-edit-name');if(!name){alert('タスク名を入力してください');return;}
+  const startV=val('ldr-edit-start')||null,dueV=val('ldr-edit-due')||null;
+  const pri=(document.getElementById('ldr-edit-pri')||{}).value||'md';
+  const API=window.VexumAPI;
+  if(API&&API.ready&&t.id){
+    const res=await API.updateTask(t.id,{title:name,start:startV,due:dueV,priority:pri});
+    if(res&&res.error){alert('更新失敗: '+res.error);return;}
+  }
+  t.name=name;t.startRaw=startV;t.dueRaw=dueV;t.pri=pri;
+  t.start=startV?fmtDate('ldr-edit-start'):'-';t.due=dueV?fmtDate('ldr-edit-due'):'-';
+  closeLdrEditModal();
+  renderAssignedTasks();
+}
+async function doLdrDeleteTask(btn){
+  const ctx=_ldrEditingTask;if(!ctx)return;
+  const t=_findLdrTask(ctx);if(!t){closeLdrEditModal();renderAssignedTasks();return;}
+  const memberId=ctx.memberId;
+  if(btn){btn.disabled=true;btn.textContent='削除中…';}
+  const API=window.VexumAPI;
+  if(API&&API.ready&&t.id){
+    const res=await API.deleteTask(t.id);
+    if(res&&res.error){
+      alert('削除失敗: '+res.error);
+      if(btn){btn.disabled=false;btn.textContent='削除する';}
+      return;
+    }
+  }
+  const arr=MEMBER_TASKS[memberId]||[];
+  const idx=arr.indexOf(t);
+  if(idx>=0)arr.splice(idx,1);
+  closeLdrEditModal();
+  renderAssignedTasks();
+}
+
+/* ===== 割り当て済みタスクの期間フィルタ ===== */
+let _asgFromFilter='',_asgToFilter='';
+function _ensureAsgDateFilter(){
+  // 初回構築時のみ値を復元する。毎回ymdSetすると、リアルタイム更新等での再描画のたびに
+  // 入力中（未適用）の日付選択が最後に適用した値へ勝手に巻き戻ってしまう。
+  const fw=document.getElementById('asgf-from-ymd');if(fw&&!fw.children.length){fw.innerHTML=ymdHtml('asgf-from','');ymdSet('asgf-from',_asgFromFilter);}
+  const tw=document.getElementById('asgf-to-ymd');if(tw&&!tw.children.length){tw.innerHTML=ymdHtml('asgf-to','');ymdSet('asgf-to',_asgToFilter);}
+}
+function applyAsgFilter(){
+  _asgFromFilter=ymdValue('asgf-from')||'';_asgToFilter=ymdValue('asgf-to')||'';
+  _lfSave({asgFrom:_asgFromFilter,asgTo:_asgToFilter});renderAssignedTasks();
+}
+function resetAsgFilter(){
+  _asgFromFilter='';_asgToFilter='';
+  ymdClear('asgf-from');ymdClear('asgf-to');
+  ['asgf-member','asgf-status','asgf-source'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  _lfSave({asgMember:'',asgStatus:'',asgSource:'',asgFrom:'',asgTo:''});
+  renderAssignedTasks();
+}
+
 function renderAssignedTasks(){
+  _ensureAsgDateFilter();
   // メンバー絞り込みドロップダウンを自チームで構築
   const ids=EVAL_IDS.filter(id=>MEMBERS[id]);
   const mf=document.getElementById('asgf-member');
@@ -1208,25 +1514,29 @@ function renderAssignedTasks(){
   // 保存済み絞り込みの復元（初回のみ）→ 現在値を保存
   if(!window._asgfRestored){const f=_lfLoad();const ss=document.getElementById('asgf-status');const sr=document.getElementById('asgf-source');
     // 保存されたメンバーがまだ選択肢に無い間（デモ→実データ切替前）は復元を保留してリトライ
-    if(!f.asgMember||ids.indexOf(f.asgMember)>=0){window._asgfRestored=true;if(f.asgMember&&mf)mf.value=f.asgMember;if(f.asgStatus&&ss)ss.value=f.asgStatus;if(f.asgSource&&sr)sr.value=f.asgSource;}}
+    if(!f.asgMember||ids.indexOf(f.asgMember)>=0){window._asgfRestored=true;if(f.asgMember&&mf)mf.value=f.asgMember;if(f.asgStatus&&ss)ss.value=f.asgStatus;if(f.asgSource&&sr)sr.value=f.asgSource;
+      if(f.asgFrom||f.asgTo){_asgFromFilter=f.asgFrom||'';_asgToFilter=f.asgTo||'';ymdSet('asgf-from',_asgFromFilter);ymdSet('asgf-to',_asgToFilter);}}}
   const fMem=(mf||{}).value||'';
   const fSt=(document.getElementById('asgf-status')||{}).value||'';
   const fSrc=(document.getElementById('asgf-source')||{}).value||'';
-  _lfSave({asgMember:fMem,asgStatus:fSt,asgSource:fSrc});
+  _lfSave({asgMember:fMem,asgStatus:fSt,asgSource:fSrc,asgFrom:_asgFromFilter,asgTo:_asgToFilter});
   let h='',shown=0;
   ids.filter(id=>!fMem||id===fMem).forEach(id=>{
     const m=MEMBERS[id];let tasks=MEMBER_TASKS[id]||[];
     if(fSt)tasks=tasks.filter(t=>(t.status||'todo')===fSt);
     if(fSrc)tasks=tasks.filter(t=>fSrc==='self'?t.self:!t.self);
+    if(_asgFromFilter||_asgToFilter)tasks=tasks.filter(t=>inDateRange(t.dueRaw||t.startRaw,_asgFromFilter,_asgToFilter));
     h+=`<div style="padding:10px 16px;background:#FAFCFC;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);display:flex;align-items:center;gap:8px"><span class="tdot" style="background:${m.color}"></span>${m.name} <span style="font-weight:400;color:var(--text3)">（${tasks.length}件）</span></div>`;
     if(!tasks.length)h+=`<div style="padding:10px 16px;font-size:11px;color:var(--text3)">該当なし</div>`;
     tasks.forEach(t=>{const sc=statusChip(effStatus(t)),pc=priChip(t.pri);shown++;
       const chartChip=t.chart?`<span style="font-size:9px;background:#EDE9FE;color:#7C3AED;padding:1px 7px;border-radius:8px;font-weight:700">📊 ${t.chart}</span>`:'';
       const pct=t.pct!=null?t.pct:0;
       const hrs=t.pct!=null&&t.hours!=null?` ／ ${t.hours}h`:'';
-      h+=`<div id="asgtask-${t.id||''}" style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${t.name} ${chartChip}${selfChip(t)}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${hrs}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${pct}%;background:${pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)'}"></div></div><div class="pp" style="font-size:10px">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
+      const rawIdx=(MEMBER_TASKS[id]||[]).indexOf(t);
+      const editBtn=`<button class="card-btn" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();openLdrEditTask(${rawIdx},'${id}')">✏ 編集</button>`;
+      h+=`<div id="asgtask-${t.id||''}" style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${t.name} ${chartChip}${selfChip(t)}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${hrs}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${pct}%;background:${pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)'}"></div></div><div class="pp" style="font-size:10px">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span>${editBtn}</div></div>`;});
   });
-  if(!shown&&(fMem||fSt||fSrc))h+='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">絞り込み条件に該当するタスクがありません</div>';
+  if(!shown&&(fMem||fSt||fSrc||_asgFromFilter||_asgToFilter))h+='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">絞り込み条件に該当するタスクがありません</div>';
   document.getElementById('assigned-list').innerHTML=h;
 }
 function pidOf(id){return (MEMBERS[id]&&MEMBERS[id].pid)||(AVAILABLE[id]&&AVAILABLE[id].pid)||(window._memberPid&&window._memberPid[id])||id;}
