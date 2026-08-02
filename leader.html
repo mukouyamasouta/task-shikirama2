@@ -462,7 +462,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
     <div style="overflow-x:auto">
       <div id="mandala-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:560px;margin:0 auto"></div>
-      <div id="mandala-grid-simple" style="display:none;grid-template-columns:repeat(3,1fr);gap:8px;max-width:560px;margin:0 auto"></div>
+      <div id="mandala-grid-simple" style="display:none"></div>
     </div>
   </div>
 </div>
@@ -1594,7 +1594,9 @@ function openMandala(k,evalMode){
     grid.innerHTML=h;
   }else{
     // KGI+CSF8項目の3x3: チャート管理タブ(renderCmSimpleGrid)と同じ見た目に統一する（記入者ごとの色分けは廃止し、①と同じ琥珀色ハイライトへ）
-    grid.style.display='none';gridSimple.style.display='grid';
+    // ★ gridSimple自体はgrid化しない。renderMandalaSimpleが内部で独自のgrid divを
+    //   差し込むため、外側も同時にgrid化すると入れ子で1マス分に押し込められ幅が潰れる
+    grid.style.display='none';gridSimple.style.display='block';
     const API=window.VexumAPI;
     const tasks=_ldTasksFor(k);
     if(API&&API.renderMandalaSimple){
@@ -2085,7 +2087,7 @@ async function renderMemberEval(){
   if(charts.length){
     chartSelHTML=`<div style="background:#FAFCFC;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap"><label class="fl" style="margin:0">評価対象の期間（チャート）</label><select class="fs" style="width:auto;min-width:280px" onchange="onEvalChartChange(this.value)">${charts.map(c=>`<option value="${c.id}" ${c.id===_evalChartId?'selected':''}>${c.period||c.scope_label||'期間未設定'}${c.name?' ／ '+c.name:''}</option>`).join('')}</select>${selfEval?'<span style="font-size:11px;color:var(--amber);font-weight:700">📝 本人自己評価あり</span>':'<span style="font-size:11px;color:var(--text3)">自己評価なし</span>'}</div>`;
   }
-  let h=`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF）</div><div class="card-sub">${d.name} ／ ${d.team}</div></div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMandala('${id}',false)">🧿 全体を見る</button><button class="card-btn" style="background:var(--accent);color:#fff" onclick="openMandala('${id}',true)">🖊 曼荼羅で評価</button><button class="card-btn" style="background:var(--accent-l);color:var(--accent);font-weight:700" onclick="toggleEvalinMnd()">🔷 曼荼羅形式</button></div></div>${chartSelHTML}<div id="evalin-mnd-wrap" style="display:none;padding:14px;overflow-x:auto;border-bottom:1px solid var(--border)"></div><div class="card-body">`;
+  let h=`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF）</div><div class="card-sub">${d.name} ／ ${d.team}</div></div><div style="display:flex;gap:6px"><button class="card-btn" style="background:var(--accent);color:#fff" onclick="openMandala('${id}',true)">🖊 曼荼羅で評価</button><button class="card-btn" style="background:var(--accent-l);color:var(--accent);font-weight:700" onclick="toggleEvalinMnd()">🔷 曼荼羅形式</button></div></div>${chartSelHTML}<div id="evalin-mnd-wrap" style="display:none;padding:14px;overflow-x:auto;border-bottom:1px solid var(--border)"></div><div class="card-body">`;
   h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-kgi">KGI</span><span class="eval-goal">${(d.center||'').replace(/\n/g,' ')}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'kgi',-1)}</div><textarea class="eval-cmt" rows="2" placeholder="KGIへの評価コメント…" oninput="saveMeval('${id}','kgi',-1,this.value)">${e.kgi.comment}</textarea>${selfKgi}</div>`;
   for(let si=0;si<8;si++)h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-csf">CSF-${si+1}</span><span class="eval-goal">${d.subs[si]}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'csf',si)}</div><textarea class="eval-cmt" rows="2" placeholder="CSF-${si+1}への評価コメント…" oninput="saveMeval('${id}','csf',${si},this.value)">${e.csf[si].comment}</textarea>${selfCsf(si)}</div>`;
   h+=`</div></div>`;
