@@ -1252,6 +1252,18 @@ function resetReportForm(){
         <input type="range" id="te-prog" min="0" max="100" value="0" style="width:100%;accent-color:var(--accent)" oninput="document.getElementById('te-prog-val').textContent=this.value+'%'"></div>
       <div class="fg"><label class="fl">本日の作業時間(h)</label><input class="fi" id="te-hours" type="number" min="0" step="0.5" placeholder="0"></div>
     </div>
+    <!-- 累計作業時間表示 -->
+    <div id="te-total-hours-wrap" style="margin-bottom:14px;background:linear-gradient(135deg,#ecfdf5 0%,#d1fae5 100%);border:1.5px solid var(--green);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">⏱</span>
+      <div style="flex:1">
+        <div style="font-size:10px;color:#065f46;font-weight:700;letter-spacing:.3px;margin-bottom:2px">このタスクの累計作業時間</div>
+        <div style="display:flex;align-items:baseline;gap:4px">
+          <span id="te-total-hours-val" style="font-size:22px;font-weight:900;color:#059669;line-height:1">0</span>
+          <span style="font-size:13px;font-weight:700;color:#059669">h</span>
+          <span id="te-total-hours-sub" style="font-size:10px;color:#6b7280;margin-left:4px"></span>
+        </div>
+      </div>
+    </div>
     <div class="fg"><label class="fl">メモ・コメント</label>
       <textarea class="fi" id="te-note" rows="3" placeholder="進捗状況・メモ・リーダーへの報告…" style="resize:vertical;font-size:12px"></textarea></div>
     <div style="display:flex;gap:8px;margin-top:4px">
@@ -3677,7 +3689,20 @@ function openTaskEdit(rid){
   document.getElementById('te-name').value=a.name||'';
   const tes=document.getElementById('te-start');if(tes)tes.value=a.startRaw||'';
   const ted=document.getElementById('te-due');if(ted)ted.value=a.dueRaw||'';
-  document.getElementById('te-meta').textContent=(a.kpi&&a.kpi!=='—'?'関連: '+a.kpi+' ／ ':'')+'期限 '+(a.end||'—')+' ／ 合計 '+(a.hours!=null?a.hours:0)+'h';
+  document.getElementById('te-meta').textContent=(a.kpi&&a.kpi!=='—'?'関連: '+a.kpi+' ／ ':'')+'期限 '+(a.end||'—');
+  // 累計作業時間を本日の作業時間欄の下に見やすく表示
+  const teHoursTotal = a.hours!=null ? a.hours : 0;
+  document.getElementById('te-total-hours-val').textContent = teHoursTotal;
+  // 本日入力ぶんをリアルタイムで加算表示
+  const teHoursInput = document.getElementById('te-hours');
+  const teTotalWrap = document.getElementById('te-total-hours-wrap');
+  const teTotalSub = document.getElementById('te-total-hours-sub');
+  teTotalSub.textContent = '';
+  teHoursInput.oninput = function(){
+    const added = parseFloat(this.value)||0;
+    document.getElementById('te-total-hours-val').textContent = Math.round((teHoursTotal + added)*10)/10;
+    teTotalSub.textContent = added > 0 ? '（本日 +'+added+'h 含む）' : '';
+  };
   const pg=a.pct||0;
   document.getElementById('te-prog').value=pg;
   document.getElementById('te-prog-val').textContent=pg+'%';
