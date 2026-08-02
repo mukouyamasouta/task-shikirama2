@@ -214,14 +214,6 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div class="card-body" id="assigned-list" style="padding:0"></div>
   </div>
 
-  <div class="card">
-    <div class="card-hd"><div><div class="card-title">個人チャートに記入して割当</div>
-      <div class="card-sub">KGI/CSFを直接書き込み「この内容を任せる」</div></div></div>
-    <div class="card-body">
-      <div class="fg"><label class="fl">対象メンバー</label><select class="fs" id="chartedit-member"></select></div>
-      <button class="f-submit" style="width:100%;background:var(--text3)" onclick="openChartEditor(document.getElementById('chartedit-member').value)">🧿 チャートを開いて記入</button>
-    </div>
-  </div>
   <span class="toast" id="asg-saved">✅ 保存しました</span>
 </div>
 
@@ -2552,7 +2544,7 @@ function populateSelects(){
     const m=MEMBERS[id];const hasSelf=m&&m.pid&&window._selfEvalMembers[m.pid];
     return `<option value="${id}">${m.name}（${m.role}）${hasSelf?' 📝自己評価あり':''}</option>`;
   }).join('');
-  ['asg-member','evalin-member','chartedit-member'].forEach(sid=>{const s=document.getElementById(sid);if(s)s.innerHTML=opts;});
+  ['asg-member','evalin-member'].forEach(sid=>{const s=document.getElementById(sid);if(s)s.innerHTML=opts;});
 }
 // 評価期間の選択肢を生成（今年基準: Q1-Q4 / 各月 / 年度）※評価タブの期間絞り込み用
 async function updateSelfEvalMarkers(){
@@ -2629,9 +2621,23 @@ let _ibCur=null,_ibSel=null;
 // リーダー受信ボックスに出す通知の種別（日報・自分が割り当てたタスクの進捗・メンバーの評価提出のみ）。
 // task_done を含めるのは、過去にDBへ入った完了通知を引き続き閲覧できるようにするため（今後は生成されない）。
 const LDR_NOTIF_TYPES=['report_submitted','report_started','task_progress','task_done','evaluation_submitted'];
+// 連続する同一種類・同一本人・同一対象（タスク/日報/評価）の通知を1件にまとめる。
+// 例: 同じタスクの進捗が短時間に何度も更新されると同じ内容の通知が連続で積み上がるため、
+// 直前と「type + actor_id + ref_id」が一致する分は表示上スキップし、最新の1件だけ残す。
+// リストは created_at 降順（新しい順）なので、直前＝より新しい方を残す形になる。
+function _ldDedupConsecutiveNotifs(list){
+  const out=[];let prevKey=null;
+  (list||[]).forEach(n=>{
+    const key=n.type+'|'+(n.actor_id||'')+'|'+(n.ref_id||'');
+    if(key===prevKey)return;
+    out.push(n);prevKey=key;
+  });
+  return out;
+}
 function updateInboxBadge(){
   const b=document.getElementById('inbox-badge');if(!b)return;
-  const n=INBOX.filter(s=>s.status!=='done').length+((window._leaderNotifs||[]).filter(x=>LDR_NOTIF_TYPES.includes(x.type)&&!x.read).length);
+  const deduped=_ldDedupConsecutiveNotifs((window._leaderNotifs||[]).filter(x=>LDR_NOTIF_TYPES.includes(x.type)));
+  const n=INBOX.filter(s=>s.status!=='done').length+deduped.filter(x=>!x.read).length;
   b.textContent=n;b.style.display=n?'':'none';
 }
 // pid（notifications.actor_id）→ リーダー画面のメンバーキーへの逆引き
@@ -2675,7 +2681,7 @@ function _ldGotoNotif(n){
 // メンバーからの記入（日報提出・タスク進捗・評価提出）を受信ボックスに表示
 function renderLeaderNotifs(){
   const con=document.getElementById('inbox-notif-list');if(!con)return;
-  const ns=(window._leaderNotifs||[]).filter(n=>LDR_NOTIF_TYPES.includes(n.type));
+  const ns=_ldDedupConsecutiveNotifs((window._leaderNotifs||[]).filter(n=>LDR_NOTIF_TYPES.includes(n.type)));
   window._lnFiltered=ns; // クリック時に_ldGotoNotifへ渡すための参照（インラインonclickはJSONを埋め込まず添字経由で引く）
   const cnt=document.getElementById('inbox-notif-count');if(cnt)cnt.textContent=ns.length?ns.length+'件':'';
   if(!ns.length){con.innerHTML='<div style="padding:14px;text-align:center;color:var(--text3);font-size:12px">まだ通知はありません</div>';return;}
@@ -2882,11 +2888,15 @@ window.VEXUM_PAGE_ROLE='leader';  // 複数ロール時に currentProfile がリ
 window.vxNotifSource=function(){
   const out=[];
   // メンバーからの通知（日報提出・自分が割り当てたタスクの進捗）= notifications テーブル由来（最優先で表示）
-  // ★ 受信ボックスタブ（renderLeaderNotifs）と同じ LDR_NOTIF_TYPES で絞り込む。
-  //   ここだけ絞り込みを忘れると、タブでは非表示の通知がヘッダーの🔔には残るという食い違いになる。
+  // ★ 受信ボックスタブ（renderLeaderNotifs）と同じ LDR_NOTIF_TYPES・連続重複除去で絞り込む。
+  //   ここだけ絞り込みを忘れると、タブでは非表示/まとめられた通知がヘッダーの🔔には
+  //   別々に残るという食い違いになる。
   if(Array.isArray(window._leaderNotifs)){
     const ntfMeta={task_done:['✅','#D1FAE5','var(--green)','assign'],task_progress:['📈','#DBEAFE','#1D4ED8','assign'],report_submitted:['📓','#EDE9FE','#7C3AED','report'],report_started:['🌅','#FFF7ED','#C2410C','report'],task_assigned:['📋','#DBEAFE','#1D4ED8','assign'],task_late:['⚠','#FEE2E2','var(--red)','assign'],chart_edit:['✏','#FEF3C7','#D97706','dashboard'],evaluation_received:['⭐','#FDF4FF','#7E22CE','dashboard'],evaluation_submitted:['📝','#ECFDF5','#059669','evalin']};
-    window._leaderNotifs.filter(n=>LDR_NOTIF_TYPES.includes(n.type)).slice(0,8).forEach(n=>{
+    const _ntfDeduped=(typeof _ldDedupConsecutiveNotifs==='function')
+      ?_ldDedupConsecutiveNotifs(window._leaderNotifs.filter(n=>LDR_NOTIF_TYPES.includes(n.type)))
+      :window._leaderNotifs.filter(n=>LDR_NOTIF_TYPES.includes(n.type));
+    _ntfDeduped.slice(0,8).forEach(n=>{
       const mt=ntfMeta[n.type]||['🔔','#F3F4F6','var(--text3)','dashboard'];
       out.push({icon:mt[0],bg:mt[1],color:mt[2],
         text:(n.actor_name?n.actor_name+'：':'')+(n.body||n.title||'通知'),
