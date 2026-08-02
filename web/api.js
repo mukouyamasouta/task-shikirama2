@@ -249,16 +249,18 @@
           if (t2) teamUuid = t2.id;
         }
         if (!teamUuid) {
-          // 3. team_members.role_in_team='leader' で照合
-          var tm0 = raw.team_members.filter(function(m){ return m.profile_id === me.id; });
-          var lead = tm0.filter(function(m){ return m.role_in_team === 'leader'; })[0] || tm0[0];
-          if (lead) teamUuid = lead.team_id;
+          // 3. team_members.role_in_team='leader' で照合。
+          //    ★ role_in_team!=='leader'（一般メンバー行）へは絶対にフォールバックしないこと。
+          //    フォールバックすると、このリーダーが別チームに単なるメンバーとして
+          //    行を持っていた場合にそのチームのteam_idを誤採用し、
+          //    無関係な他チームの人が評価管理タブ等に丸ごと表示される事故になる。
+          var tm0 = raw.team_members.filter(function(m){ return m.profile_id === me.id && m.role_in_team === 'leader'; });
+          if (tm0[0]) teamUuid = tm0[0].team_id;
         }
         if (!teamUuid) {
-          // 4. 同メール全profileでteam_members照合
+          // 4. 同メール全profileでteam_members照合（同上の理由でrole_in_team='leader'のみ許可）
           var myPids2 = raw.profiles.filter(function(p){ return p.email === me.email; }).map(function(p){ return p.id; });
-          var tm1 = raw.team_members.filter(function(m){ return myPids2.indexOf(m.profile_id) >= 0 && m.role_in_team === 'leader'; })[0]
-                 || raw.team_members.filter(function(m){ return myPids2.indexOf(m.profile_id) >= 0; })[0];
+          var tm1 = raw.team_members.filter(function(m){ return myPids2.indexOf(m.profile_id) >= 0 && m.role_in_team === 'leader'; })[0];
           if (tm1) teamUuid = tm1.team_id;
         }
       }
@@ -1009,12 +1011,28 @@
     if (existing) {
       var u = await sb.from('evaluations').update(row).eq('id', existing.id);
       if (u.error) return { error: friendlyErr(u.error.message) };
+      if (row.submitted) { try { await notifyEvalSubmitted(existing.id, row.period); } catch (e) {} }
       return { id: existing.id, submitted: row.submitted };
     } else {
       var ins = await sb.from('evaluations').insert(row).select().single();
       if (ins.error) return { error: friendlyErr(ins.error.message) };
+      if (row.submitted) { try { await notifyEvalSubmitted(ins.data.id, row.period); } catch (e) {} }
       return { id: ins.data.id, submitted: row.submitted };
     }
+  }
+  // 自己評価の「提出する（確定）」をリーダーへ通知（下書き保存では通知しない）
+  async function notifyEvalSubmitted(evalId, period) {
+    if (!sb) return;
+    var me = await currentProfile(); if (!me) return;
+    var ldr = await _getLeaderForProfile(me.id);
+    if (!ldr.leaderId) return;
+    try {
+      await sb.from('notifications').insert({
+        to_user_id: ldr.leaderId, to_team_id: ldr.teamId, type: 'evaluation_submitted',
+        title: '評価提出', body: (period ? period + ' の' : '') + '自己評価が提出されました',
+        actor_id: me.id, actor_name: me.full_name, ref_id: evalId || null
+      });
+    } catch (e) { console.warn('[VEXUM notify] notifications insert失敗 (evaluation_submitted):', e); }
   }
   // 曼荼羅チャートの部分更新（KPI追記・期間変更など）
   async function updateChart(id, patch) {
