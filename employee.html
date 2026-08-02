@@ -4731,11 +4731,33 @@ function vexumLogout(){
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}
   // 別ユーザーでログインしたら前ユーザーの localStorage（vexum_*）を一掃する
   // → 新規アカウントに前任者のタスク・進捗・未送信キューが残らない（バグ2対策）
-  function clearOtherUserData(currentProfileId){
+  // ★ マルチロール対応: currentProfile()は画面ごと(window.VEXUM_PAGE_ROLE)に
+  //   「リーダー用profile」「従業員用profile」という別々のUUIDを返すため、
+  //   profile.idでの比較では同一人物のロール切替まで「別ユーザー」と誤判定してしまう
+  //   （リーダー⇄従業員紐づけが画面遷移のたびに消える原因だった）。
+  //   判定基準をemail（大文字小文字無視）に変更し、本当に別人がログインした時だけクリアする。
+  function clearOtherUserData(currentProfileId,currentEmail){
     try{
+      var prevEmail=localStorage.getItem('vexum_last_profile_email');
       var prevId=localStorage.getItem('vexum_last_profile_id');
-      if(prevId&&currentProfileId&&prevId!==currentProfileId){
-        Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id';}).forEach(function(k){localStorage.removeItem(k);});
+      var isDifferentUser;
+      if(prevEmail&&currentEmail){
+        // 通常運用: emailの一致で判定する（同一人物のロール切替では誤ってクリアしない）
+        isDifferentUser=prevEmail.toLowerCase()!==currentEmail.toLowerCase();
+      }else if(!prevEmail&&!prevId){
+        // 本当に初回アクセス（比較対象が無い）
+        isDifferentUser=false;
+      }else{
+        // email記録がまだ無い場合（本修正の適用直後で旧コードのvexum_last_profile_idしか
+        // 無い場合／プロフィールにemailが無い異常系）の安全側フォールバック。
+        // 一度だけprofile.idで判定するため同一人物のロール切替でも1回だけ再クリアされ得るが、
+        // このタイミングでvexum_last_profile_emailが記録されるため以降は正しく判定される。
+        // ★ここを「別ユーザーとみなさない」側に倒すと、本当に別人が入れ替わった場合に
+        //   前ユーザーのvexum_linked_employee_id等が残ってしまう（セキュリティ上の後退）。
+        isDifferentUser=!!(prevId&&currentProfileId&&prevId!==currentProfileId);
+      }
+      if(isDifferentUser){
+        Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id'&&k!=='vexum_last_profile_email';}).forEach(function(k){localStorage.removeItem(k);});
         // 別ユーザーに切替: スクリプトロード時に復元済みの旧ユーザーの絞り込みがメモリに残るため、
         // デフォルトへ戻してから（空になった）localStorageで再復元する
         try{
@@ -4753,6 +4775,7 @@ function vexumLogout(){
         }catch(e){}
       }
       if(currentProfileId)localStorage.setItem('vexum_last_profile_id',currentProfileId);
+      if(currentEmail)localStorage.setItem('vexum_last_profile_email',currentEmail);
     }catch(e){}
   }
   // リーダーから「従業員画面に切り替え」した場合の代理表示用
@@ -4793,7 +4816,7 @@ function vexumLogout(){
   }
   API.currentProfile().then(function(p){
     if(!p){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); return; }
-    clearOtherUserData(p.id);  // 別ユーザーなら前ユーザーのLSを一掃
+    clearOtherUserData(p.id,p.email);  // 別ユーザー(email基準)なら前ユーザーのLSを一掃
     try{_linkedEmp=localStorage.getItem('vexum_linked_employee_id');_curRole=localStorage.getItem('vexum_current_role');}catch(e){}
     window._meAuthProfile=p;
     // アクセス再検証: DB上で 'member' ロールを実際に保有しているか毎回確認（権限削除を即反映）

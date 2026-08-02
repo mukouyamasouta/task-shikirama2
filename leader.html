@@ -148,7 +148,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="sb-item" onclick="swTab('assign',this);renderAssignedTasks()"><span class="sb-icon">📋</span>タスク割当</button>
     <button class="sb-item" onclick="swTab('inbox',this);renderInbox()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="inbox-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('teamedit',this);renderTeamEdit()"><span class="sb-icon">⚙</span>チーム編集</button>
-    <button class="sb-item" onclick="swTab('evalin',this);renderMemberEval();renderEvalPeriodTasks()"><span class="sb-icon">📝</span>メンバー評価入力</button>
+    <button class="sb-item" onclick="swTab('evalin',this);renderMemberEval()"><span class="sb-icon">📝</span>メンバー評価入力</button>
     <button class="sb-item" onclick="swTab('evalrec',this);renderEvalRec()"><span class="sb-icon">📊</span>評価記録</button>
     <button class="sb-item" onclick="swTab('report',this);renderReports()"><span class="sb-icon">📒</span>日報<span class="sb-badge">6</span></button>
     <button class="sb-item" onclick="swTab('submissions',this);renderSubmissions()"><span class="sb-icon">📥</span>提出物（工数）</button>
@@ -320,21 +320,18 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="sec-title">メンバー評価入力 <span style="font-size:11px;font-weight:400;color:var(--text3)">曼荼羅チャートのKGI・CSFを★5段階＋コメントで評価</span></div>
   <div class="card" style="margin-bottom:16px">
     <div class="card-body" style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
-      <div style="flex:1;min-width:200px"><label class="fl">評価するメンバー</label><select class="fs" id="evalin-member" onchange="renderMemberEval();renderEvalPeriodTasks()"></select></div>
+      <div style="flex:1;min-width:200px"><label class="fl">評価するメンバー</label><select class="fs" id="evalin-member" onchange="renderMemberEval()"></select></div>
       <div><label class="fl" style="margin-bottom:4px;display:block">評価期間（開始〜期限）</label>
         <div style="display:flex;align-items:flex-end;gap:6px">
           <div id="evalin-from-ymd"></div>
           <span style="align-self:flex-end;padding-bottom:6px;color:var(--text3)">〜</span>
           <div id="evalin-to-ymd"></div>
-          <button class="f-btn active" style="align-self:flex-end" onclick="renderEvalPeriodTasks()">絞り込む</button>
         </div>
       </div>
       <button class="f-submit" onclick="saveMemberEval()">💾 評価を保存</button>
       <span class="toast" id="evalin-saved">✅ 評価を保存しました（評価記録に反映）</span>
     </div>
   </div>
-  <!-- 選択期間のタスク・工数（評価の参考） -->
-  <div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">📋 選択期間のタスク・工数（参考）</div><div class="card-sub" id="evalp-sub">選択した評価期間で集計</div></div><span id="evalp-total" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div><div class="card-body" id="evalp-tasks" style="padding:0"><div style="padding:14px;color:var(--text3);font-size:12px">メンバーと期間を選択してください</div></div></div>
   <div style="background:#F0FDF4;border:1px solid #10B981;border-radius:8px;padding:9px 14px;margin-bottom:14px;font-size:11px;color:#065F46;display:flex;gap:14px;flex-wrap:wrap;align-items:center">
     <span style="font-weight:700">⭐ 星をクリックで5段階評価</span><span>KGI・各CSF・割当タスクごとにコメントを記入できます</span>
   </div>
@@ -571,7 +568,6 @@ const MEMBER_TASKS={
   ]
 };
 /* 日報（メンバーごと・日付ごと） */
-const COND={great:['😀','とても良い','#10B981'],good:['🙂','良い','#06B6D4'],normal:['😐','普通','#F59E0B'],bad:['😟','やや不調','#EF4444']};
 const REPORTS={
   nakamura:[
     {date:'2025-05-07',hours:'8.0h',done:'テレアポ40件・アポ3件獲得。',plan:'訪問準備とルート確認。',issue:'特になし。',cond:'good'},
@@ -2016,24 +2012,6 @@ function ensureEvalPeriodOptions(){
   const efw=document.getElementById('evalin-from-ymd');if(efw&&!efw.children.length)efw.innerHTML=ymdHtml('evalin-from','');
   const etw=document.getElementById('evalin-to-ymd');if(etw&&!etw.children.length)etw.innerHTML=ymdHtml('evalin-to','');
 }
-// 選択メンバー×選択期間のタスクと工数を表示（評価の参考）
-function renderEvalPeriodTasks(){
-  ensureEvalPeriodOptions();
-  const id=(document.getElementById('evalin-member')||{}).value;
-  const fromD=ymdValue('evalin-from')||'';
-  const toD=ymdValue('evalin-to')||'';
-  const con=document.getElementById('evalp-tasks');if(!con)return;
-  if(!id||!MEMBERS[id]){con.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">メンバーを選択してください</div>';return;}
-  let tasks=(MEMBER_TASKS[id]||[]);
-  const inPeriod=(fromD||toD)?tasks.filter(t=>inDateRange(t.dueRaw||t.startRaw,fromD,toD)):tasks;
-  document.getElementById('evalp-sub').textContent=(fromD||toD)?((fromD||'')+'〜'+(toD||'')+' のタスク'):'全期間のタスク';
-  const totalH=inPeriod.reduce((a,t)=>a+(t.hours||0),0);
-  const doneN=inPeriod.filter(t=>t.status==='done'||((t.pct||0)>=100)).length;
-  document.getElementById('evalp-total').textContent='合計 '+(Math.round(totalH*10)/10)+'h ／ 完了 '+doneN+'/'+inPeriod.length;
-  if(!inPeriod.length){con.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">この期間の割当タスクはありません</div>';return;}
-  con.innerHTML=inPeriod.map(t=>{const sc=statusChip(effStatus(t)),pct=t.pct!=null?t.pct:0;
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-bottom:1px solid var(--border)"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}${selfChip(t)}</div><div style="font-size:10px;color:var(--text3)">${t.kpi}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><span style="font-size:12px;font-weight:700;color:var(--accent)">${t.hours||0}h</span><span style="font-size:10px">${pct}%</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;}).join('');
-}
 async function renderMemberEval(){
   const sel=document.getElementById('evalin-member');if(!sel)return;const id=sel.value;if(!id)return;
   ensureEvalPeriodOptions();
@@ -2347,7 +2325,7 @@ function renderReportCalendar(){
     const r=repByDate(_repMember,ds);
     const sel=ds===_repSelDate;
     if(r){
-      const c=COND[r.cond]||COND.normal;
+      const ac=r.submitted?'var(--accent)':'#F59E0B';
       const hasMorning=_hasMorningDataLd(r);
       // 始業（今日やること）と終業（達成タスク）を分けて冒頭のみ表示し、全文はtitle属性に入れる
       let rows='';
@@ -2357,8 +2335,8 @@ function renderReportCalendar(){
       if(hasMorning)titleParts.push('🌅 今日やること: '+(r.planTasks||'（未記入）'));
       if(r.submitted)titleParts.push('✅ 達成タスク: '+(r.done||'（未記入）'));
       const titleText=titleParts.length?titleParts.join('\n'):(r.done||'');
-      h+=`<div onclick="showReportDetail('${ds}')" style="min-height:64px;border:1.5px solid ${sel?c[2]:'var(--border)'};border-radius:8px;padding:5px;cursor:pointer;background:${sel?c[2]+'1A':'#fff'};transition:.12s" title="${titleText}">
-        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;font-weight:700;color:var(--text2)">${day}</span><span style="font-size:13px">${c[0]}</span></div>
+      h+=`<div onclick="showReportDetail('${ds}')" style="min-height:64px;border:1.5px solid ${sel?ac:'var(--border)'};border-radius:8px;padding:5px;cursor:pointer;background:${sel?ac+'1A':'#fff'};transition:.12s" title="${titleText}">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;font-weight:700;color:var(--text2)">${day}</span><span style="font-size:8px;font-weight:700;color:${ac}">${r.submitted?'提出':'予定'}</span></div>
         <div style="font-size:8.5px;color:var(--text3);margin-top:1px">${r.hours}</div>
         ${rows}
       </div>`;
@@ -2366,9 +2344,6 @@ function renderReportCalendar(){
       h+=`<div style="min-height:64px;border:1px solid #F3F4F6;border-radius:8px;padding:5px;background:#FAFCFC"><span style="font-size:10px;color:var(--text3)">${day}</span></div>`;
     }
   }
-  h+='</div>';
-  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:10px;color:var(--text2)">';
-  Object.values(COND).forEach(c=>h+=`<span style="display:flex;align-items:center;gap:4px"><span>${c[0]}</span>${c[1]}</span>`);
   h+='</div>';
   document.getElementById('report-calendar').innerHTML=h;
 }
@@ -2387,31 +2362,36 @@ function showReportDetail(ds){
   _repSelDate=ds;renderReportCalendar();
   const m=MEMBERS[_repMember];const r=repByDate(_repMember,ds);
   if(!r){document.getElementById('report-detail').innerHTML='';return;}
-  const c=COND[r.cond]||COND.normal;
   const p=ds.split('-');const dow=['日','月','火','水','木','金','土'][new Date(+p[0],+p[1]-1,+p[2]).getDay()];
-  // 始業（予定: plan_tasks/plan_hours）と終業（実績: done/plan/issue/actual_hours・goal=出退勤実績）を判別して表示する。
+  // 始業（予定: plan_tasks/plan_hours）と終業（実績: done/actual_hours・goal=出退勤実績）を判別して表示する。
   // employee.html側の始業のみ提出（終業前）の日報が、リーダー側でも「始業のみ（予定）」として見える。
+  // 表示構成はemployee.html showPReportDetail()と同じ（出退勤・工数・振り返りの3項目）に統一。
   const pt=String(r.planHours||'').split('~');
   const at=String(r.goal||'').split('~');  // 出退勤の実績（employee.html _prepGather の actualTimes と同じ形式）
   const hasMorning=_hasMorningDataLd(r);
-  const morningOnly=!r.submitted&&hasMorning;
+  const pw=_workHoursLd(pt[0],pt[1]),aw=_workHoursLd(at[0],at[1]);
   const statusLabel=r.submitted?'終業提出済み':(hasMorning?'始業のみ（予定・終業未提出）':'—');
   const morning=hasMorning?`<div style="grid-column:1/2;background:#FFF7ED;border:1px solid #FDBA74;border-radius:6px;padding:8px 10px">
-      <div style="font-size:10px;font-weight:800;color:#C2410C;margin-bottom:4px">🌅 始業（予定）</div>
-      ${(pt[0]||pt[1])?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>出退勤予定:</b> ${pt[0]||'—'}〜${pt[1]||'—'}${_workHoursLd(pt[0],pt[1])!=null?'（'+_workHoursLd(pt[0],pt[1])+'h）':''}</div>`:''}
-      <div style="font-size:11px;color:var(--text2);line-height:1.6;white-space:pre-wrap"><b>今日やること:</b> ${r.planTasks||'—'}</div>
+      <div style="font-size:10px;font-weight:800;color:#C2410C;margin-bottom:4px">始業（予定）</div>
+      ${(pt[0]||pt[1])?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>出退勤:</b> ${pt[0]||'—'}〜${pt[1]||'—'}${pw!=null?'（'+pw+'h）':''}</div>`:''}
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;white-space:pre-wrap"><b>やること:</b> ${r.planTasks||'—'}</div>
     </div>`:'';
-  const evening=r.submitted?`<div style="grid-column:${hasMorning?'2/3':'1/3'}">
-      ${(at[0]||at[1])?`<div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:6px"><b>出退勤実績:</b> ${at[0]||'—'}〜${at[1]||'—'}${_workHoursLd(at[0],at[1])!=null?'（'+_workHoursLd(at[0],at[1])+'h）':''}</div>`:''}
-      <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:3px">✅ 本日の達成タスク</div><div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px;white-space:pre-wrap">${r.done||'—'}</div>
-      <div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:3px">📅 明日の予定</div><div style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${r.plan||'—'}</div>
+  const evening=r.submitted?`<div style="grid-column:${hasMorning?'2/3':'1/3'};background:#EFF6FF;border:1px solid #93C5FD;border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:800;color:#1D4ED8;margin-bottom:4px">終業（実績）</div>
+      ${(at[0]||at[1])?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>出退勤:</b> ${at[0]||'—'}〜${at[1]||'—'}${aw!=null?'（'+aw+'h）':''}</div>`:''}
+      <div style="font-size:11px;color:var(--text2);line-height:1.6"><b>工数:</b> ${r.hours&&r.hours!=='—'?r.hours:'—'}</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;white-space:pre-wrap"><b>振り返り:</b> ${r.done&&r.done!=='—'?r.done:'—'}</div>
     </div>`:(hasMorning?`<div style="grid-column:2/3;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:11px;text-align:center;background:#FAFAFA;border:1px dashed var(--border);border-radius:6px">終業（実績）はまだ提出されていません</div>`:'');
-  const issue=r.submitted?`<div style="grid-column:1/3"><div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:3px">⚠ 課題・相談事項</div><div style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${r.issue||'—'}</div></div>`:'';
+  // 旧フォーム・デモデータ等でr.plan/r.issueに実データが残っている場合のみ、控えめな参考表示として残す
+  // （現行の日報フォームはこの2項目を収集しないため、通常は表示されない）
+  const refParts=[];
+  if(r.plan&&r.plan!=='—')refParts.push(`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>参考：明日の予定:</b> ${r.plan}</div>`);
+  if(r.issue&&r.issue!=='—')refParts.push(`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>参考：課題・相談:</b> ${r.issue}</div>`);
+  const ref=refParts.length?`<div style="grid-column:1/3;background:#FAFAFA;border:1px dashed var(--border);border-radius:6px;padding:8px 10px">${refParts.join('')}</div>`:'';
   const h=`<div class="card"><div class="card-hd" style="border-left:4px solid ${m.color}">
       <div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:8px;background:${m.color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px">${m.name.charAt(0)}</div><div><div class="card-title">${m.name} <span class="badge ${m.role==='リーダー'?'b-manager':'b-employee'}" style="margin-left:2px">${m.role}</span></div><div class="card-sub">${+p[0]}/${+p[1]}/${+p[2]} (${dow}) ／ 稼働 ${r.hours} ／ ${statusLabel}</div></div></div>
-      <span style="font-size:12px;font-weight:700;color:${c[2]}">${c[0]} ${c[1]}</span>
     </div><div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      ${morning}${evening}${issue}
+      ${morning}${evening}${ref}
     </div></div>`;
   document.getElementById('report-detail').innerHTML=h;
 }
@@ -2640,9 +2620,13 @@ function updateInboxBadge(){
   const n=INBOX.filter(s=>s.status!=='done').length+deduped.filter(x=>!x.read).length;
   b.textContent=n;b.style.display=n?'':'none';
 }
-// pid（notifications.actor_id）→ リーダー画面のメンバーキーへの逆引き
+// pid（notifications.actor_id）→ リーダー画面のメンバーキーへの逆引き。
+// マルチロール対応: window._ldPidToKey（loadLeaderDataが構築する、その人物の全profile_idを
+// 含む逆引きマップ）を優先する。MEMBERS[k].pidは代表profile1件のみのため、日報のauthor_id等が
+// 別ロールのprofile_idになるケースを取りこぼす（従来の走査のみでは失敗しうる）。
 function _ldKeyForPid(pid){
   if(!pid)return null;
+  if(window._ldPidToKey&&window._ldPidToKey[pid])return window._ldPidToKey[pid];
   const ks=Object.keys(MEMBERS||{});
   return ks.find(k=>(MEMBERS[k]||{}).pid===pid)||null;
 }
@@ -2669,9 +2653,22 @@ function _ldGotoNotif(n){
   if(n.type==='evaluation_submitted'){
     gotoTab('evalin');
     if(mk){
-      setTimeout(()=>{
+      setTimeout(async()=>{
         const sel=document.getElementById('evalin-member');
-        if(sel){sel.value=mk;if(typeof renderMemberEval==='function')renderMemberEval();if(typeof renderEvalPeriodTasks==='function')renderEvalPeriodTasks();}
+        if(!sel)return;
+        sel.value=mk;
+        // 通知に紐づく評価(ref_id)からchart_idを解決し、提出された当該チャート・期間を選択してから描画する
+        // （未解決のままだとrenderMemberEvalがそのメンバーの先頭チャートを既定表示してしまい、
+        //   複数チャートを持つメンバーで「対応する評価チャート」と食い違う）
+        const API=window.VexumAPI;
+        if(n.ref_id&&API&&API.ready&&API.sb){
+          try{
+            const r=await API.sb.from('evaluations').select('chart_id').eq('id',n.ref_id).limit(1);
+            const cid=r.data&&r.data[0]&&r.data[0].chart_id;
+            if(cid)_evalChartId=cid;
+          }catch(e){}
+        }
+        if(typeof renderMemberEval==='function')await renderMemberEval();
       },150);
     }
     return;
@@ -2936,19 +2933,42 @@ function vexumLogout(){
   });
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}
-  // 別ユーザーでログインしたら前ユーザーの localStorage（vexum_*）を一掃（バグ2対策）
-  function clearOtherUserData(currentProfileId){
+  // 別ユーザーでログインしたら前ユーザーの localStorage（vexum_*）を一掃（バグ2対策）。
+  // ★ マルチロール対応: currentProfile()は画面ごと(window.VEXUM_PAGE_ROLE)に
+  //   「リーダー用profile」「従業員用profile」という別々のUUIDを返すため、
+  //   profile.idでの比較では同一人物のロール切替まで「別ユーザー」と誤判定してしまう
+  //   （リーダー⇄従業員紐づけが画面遷移のたびに消える原因だった）。
+  //   判定基準をemail（大文字小文字無視）に変更し、本当に別人がログインした時だけクリアする。
+  function clearOtherUserData(currentProfileId,currentEmail){
     try{
+      var prevEmail=localStorage.getItem('vexum_last_profile_email');
       var prevId=localStorage.getItem('vexum_last_profile_id');
-      if(prevId&&currentProfileId&&prevId!==currentProfileId){
-        Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id';}).forEach(function(k){localStorage.removeItem(k);});
+      var isDifferentUser;
+      if(prevEmail&&currentEmail){
+        // 通常運用: emailの一致で判定する（同一人物のロール切替では誤ってクリアしない）
+        isDifferentUser=prevEmail.toLowerCase()!==currentEmail.toLowerCase();
+      }else if(!prevEmail&&!prevId){
+        // 本当に初回アクセス（比較対象が無い）
+        isDifferentUser=false;
+      }else{
+        // email記録がまだ無い場合（本修正の適用直後で旧コードのvexum_last_profile_idしか
+        // 無い場合／プロフィールにemailが無い異常系）の安全側フォールバック。
+        // 一度だけprofile.idで判定するため同一人物のロール切替でも1回だけ再クリアされ得るが、
+        // このタイミングでvexum_last_profile_emailが記録されるため以降は正しく判定される。
+        // ★ここを「別ユーザーとみなさない」側に倒すと、本当に別人が入れ替わった場合に
+        //   前ユーザーのvexum_linked_employee_id等が残ってしまう（セキュリティ上の後退）。
+        isDifferentUser=!!(prevId&&currentProfileId&&prevId!==currentProfileId);
+      }
+      if(isDifferentUser){
+        Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id'&&k!=='vexum_last_profile_email';}).forEach(function(k){localStorage.removeItem(k);});
         // 別ユーザーに切替: スクリプトロード時に復元済みの旧ユーザーの絞り込みがメモリに残るためデフォルトへ戻す
         window._dashMemberFilter='';window._dashFromFilter='';window._dashToFilter='';
       }
       if(currentProfileId)localStorage.setItem('vexum_last_profile_id',currentProfileId);
+      if(currentEmail)localStorage.setItem('vexum_last_profile_email',currentEmail);
     }catch(e){}
   }
-  API.currentProfile().then(function(p){ if(!p)return; clearOtherUserData(p.id); window._meProfile=p; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; if(typeof LEADER==='object'){LEADER.name=p.full_name;LEADER.email=p.email;} if(typeof _updateSwitchBtn==='function')_updateSwitchBtn(); }).catch(function(){});
+  API.currentProfile().then(function(p){ if(!p)return; clearOtherUserData(p.id,p.email); window._meProfile=p; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; if(typeof LEADER==='object'){LEADER.name=p.full_name;LEADER.email=p.email;} if(typeof _updateSwitchBtn==='function')_updateSwitchBtn(); }).catch(function(){});
   API.loadLeaderData().then(function(d){
     if(!d) return;
     repl(MEMBERS,d.MEMBERS); repl(MEMBER_TASKS,d.MEMBER_TASKS); repl(REPORTS,d.REPORTS); repl(AVAILABLE,d.AVAILABLE);
@@ -2956,6 +2976,7 @@ function vexumLogout(){
     if(d.teamName){ teamMeta.name=d.teamName; }
     if(d.teamUuid){ teamMeta.uid=d.teamUuid; }
     window._memberPid=d.memberPid||{};
+    window._ldPidToKey=d.pidToKey||{};   // マルチロール対応: 通知actor_id→メンバーキーの逆引き（_ldKeyForPid用）
     window._ldTeamProgress=(d.teamProgress!=null)?d.teamProgress:null;  // チャート基準（幹部と同一ロジック）
     window._ldMemberCount=(d.memberCount!=null)?d.memberCount:null;     // 人物単位の人数
     if(typeof populateSelects==='function') populateSelects();
@@ -3012,6 +3033,7 @@ function vexumLogout(){
         if(!d)return;
         repl(MEMBERS,d.MEMBERS);repl(MEMBER_TASKS,d.MEMBER_TASKS);repl(REPORTS,d.REPORTS);
         replArr(EVAL_RECORDS,d.EVAL_RECORDS);replArr(DASH_IDS,d.DASH_IDS);replArr(EVAL_IDS,d.EVAL_IDS);
+        window._ldPidToKey=d.pidToKey||{};
         window._ldTeamProgress=(d.teamProgress!=null)?d.teamProgress:null;
         window._ldMemberCount=(d.memberCount!=null)?d.memberCount:null;
         if(typeof renderDashboard==='function')renderDashboard();

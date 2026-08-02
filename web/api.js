@@ -394,7 +394,7 @@
     raw.profiles.forEach(function (p) { memberPid[memKey(p.id)] = p.id; });
     // チーム集計（人物単位の人数・チャート基準の進捗％。幹部画面と同一ロジックで一致させる）
     var teamProgress = calcTeamProgress(raw.mandala_charts, teamUuid, members.map(function (m) { return m.profile_id; }));
-    return { MEMBERS: MEMBERS, MEMBER_TASKS: MEMBER_TASKS, REPORTS: REPORTS, EVAL_RECORDS: EVAL_RECORDS, DASH_IDS: DASH_IDS, EVAL_IDS: EVAL_IDS, AVAILABLE: AVAILABLE, teamName: team.name, teamUuid: teamUuid, memberPid: memberPid, teamProgress: teamProgress, memberCount: persons.length };
+    return { MEMBERS: MEMBERS, MEMBER_TASKS: MEMBER_TASKS, REPORTS: REPORTS, EVAL_RECORDS: EVAL_RECORDS, DASH_IDS: DASH_IDS, EVAL_IDS: EVAL_IDS, AVAILABLE: AVAILABLE, teamName: team.name, teamUuid: teamUuid, memberPid: memberPid, pidToKey: pidToKey, teamProgress: teamProgress, memberCount: persons.length };
   }
 
   // ===== リーダー操作：チーム所属の追加/削除・タスク割当・評価記録 =====
