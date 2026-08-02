@@ -1109,6 +1109,10 @@
     });
   }
   // 評価をメンバー本人に届ける（個人画面のフィードバックに表示される evaluations へ）
+  // saveEvaluationの同時多重呼び出し対策: 同一キー（評価者→対象者→ロール→チャート→期間）の
+  // 呼び出しを直列化し、既存行チェックと保存の間に別の呼び出しが割り込んで重複insertするのを防ぐ
+  // （ダブルクリック等、SELECT→INSERT/UPDATEがアトミックでないことによる競合状態への対策）。
+  var _evalSaveLocks = {};
   async function saveEvaluation(o) {
     if (!sb) return { error: 'Supabase未接続' };
     var me = await currentProfile();
@@ -1116,10 +1120,34 @@
       target_type: 'user', target_user_id: o.targetPid || null,
       evaluator_id: me ? me.id : null, evaluator_role: o.evaluatorRole || 'leader',
       period: o.period || null, kgi_stars: o.kgi || 0, kgi_comment: o.kgiComment || '',
-      csf: o.csf || []
+      csf: o.csf || [], chart_id: o.chartId || null
     };
-    if (o.chartId) row.chart_id = o.chartId;
-    var r = await sb.from('evaluations').insert(row);
+    var lockKey = (me ? me.id : '') + '|' + (o.targetPid || '') + '|' + row.evaluator_role + '|' + (o.chartId || '') + '|' + (row.period || '');
+    if (_evalSaveLocks[lockKey]) { try { await _evalSaveLocks[lockKey]; } catch (e) {} }
+    var op = (async function () {
+      // 既存評価（同じ評価者→対象者→ロール→チャート→期間）があれば更新し、保存のたびに
+      // 重複行が増えるのを防ぐ（employee.htmlのupsertSelfEvalと同じ考え方）。evaluator_roleで
+      // 絞っているため、同じ対象者へのリーダー評価と幹部評価が誤って上書きし合うことはない。
+      // periodも一致条件に含めることで、同じチャートを異なる期間で評価し直した際に
+      // 過去の期間の評価を上書き消去してしまわないようにする。
+      var existing = null;
+      if (me && o.targetPid) {
+        var q = sb.from('evaluations').select('id')
+          .eq('evaluator_id', me.id).eq('target_user_id', o.targetPid)
+          .eq('evaluator_role', row.evaluator_role);
+        q = o.chartId ? q.eq('chart_id', o.chartId) : q.is('chart_id', null);
+        q = row.period ? q.eq('period', row.period) : q.is('period', null);
+        var qr = await q.order('created_at', { ascending: false }).limit(1);
+        if (qr.error) return { error: qr.error };
+        if (qr.data && qr.data[0]) existing = qr.data[0];
+      }
+      return existing
+        ? await sb.from('evaluations').update(row).eq('id', existing.id)
+        : await sb.from('evaluations').insert(row);
+    })();
+    _evalSaveLocks[lockKey] = op;
+    var r;
+    try { r = await op; } finally { if (_evalSaveLocks[lockKey] === op) delete _evalSaveLocks[lockKey]; }
     if (r.error) return { error: friendlyErr(r.error.message) };
     // ★評価対象者へ通知（リーダー/幹部→従業員）
     // 注意: notifications.ref_id は uuid 型（41_notifications_ref_text.sql 適用前）。
