@@ -302,7 +302,8 @@
         name: p.full_name, role: person.isLeader ? 'リーダー' : '従業員', roles: person.roles, team: team.name,
         color: p.color, bg: '#F3F4F6', rate: person.rate, kpis: kpis, stats: stats,
         center: c.center || (p.full_name + '\n個人目標'), subs: c.subs || [], acts: c.acts || [],
-        memberKpiEdits: c.member_kpi_edits || {}
+        memberKpiEdits: c.member_kpi_edits || {},
+        chartStartDate: c.start_date || '', chartEndDate: c.end_date || ''
       };
       DASH_IDS.push(key);
       if (person.roles.indexOf('従業員') >= 0) EVAL_IDS.push(key);   // 従業員ロールを持つ人物は評価対象

@@ -748,39 +748,54 @@ function _teamCharts(){
   });
   return out;
 }
-// メンバーが指定チャートに関係するか（そのチャートの所有者 or そのチャートのタスクを持つ）
-function _memberMatchesChart(id,chart){
-  if(!chart)return true;
-  if(chart.ownerId===id)return true;
-  const labels={};
-  (chart.subs||[]).forEach(x=>{if(x)labels[String(x).trim()]=1;});
-  (chart.acts||[]).forEach(r=>(r||[]).forEach(a=>{if(a)labels[String(a).trim()]=1;}));
-  const center=((chart.center||'').split('\n')[0]||'').trim(),name=(chart.name||'').trim();
-  const tasks=MEMBER_TASKS[id]||[];
-  return tasks.some(t=>{
-    if(t.chart){const c=String(t.chart).trim();if(c===center||c===name)return true;}
-    if(t.kpi&&t.kpi!=='—'&&labels[String(t.kpi).trim()])return true;
-    return false;
+// CSFの期限解決（従業員画面 _cellPeriod と同じ優先順位: 紐付けタスクの期限→明示的なセル期間→チャート全体の終了日）
+function _ldCsfDue(m,tasks,si,chartEnd){
+  const linked=(tasks||[]).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si);
+  if(linked.length){
+    const withP=linked.find(t=>t.startRaw||t.dueRaw)||linked[0];
+    return withP.dueRaw||chartEnd||'';
+  }
+  const per=((_mdEdits(m).period)||{})['csf-'+si]||{};
+  return per.end||chartEnd||'';
+}
+// KGI/CSFセルへの直接記入（タスク未紐付け）もダッシュボード統計に含める（従業員画面 _dashCellItems と同じロジック）。
+// MEMBERSの各メンバーは主チャート1件分の情報を持つため、そのままchart-like objectとして正典関数に渡せる。
+function _ldDashCellItems(ids){
+  const items=[];
+  (ids||[]).forEach(id=>{
+    const m=MEMBERS[id];if(!m)return;
+    const tasks=MEMBER_TASKS[id]||[];
+    const chartEnd=m.chartEndDate||'';
+    const kgiName=((m.center||'').split('\n')[0]||'').trim();
+    if(kgiName&&chartEnd)items.push({id,si:null,kind:'kgi',due:chartEnd,pct:_mdKgiPct(m,tasks)});
+    (m.subs||[]).forEach((s,si)=>{
+      const ed=((m.memberKpiEdits||{})['csf-'+si])||{};
+      const text=(ed.text!=null?ed.text:s)||'';
+      if(!text)return;
+      const due=_ldCsfDue(m,tasks,si,chartEnd);
+      if(!due)return;
+      items.push({id,si,kind:'csf',due,pct:_mdCsfPct(m,tasks,si)});
+    });
   });
+  return items;
+}
+// メンバー1人分の合計作業時間（従業員画面 _dashTotalHours と同じ方式: チャート紐付け分は正典関数で、
+// チャートに紐付かないタスクは二重計上を避けつつ加算する）
+function _ldMemberTotalHours(m,allTasks,filteredTasks){
+  let sum=_mdKgiHours(m,allTasks||[]);
+  const counted=new Set();
+  _mdChartTasks(m,allTasks||[]).forEach(t=>{if(t.csfIdx!=null&&!isNaN(t.csfIdx))counted.add(t);});
+  (filteredTasks||[]).forEach(t=>{if(!counted.has(t))sum+=(+t.hours||0);});
+  return Math.round(sum*10)/10;
 }
 function _renderDashFilterBar(){
   const bar=document.getElementById('dash-filter-bar');if(!bar)return;
-  const memF=window._dashMemberFilter||'',chartF=window._dashChartFilter||'';
+  const memF=window._dashMemberFilter||'';
   const ids=DASH_IDS.filter(id=>MEMBERS[id]);
   const memOpts='<option value="">全員</option>'+ids.map(id=>`<option value="${id}"${id===memF?' selected':''}>${MEMBERS[id].name}</option>`).join('');
-  const charts=_teamCharts();
-  const visibleCharts=memF?charts.filter(c=>c.ownerId===memF):charts;
-  const validChartF=visibleCharts.some(c=>c.key===chartF)?chartF:'';
-  const chartOpts='<option value="">全チャート</option>'+visibleCharts.map(c=>{
-    const kgiText=(c.center||c.kgi||c.label||'').replace(/\n/g,' ').trim()||c.label;
-    const sd=c.startDate||'';const ed=c.endDate||'';
-    const dateStr=(sd||ed)?` (${sd}${ed?'〜'+ed:''})`:'';
-    return `<option value="${c.key}"${c.key===validChartF?' selected':''}>${kgiText}${dateStr}</option>`;
-  }).join('');
   const lbl='font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:5px';
   bar.innerHTML=`
-    <div><div style="${lbl}">従業員</div><select class="fs" id="dash-f-member" onchange="onDashMemberSel()" style="font-size:12px;padding:7px 10px;font-weight:600;min-width:150px">${memOpts}</select></div>
-    <div><div style="${lbl}">チャート</div><select class="fs" id="dash-f-chart" style="font-size:12px;padding:7px 10px;font-weight:600;min-width:200px">${chartOpts}</select></div>
+    <div><div style="${lbl}">従業員</div><select class="fs" id="dash-f-member" style="font-size:12px;padding:7px 10px;font-weight:600;min-width:150px">${memOpts}</select></div>
     <div><div style="${lbl}">開始日</div><div id="ld-from-ymd"></div></div>
     <div style="align-self:flex-end;padding-bottom:6px;color:var(--text3)">〜</div>
     <div><div style="${lbl}">期限</div><div id="ld-to-ymd"></div></div>
@@ -794,43 +809,24 @@ function _lfLoad(){try{return JSON.parse(localStorage.getItem('vexum_filters_lea
 function _lfSave(patch){const f=_lfLoad();Object.assign(f,patch);try{localStorage.setItem('vexum_filters_leader',JSON.stringify(f));}catch(e){}}
 function applyDashFilter(){
   window._dashMemberFilter=(document.getElementById('dash-f-member')||{}).value||'';
-  window._dashChartFilter=(document.getElementById('dash-f-chart')||{}).value||'';
   window._dashFromFilter=ymdValue('ld-from')||'';
   window._dashToFilter=ymdValue('ld-to')||'';
   // 絞り込み状態を保存（リセットするまでログイン後も維持）
-  _lfSave({member:window._dashMemberFilter,chart:window._dashChartFilter,from:window._dashFromFilter,to:window._dashToFilter});
+  _lfSave({member:window._dashMemberFilter,from:window._dashFromFilter,to:window._dashToFilter});
   renderDashboard();
 }
-function resetDashFilter(){window._dashMemberFilter='';window._dashChartFilter='';window._dashFromFilter='';window._dashToFilter='';ymdClear('ld-from');ymdClear('ld-to');_lfSave({member:'',chart:'',from:'',to:''});renderDashboard();}
-function onDashMemberSel(){
-  const memId=(document.getElementById('dash-f-member')||{}).value||'';
-  const charts=_teamCharts();
-  const visible=memId?charts.filter(c=>c.ownerId===memId):charts;
-  const chartSel=document.getElementById('dash-f-chart');
-  if(!chartSel)return;
-  const curChart=chartSel.value||'';
-  const validChart=visible.some(c=>c.key===curChart)?curChart:'';
-  chartSel.innerHTML='<option value="">全チャート</option>'+visible.map(c=>{
-    const kgiText=(c.center||c.kgi||c.label||'').replace(/\n/g,' ').trim()||c.label;
-    const sd=c.startDate||'';const ed=c.endDate||'';
-    const dateStr=(sd||ed)?` (${sd}${ed?'〜'+ed:''})`:'';
-    return `<option value="${c.key}"${c.key===validChart?' selected':''}>${kgiText}${dateStr}</option>`;
-  }).join('');
-}
+function resetDashFilter(){window._dashMemberFilter='';window._dashFromFilter='';window._dashToFilter='';ymdClear('ld-from');ymdClear('ld-to');_lfSave({member:'',from:'',to:''});renderDashboard();}
 // 保存済みの絞り込みを復元（初回描画時に_renderDashFilterBarが反映する）
 try{const _sf=JSON.parse(localStorage.getItem('vexum_filters_leader')||'null');
-  if(_sf){window._dashMemberFilter=_sf.member||'';window._dashChartFilter=_sf.chart||'';window._dashFromFilter=_sf.from||'';window._dashToFilter=_sf.to||'';}
+  if(_sf){window._dashMemberFilter=_sf.member||'';window._dashFromFilter=_sf.from||'';window._dashToFilter=_sf.to||'';}
 }catch(e){}
 function renderDashboard(){
   _renderDashFilterBar();
   // 絞り込み対象メンバーを先に確定する（統計カードがこのidsを使って集計できるよう、
   // 従来「統計カード→絞り込み→メンバーカード」だった順序を「絞り込み→統計カード→メンバーカード」に変更）
-  const memF=window._dashMemberFilter||'',chartF=window._dashChartFilter||'';
-  const charts=_teamCharts();
-  const chart=chartF?charts.find(c=>c.key===chartF):null;
+  const memF=window._dashMemberFilter||'';
   let ids=DASH_IDS.filter(id=>MEMBERS[id]);
   if(memF)ids=ids.filter(id=>id===memF);
-  if(chart)ids=ids.filter(id=>_memberMatchesChart(id,chart));
   const from=window._dashFromFilter||'',to=window._dashToFilter||'';
   if(from||to){
     ids=ids.filter(id=>{
@@ -840,8 +836,8 @@ function renderDashboard(){
     });
   }
   // 統計カード＝従業員画面ダッシュボードと同じ4指標（本日までの達成率／本日対応すべき／
-  // 遅延タスク／合計作業時間）。絞り込み後のidsで集計する。対象はタスクのみ（KGI/CSFは
-  // リーダー画面に同等の集計機構が無いため含めない。サブ文言も実態通り「（タスク）」と書く）。
+  // 遅延タスク／合計作業時間）。絞り込み後のidsで集計する。タスクに加えKGI/CSFセルへの
+  // 直接記入（タスク未紐付け）も従業員画面と同じロジックで含める（_ldDashCellItems）。
   // 情報ストリップ（チーム名・メンバー数・チーム進捗・完了タスク）はチーム全体（allIds）のまま維持する。
   (function(){
     const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
@@ -858,19 +854,30 @@ function renderDashboard(){
     // メンバーカード側の期間フィルタは「1件でも期間内なら人を残す」仕様（上のids算出）だが、
     // 統計カードは「期間内のタスクのみ集計」の方が自然なため、ここでタスク単位にもう一段絞る（意図的な差）。
     if(from||to)targetTasks=targetTasks.filter(t=>inDateRange(t.dueRaw||t.startRaw,from,to));
-    const late=targetTasks.filter(t=>t.dueRaw&&t.dueRaw<today&&(t.pct||0)<100).length;
-    const due=targetTasks.filter(t=>t.dueRaw&&t.dueRaw===today&&(t.pct||0)<100).length;
+    let cells=_ldDashCellItems(ids);
+    if(from||to)cells=cells.filter(c=>inDateRange(c.due,from,to));
+    const cellLate=cells.filter(c=>c.due<today&&c.pct<100).length;
+    const cellDue=cells.filter(c=>c.due===today&&c.pct<100).length;
+    const cellPassed=cells.filter(c=>c.due<=today);
+    const late=targetTasks.filter(t=>t.dueRaw&&t.dueRaw<today&&(t.pct||0)<100).length+cellLate;
+    const due=targetTasks.filter(t=>t.dueRaw&&t.dueRaw===today&&(t.pct||0)<100).length+cellDue;
     const passed=targetTasks.filter(t=>t.dueRaw&&t.dueRaw<=today);
-    const doneOfPassed=passed.filter(t=>(t.pct||0)>=100).length;
+    const doneOfPassed=passed.filter(t=>(t.pct||0)>=100).length+cellPassed.filter(c=>c.pct>=100).length;
+    const passedTotal=passed.length+cellPassed.length;
     // 対象0件は「—」にする（0除算で誤って0%と出さないため）
-    const todayRate=passed.length>0?Math.round(doneOfPassed/passed.length*100):null;
-    const hours=Math.round(targetTasks.reduce((s,t)=>s+(+t.hours||0),0)*10)/10;
+    const todayRate=passedTotal>0?Math.round(doneOfPassed/passedTotal*100):null;
+    // 合計作業時間: チャート管理と同じ計算（CSF上書き値→KPIタスク→セル記入時間）を正典関数でメンバーごとに集計
+    const hours=Math.round(ids.reduce((s,id)=>{
+      const allT=MEMBER_TASKS[id]||[];
+      const filT=(from||to)?allT.filter(t=>inDateRange(t.dueRaw||t.startRaw,from,to)):allT;
+      return s+_ldMemberTotalHours(MEMBERS[id],allT,filT);
+    },0)*10)/10;
     if(todayRate!=null){
       set('ld-todayrate',todayRate+'%');
-      set('ld-todayrate-sub','期限到来分（タスク）の完了割合');
+      set('ld-todayrate-sub','期限到来分（タスク・KGI/CSF）の完了割合');
     }else{
       set('ld-todayrate','—');
-      set('ld-todayrate-sub',targetTasks.length>0?'期限到来タスクがまだありません':'タスクがありません');
+      set('ld-todayrate-sub',(targetTasks.length+cells.length)>0?'期限到来タスクがまだありません':'タスクがありません');
     }
     set('ld-due',due);
     set('ld-late',late);
@@ -2830,7 +2837,7 @@ function vexumLogout(){
       if(prevId&&currentProfileId&&prevId!==currentProfileId){
         Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id';}).forEach(function(k){localStorage.removeItem(k);});
         // 別ユーザーに切替: スクリプトロード時に復元済みの旧ユーザーの絞り込みがメモリに残るためデフォルトへ戻す
-        window._dashMemberFilter='';window._dashChartFilter='';window._dashFromFilter='';window._dashToFilter='';
+        window._dashMemberFilter='';window._dashFromFilter='';window._dashToFilter='';
       }
       if(currentProfileId)localStorage.setItem('vexum_last_profile_id',currentProfileId);
     }catch(e){}
