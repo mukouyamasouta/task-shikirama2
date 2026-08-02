@@ -287,9 +287,15 @@
       c = c || { subs: [], acts: [], center: '' };
       // この人物の全タスク（複数ロール分を合算）
       var tk = raw.tasks.filter(function (t) { return person.pids.indexOf(t.assignee_id) >= 0; });
-      var stats = { done: tk.filter(function (t) { return t.status === 'done'; }).length,
-                    wip: tk.filter(function (t) { return t.status === 'wip'; }).length,
-                    late: tk.filter(function (t) { return t.status === 'late'; }).length };
+      // 完了/進行中/遅延はDBのstatus列だけでなく期限日からも判定する（画面側のeffStatus/stOfと同一基準）。
+      // status列は保存操作が起きた時点のスナップショットで、期限超過後にタスクへ触っていないと
+      // 自動では'late'に変わらず古い値のまま残るため、期限日で都度補正する。
+      var _today = new Date().toISOString().slice(0, 10);
+      var _isDone = function (t) { return t.status === 'done' || (t.progress || 0) >= 100; };
+      var _isLate = function (t) { return !_isDone(t) && (t.status === 'late' || (t.due_date && t.due_date < _today)); };
+      var stats = { done: tk.filter(_isDone).length,
+                    wip: tk.filter(function (t) { return !_isDone(t) && !_isLate(t) && (t.progress || 0) > 0; }).length,
+                    late: tk.filter(_isLate).length };
       var kpis = (c.subs || []).slice(0, 4).map(function (s) {
         var rel = tk.filter(function (t) { return t.related_kgi === s; });
         var pp = rel.length
@@ -1798,10 +1804,16 @@
       var key = memKey(m.profile_id), p = prof[m.profile_id]; if (!key || !p) return;
       var team = teamById[m.team_id] || { name: '' };
       var tk = raw.tasks.filter(function (t) { return t.assignee_id === m.profile_id; });
+      // 完了/進行中/遅延はDBのstatus列だけでなく期限日からも判定する（画面側のeffStatus/stOfと同一基準。
+      // status列は保存操作が起きた時点のスナップショットで、期限超過後にタスクへ触っていないと
+      // 自動では'late'に変わらず古い値のまま残るため、期限日で都度補正する）。
+      var _today2 = new Date().toISOString().slice(0, 10);
+      var _isDone2 = function (t) { return t.status === 'done' || (t.progress || 0) >= 100; };
+      var _isLate2 = function (t) { return !_isDone2(t) && (t.status === 'late' || (t.due_date && t.due_date < _today2)); };
       var stats = {
-        done: tk.filter(function (t) { return t.status === 'done'; }).length,
-        wip: tk.filter(function (t) { return t.status === 'wip'; }).length,
-        late: tk.filter(function (t) { return t.status === 'late'; }).length
+        done: tk.filter(_isDone2).length,
+        wip: tk.filter(function (t) { return !_isDone2(t) && !_isLate2(t) && (t.progress || 0) > 0; }).length,
+        late: tk.filter(_isLate2).length
       };
       var c = chartByUser[m.profile_id] || { subs: [], acts: [], center: '' };
       // KPI進捗 = そのCSFに紐づくタスクの平均進捗（タスクが無いCSFは達成率で代替）— リーダー画面と同ロジック

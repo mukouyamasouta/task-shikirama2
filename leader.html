@@ -749,8 +749,11 @@ function _teamCharts(){
   return out;
 }
 // CSFの期限解決（従業員画面 _cellPeriod と同じ優先順位: 紐付けタスクの期限→明示的なセル期間→チャート全体の終了日）
+// ★ csfIdxだけでなくチャート一致（_mdChartTasks）も必須条件にすること。
+//   メンバーが複数チャートを持つ場合、csfIdxは0-7の範囲しか無くチャートをまたいで
+//   衝突しうるため、csfIdxのみで絞ると無関係なチャートのタスクの期限を誤って拾う。
 function _ldCsfDue(m,tasks,si,chartEnd){
-  const linked=(tasks||[]).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si);
+  const linked=_mdChartTasks(m,tasks).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si);
   if(linked.length){
     const withP=linked.find(t=>t.startRaw||t.dueRaw)||linked[0];
     return withP.dueRaw||chartEnd||'';
@@ -758,33 +761,49 @@ function _ldCsfDue(m,tasks,si,chartEnd){
   const per=((_mdEdits(m).period)||{})['csf-'+si]||{};
   return per.end||chartEnd||'';
 }
+// メンバー1人分のチャート一覧を返す。個人DBを開いてキャッシュ済みなら全チャート
+// （_teamChartsと同じ考え方）、未取得ならMEMBERSの主チャート1件を近似として返す。
+// ★ 未取得時の近似はCSF個別期限（member_kpi_edits.period）を反映できないため、
+//   個人DBを開いた直後（キャッシュが埋まった後）はより正確な値に自動で切り替わる
+//   （_ldWarmChartsCacheが再描画をトリガーする）。
+function _ldMemberCharts(id){
+  const m=MEMBERS[id];if(!m)return [];
+  const cached=window._chartsCache&&window._chartsCache[m.pid];
+  if(cached&&cached.length)return cached;
+  return [{center:m.center||'',subs:m.subs||[],acts:m.acts||[],name:(m.name||'')+' のチャート',member_kpi_edits:m.memberKpiEdits||{},end_date:m.chartEndDate||''}];
+}
 // KGI/CSFセルへの直接記入（タスク未紐付け）もダッシュボード統計に含める（従業員画面 _dashCellItems と同じロジック）。
-// MEMBERSの各メンバーは主チャート1件分の情報を持つため、そのままchart-like objectとして正典関数に渡せる。
+// メンバーが複数チャートを持つ場合も全て対象にする（_ldMemberCharts参照）。
 function _ldDashCellItems(ids){
   const items=[];
   (ids||[]).forEach(id=>{
     const m=MEMBERS[id];if(!m)return;
     const tasks=MEMBER_TASKS[id]||[];
-    const chartEnd=m.chartEndDate||'';
-    const kgiName=((m.center||'').split('\n')[0]||'').trim();
-    if(kgiName&&chartEnd)items.push({id,si:null,kind:'kgi',due:chartEnd,pct:_mdKgiPct(m,tasks)});
-    (m.subs||[]).forEach((s,si)=>{
-      const ed=((m.memberKpiEdits||{})['csf-'+si])||{};
-      const text=(ed.text!=null?ed.text:s)||'';
-      if(!text)return;
-      const due=_ldCsfDue(m,tasks,si,chartEnd);
-      if(!due)return;
-      items.push({id,si,kind:'csf',due,pct:_mdCsfPct(m,tasks,si)});
+    _ldMemberCharts(id).forEach(c=>{
+      const chartEnd=c.end_date||c.endDate||'';
+      const kgiName=((c.center||'').split('\n')[0]||'').trim();
+      if(kgiName&&chartEnd)items.push({id,si:null,kind:'kgi',due:chartEnd,pct:_mdKgiPct(c,tasks)});
+      (c.subs||[]).forEach((s,si)=>{
+        const ed=(_mdEdits(c)['csf-'+si])||{};
+        const text=(ed.text!=null?ed.text:s)||'';
+        if(!text)return;
+        const due=_ldCsfDue(c,tasks,si,chartEnd);
+        if(!due)return;
+        items.push({id,si,kind:'csf',due,pct:_mdCsfPct(c,tasks,si)});
+      });
     });
   });
   return items;
 }
 // メンバー1人分の合計作業時間（従業員画面 _dashTotalHours と同じ方式: チャート紐付け分は正典関数で、
-// チャートに紐付かないタスクは二重計上を避けつつ加算する）
-function _ldMemberTotalHours(m,allTasks,filteredTasks){
-  let sum=_mdKgiHours(m,allTasks||[]);
+// チャートに紐付かないタスクは二重計上を避けつつ加算する）。複数チャート保有時は全チャート分を合算する。
+function _ldMemberTotalHours(id,allTasks,filteredTasks){
+  let sum=0;
   const counted=new Set();
-  _mdChartTasks(m,allTasks||[]).forEach(t=>{if(t.csfIdx!=null&&!isNaN(t.csfIdx))counted.add(t);});
+  _ldMemberCharts(id).forEach(c=>{
+    sum+=_mdKgiHours(c,allTasks||[]);
+    _mdChartTasks(c,allTasks||[]).forEach(t=>{if(t.csfIdx!=null&&!isNaN(t.csfIdx))counted.add(t);});
+  });
   (filteredTasks||[]).forEach(t=>{if(!counted.has(t))sum+=(+t.hours||0);});
   return Math.round(sum*10)/10;
 }
@@ -870,7 +889,7 @@ function renderDashboard(){
     const hours=Math.round(ids.reduce((s,id)=>{
       const allT=MEMBER_TASKS[id]||[];
       const filT=(from||to)?allT.filter(t=>inDateRange(t.dueRaw||t.startRaw,from,to)):allT;
-      return s+_ldMemberTotalHours(MEMBERS[id],allT,filT);
+      return s+_ldMemberTotalHours(id,allT,filT);
     },0)*10)/10;
     if(todayRate!=null){
       set('ld-todayrate',todayRate+'%');
@@ -919,6 +938,22 @@ function renderDashboard(){
   });
   const con=document.getElementById('dash-members');
   con.innerHTML=ids.length?h:'<div class="card" style="grid-column:1/-1"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">条件に一致するメンバーがいません</div></div>';
+  _ldWarmChartsCache(ids);
+}
+// 個人DBを一度も開いていないメンバーは _ldDashCellItems/_ldMemberTotalHours が
+// 主チャート1件分の近似値しか使えない（CSF個別期限を反映できない）。
+// バックグラウンドで全チャートを取得し、揃ったらダッシュボードを再描画して正確な値に切り替える。
+function _ldWarmChartsCache(ids){
+  const API=window.VexumAPI;if(!(API&&API.ready))return;
+  const need=(ids||[]).filter(id=>MEMBERS[id]&&MEMBERS[id].pid&&!window._chartsCache[MEMBERS[id].pid]);
+  if(!need.length)return;
+  Promise.all(need.map(id=>{
+    const pid=MEMBERS[id].pid;
+    return API.loadChartsFor(pid).then(cs=>{window._chartsCache[pid]=cs||[];}).catch(()=>{window._chartsCache[pid]=[];});
+  })).then(()=>{
+    const t=document.getElementById('tc-dashboard');
+    if(t&&t.classList.contains('active'))renderDashboard();
+  });
 }
 async function openMemberDash(id){
   const m=MEMBERS[id];
