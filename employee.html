@@ -572,7 +572,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <div class="form-card">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:6px" id="prep-form-title">本日の日報（始業 → 終業）</h3>
         <div style="font-size:11px;color:var(--text3);margin-bottom:14px">出勤時に「始業」を、退勤時に「終業」を入力します。<span id="prep-edit-note" style="display:none;color:var(--accent);font-weight:700"></span></div>
-        <div class="fg"><label class="fl">日付</label><input class="fi" type="date" id="prep-date" onchange="_prepUpdateMorningStatus()"></div>
+        <div class="fg"><label class="fl">日付</label><input class="fi" type="date" id="prep-date" onchange="_prepUpdateMorningStatus();_prepUpdateEveningStatus()"></div>
         <!-- 始業 -->
         <div style="background:#FFF7ED;border:1px solid #FDBA74;border-radius:8px;padding:12px;margin-bottom:12px">
           <div style="font-size:12px;font-weight:800;color:#C2410C;margin-bottom:8px">始業（出勤時の予定）</div>
@@ -598,8 +598,9 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
           <div class="fg"><label class="fl">振り返り</label><textarea class="fi" id="prep-reflect" rows="3" placeholder="今日の振り返りを記入…" style="resize:vertical"></textarea></div>
           <!-- 予定と実績の相違 -->
           <div id="prep-diff" style="display:none;background:#fff;border:1px dashed #93C5FD;border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:11px"></div>
-          <button class="f-submit" style="margin-top:0" onclick="reportSubmit()">終業を提出（リーダーへ通知）</button>
-          <span id="report-msg" style="display:none;margin-left:12px;color:var(--green);font-size:12px;font-weight:700">提出しました</span>
+          <div id="report-evening-status" style="display:none;margin-bottom:8px;font-size:11px;font-weight:700;color:#1D4ED8;background:#EFF6FF;border:1px solid #93C5FD;border-radius:6px;padding:6px 10px"></div>
+          <button class="card-btn" style="width:100%;background:#DBEAFE;color:#1D4ED8;border-color:#93C5FD;font-weight:700;padding:9px" onclick="reportSubmit()">📤 終業をリーダーに提出</button>
+          <span id="report-msg" style="display:none;margin-left:8px;color:var(--green);font-size:11px;font-weight:700">提出しました</span>
         </div>
         <div id="prep-edit-actions" style="display:none;margin-top:10px;text-align:right"><button class="card-btn" onclick="resetReportForm()">＋ 新規日報に切替</button></div>
       </div>
@@ -1006,7 +1007,7 @@ async function reportSaveMorning(){
   }
   _prepStore(rec);
   _lsSet('vexum_report_morning_'+_curPid()+'_'+rec.date,_nowHM());
-  _prepUpdateMorningStatus();
+  _prepUpdateMorningStatus();_prepUpdateEveningStatus();
   const m=document.getElementById('report-morning-msg');if(m){m.style.display='inline';setTimeout(()=>m.style.display='none',2500);}
 }
 function _nowHM(){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
@@ -1029,6 +1030,15 @@ function _prepUpdateMorningStatus(){
   el.style.display='block';
   el.textContent='✓ 始業提出済み'+(t?'（'+t+'）':'')+' — リーダーに共有されています';
 }
+// 終業提出済み状態表示: 始業の状態表示と対になる（フォームの日付に紐づく日報のsubmitted有無で判定）
+function _prepUpdateEveningStatus(){
+  const el=document.getElementById('report-evening-status');if(!el)return;
+  const ds=(document.getElementById('prep-date')||{}).value||'';
+  const r=ds?prepByDate(ds):null;
+  if(!r||!r.submitted){el.style.display='none';el.textContent='';return;}
+  el.style.display='block';
+  el.textContent='✓ 終業提出済み — リーダーに共有されています';
+}
 // 終業：報告を提出（リーダーへ通知）
 async function reportSubmit(){
   const rec=_prepGather();
@@ -1040,6 +1050,7 @@ async function reportSubmit(){
   }
   rec.submitted=true;
   _prepStore(rec);
+  _prepUpdateEveningStatus();
   const m=document.getElementById('report-msg');m.style.display='inline';setTimeout(()=>{m.style.display='none';},3000);
 }
 // 編集：既存日報をフォームに読み込む
@@ -1054,7 +1065,7 @@ function editPReport(ds){
   prepCalcPlanWork();prepCalcActualWork();
   const note=document.getElementById('prep-edit-note');if(note){note.style.display='inline';note.textContent='（'+r.date+' を編集中）';}
   document.getElementById('prep-edit-actions').style.display='block';
-  _prepUpdateMorningStatus();
+  _prepUpdateMorningStatus();_prepUpdateEveningStatus();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 // 削除
@@ -1074,7 +1085,7 @@ function resetReportForm(){
   const note=document.getElementById('prep-edit-note');if(note)note.style.display='none';
   document.getElementById('prep-edit-actions').style.display='none';
   const d=document.getElementById('prep-date');if(d)d.value=_epToday();
-  _prepUpdateMorningStatus();
+  _prepUpdateMorningStatus();_prepUpdateEveningStatus();
 }
 </script>
 
@@ -1596,7 +1607,19 @@ function openMandala(k,evalMode){
   const eb=document.getElementById('mnd-eval-bar');if(eb){eb.style.display=evalMode?'flex':'none';const p=document.getElementById('mnd-eval-pct');if(p)p.textContent=getEvalProgress(k)+'%';}
   const kb=document.getElementById('mnd-kpi-toggle');if(kb)kb.textContent=_mndKpiOn?'− KPIを隠す':'＋ KPIを表示';
   if(_mndKpiOn) document.getElementById('mandala-grid').innerHTML=buildGridHTML(k,!!evalMode);
-  else document.getElementById('mandala-grid-simple').innerHTML=buildSimpleGridHTML(k);
+  else{
+    const API=window.VexumAPI;
+    const box=document.getElementById('mandala-grid-simple');
+    if(API&&API.renderMandalaSimple){
+      const edits=_chartEdits(k);
+      API.renderMandalaSimple(box, d, edits, {
+        centerClickable:false,
+        hoursOf:(kind,si,ai)=> kind==='center' ? (typeof _kgiHours==='function'?_kgiHours(k):0) : (typeof _csfHours==='function'?_csfHours(k,si):0),
+        pctOf:(kind,si,ai)=> kind==='center' ? (typeof _kgiPct==='function'?_kgiPct(k):0) : (typeof _csfPct==='function'?_csfPct(k,si):0),
+        hoursOverrideOf:(kind,si,ai)=> kind==='csf' && ((_chartEdits(k).csf_hours_override||{})[si]!=null)
+      });
+    }else box.innerHTML=buildSimpleGridHTML(k);
+  }
   _mndApplyView();
   const m=document.getElementById('mandala-modal');m.style.display='flex';m.scrollTop=0;
 }
@@ -1802,15 +1825,25 @@ function renderEval(){
   renderFeedback(k);
 }
 async function renderEvalMndOverlay(k,d){
-  const API=window.VexumAPI;if(!(API&&API.renderEvalMandala))return;
+  const API=window.VexumAPI;if(!(API&&API.renderMandalaSimple))return;
   const wrap=document.getElementById('eval-mnd-wrap');if(!wrap)return;
   const draw=()=>{
     const wrap2=document.getElementById('eval-mnd-wrap');
     if(!wrap2||evalChartKey!==k||evalView!=='mandala')return;
-    API.renderEvalMandala(d,d.memberKpiEdits||{},wrap2,{
-      evalData:_evalDataCache[k]||null,
-      csfProgressOf:si=>evalCsfProgress((d.memberKpiEdits||{}),si,k),
-      onCellClick:(kind,si,ai)=>onEvalMndCellClick(k,kind,si,ai)
+    const edits=_chartEdits(k);
+    API.renderMandalaSimple(wrap2, d, edits, {
+      onCellClick:(kind,si,ai)=>onEvalMndCellClick(k,kind==='center'?'kgi':kind,si,ai),
+      centerClickable:true,
+      hoursOf:(kind,si,ai)=> kind==='center' ? (typeof _kgiHours==='function'?_kgiHours(k):0) : (typeof _csfHours==='function'?_csfHours(k,si):0),
+      pctOf:(kind,si,ai)=> kind==='center' ? (typeof _kgiPct==='function'?_kgiPct(k):0) : (typeof _csfPct==='function'?_csfPct(k,si):0),
+      hoursOverrideOf:(kind,si,ai)=> kind==='csf' && ((_chartEdits(k).csf_hours_override||{})[si]!=null),
+      extraBadge:(kind,si,ai)=>{
+        if(kind!=='center')return '';
+        const ev=_evalDataCache[k]||null;
+        if(!ev)return '';
+        const t=(ev.submitted&&ev.kgi)?('★'+ev.kgi):'未評価';
+        return '<span style="position:absolute;bottom:1px;right:3px;font-size:10px;font-weight:800">'+t+'</span>';
+      }
     });
   };
   draw();
@@ -2418,7 +2451,7 @@ function showPReportDetail(ds){
 updateTbNewBtn('progress');
 renderEval();
 renderPReportCalendar();
-_prepUpdateMorningStatus();
+_prepUpdateMorningStatus();_prepUpdateEveningStatus();
 if(typeof restoreTasksFromLS==='function')restoreTasksFromLS();
 renderAssign();
 updateAssignBadge();
@@ -4719,6 +4752,7 @@ function vexumLogout(){
     if(typeof updateAssignBadge==='function') updateAssignBadge();
     if(typeof renderPReportCalendar==='function') renderPReportCalendar();
     if(typeof _prepUpdateMorningStatus==='function') _prepUpdateMorningStatus();
+    if(typeof _prepUpdateEveningStatus==='function') _prepUpdateEveningStatus();
     if(window.VexumUI)VexumUI.refresh();
     console.log('[VEXUM] Supabaseデータを反映しました'+(window._actingEmpId?'（従業員として代理表示）':''));
     if(typeof flushPendingCharts==='function'){flushPendingCharts();if(typeof flushPendingTasks==='function')flushPendingTasks();}

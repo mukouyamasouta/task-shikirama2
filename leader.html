@@ -462,6 +462,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
     <div style="overflow-x:auto">
       <div id="mandala-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:560px;margin:0 auto"></div>
+      <div id="mandala-grid-simple" style="display:none;grid-template-columns:repeat(3,1fr);gap:8px;max-width:560px;margin:0 auto"></div>
     </div>
   </div>
 </div>
@@ -1342,10 +1343,21 @@ function mdRenderMnd(chartId){
   if(!c){box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートがありません</div>';return;}
   window._mdCurChart=c;
   const API=window.VexumAPI;
-  // CSF/KPIセルをクリック → 期間設定モーダル（API接続時のみ・読み取り専用ではない）
-  const opts=(API&&API.ready)?{onCellClick:(kind,si,ai)=>openMdPeriodEdit(kind,si,ai)}:{};
+  // hoursOf/pctOfはローカルのMEMBER_TASKS/正典関数のみで完結するためAPI接続状態に関わらず常に有効にする。
+  // onCellClick（期間設定モーダル→DB保存）だけはAPI接続時のみ・読み取り専用ではない
+  const opts={
+    hoursOf:(kind,si,ai)=>{
+      const tasks=MEMBER_TASKS[window._mdMemberId]||[];
+      return kind==='center' ? _mdKgiHours(c,tasks) : _mdCsfHours(c,tasks,si);
+    },
+    pctOf:(kind,si,ai)=>{
+      const tasks=MEMBER_TASKS[window._mdMemberId]||[];
+      return kind==='center' ? _mdKgiPct(c,tasks) : _mdCsfPct(c,tasks,si);
+    },
+    hoursOverrideOf:(kind,si,ai)=> kind==='csf' && (((c.member_kpi_edits||c.memberKpiEdits||{}).csf_hours_override||{})[si]!=null)
+  };
+  if(API&&API.ready)opts.onCellClick=(kind,si,ai)=>openMdPeriodEdit(kind,si,ai);
   if(API&&API.renderMandalaSimple)API.renderMandalaSimple(box,c,c.member_kpi_edits||c.memberKpiEdits||{},opts);
-  else if(API&&API.renderEvalMandala)API.renderEvalMandala(c,c.member_kpi_edits||c.memberKpiEdits||{},box);
   else box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートを表示できません</div>';
 }
 /* ===== 個人DB曼荼羅 CSF/KPI 期間設定（従業員画面と同じ保存ロジック） ===== */
@@ -1462,6 +1474,14 @@ function toggleLdMndKpi(){
   if(b)b.textContent=_ldMndKpiOn?'− KPIを隠す':'＋ KPIを表示';
   if(_curEvalKey)openMandala(_curEvalKey,_mndLastEvalMode);
 }
+// 全画面曼荼羅(3x3)の工数・進捗集計に使うタスク集合を解決する。
+// kはMEMBERSのキーで、実メンバーIDのほか、複数チャート切替時の一時ビュー('__mdview__'/'__mndview__')も入る。
+// 一時ビューの場合は実メンバーIDをwindow側の保持値から辿る。
+function _ldTasksFor(k){
+  if(k==='__mdview__')return MEMBER_TASKS[window._mdMemberId]||[];
+  if(k==='__mndview__')return MEMBER_TASKS[window._mndMemberId]||[];
+  return MEMBER_TASKS[k]||[];
+}
 function openMandala(k,evalMode){
   // KGI+CSF8項目の3x3が既定表示。「＋KPIを表示」トグルで9x9（KPIセル込み）に切替できる。
   const d=getAllMnd()[k];if(!d)return;
@@ -1474,7 +1494,9 @@ function openMandala(k,evalMode){
   const kb=document.getElementById('ld-mnd-kpi-toggle');if(kb)kb.textContent=_ldMndKpiOn?'− KPIを隠す':'＋ KPIを表示';
   const edits=d.memberKpiEdits||{};
   const grid=document.getElementById('mandala-grid');
+  const gridSimple=document.getElementById('mandala-grid-simple');
   if(_ldMndKpiOn){
+    gridSimple.style.display='none';grid.style.display='grid';
     // KPI(9x9)表示: 記入者カラー(_ldEditorColor)による装飾を外周(KPI)セルにも同様に適用する
     grid.style.gridTemplateColumns='repeat(9,minmax(46px,1fr))';grid.style.gap='2px';grid.style.maxWidth='720px';
     // 9x9レイアウトは既存のCELL_META（読み込み時に1回だけ計算済み）を再利用する（SP_MAP再計算の重複を避ける）
@@ -1503,23 +1525,19 @@ function openMandala(k,evalMode){
     }}
     grid.innerHTML=h;
   }else{
-    grid.style.gridTemplateColumns='repeat(3,1fr)';grid.style.gap='6px';grid.style.maxWidth='560px';
-    const order=[0,1,2,7,-1,3,6,5,4];
-    let h='';
-    order.forEach(si=>{
-      let sty='min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;line-height:1.35;padding:6px 5px;border-radius:3px;word-break:break-all;box-sizing:border-box;position:relative;';
-      let tx='';
-      if(si<0){sty+=`background:${d.color};color:#fff;font-weight:800;font-size:12px;border:2px solid ${d.color};`;tx=(d.center||'').replace(/\n/g,'<br>');}
-      else{
-        const ed=edits['csf-'+si];
-        const ec=ed&&ed.by?_ldEditorColor(ed.by):'#D97706';
-        sty+=ed?`background:${ec}1A;color:#3f3f46;border:1.5px solid ${ec};`:`background:${d.bg};color:${d.color};font-weight:700;border:1.5px solid ${d.color};`;
-        tx=(ed&&ed.text!=null?ed.text:((d.subs||[])[si]||''));
-        if(ed)tx+=`<span style="font-size:7px;position:absolute;top:1px;right:2px;color:${ec}" title="${ed.by||''}">✎</span>${ed.progress!=null?`<span style="font-size:8px;display:block;color:${ec};font-weight:700">${ed.progress}%</span>`:''}`;
-      }
-      h+=`<div style="${sty}">${tx}</div>`;
-    });
-    grid.innerHTML=h;
+    // KGI+CSF8項目の3x3: チャート管理タブ(renderCmSimpleGrid)と同じ見た目に統一する（記入者ごとの色分けは廃止し、①と同じ琥珀色ハイライトへ）
+    grid.style.display='none';gridSimple.style.display='grid';
+    const API=window.VexumAPI;
+    const tasks=_ldTasksFor(k);
+    if(API&&API.renderMandalaSimple){
+      API.renderMandalaSimple(gridSimple, d, edits, {
+        hoursOf:(kind,si,ai)=> kind==='center'?_mdKgiHours(d,tasks):_mdCsfHours(d,tasks,si),
+        pctOf:(kind,si,ai)=> kind==='center'?_mdKgiPct(d,tasks):_mdCsfPct(d,tasks,si),
+        hoursOverrideOf:(kind,si,ai)=> kind==='csf' && ((edits.csf_hours_override||{})[si]!=null)
+      });
+    }else{
+      gridSimple.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートを表示できません</div>';
+    }
   }
   const m=document.getElementById('mandala-modal');m.style.display='flex';m.scrollTop=0;
 }
@@ -2019,7 +2037,14 @@ function renderEvalinMnd(){
   const charts=window._chartsCache[d.pid]||[];
   const chart=charts.find(c=>c.id===_evalChartId)||{center:d.center,subs:d.subs,acts:d.acts,member_kpi_edits:d.memberKpiEdits||{}};
   const API=window.VexumAPI;
-  if(API&&API.renderEvalMandala)API.renderEvalMandala(chart,chart.member_kpi_edits||chart.memberKpiEdits||{},box);
+  const tasks=MEMBER_TASKS[id]||[];
+  if(API&&API.renderMandalaSimple){
+    API.renderMandalaSimple(box, chart, chart.member_kpi_edits||chart.memberKpiEdits||{}, {
+      hoursOf:(kind,si,ai)=> kind==='center'?_mdKgiHours(chart,tasks):_mdCsfHours(chart,tasks,si),
+      pctOf:(kind,si,ai)=> kind==='center'?_mdKgiPct(chart,tasks):_mdCsfPct(chart,tasks,si),
+      hoursOverrideOf:(kind,si,ai)=> kind==='csf' && (((chart.member_kpi_edits||chart.memberKpiEdits||{}).csf_hours_override||{})[si]!=null)
+    });
+  }
 }
 function saveMemberEval(){
   const id=document.getElementById('evalin-member').value;

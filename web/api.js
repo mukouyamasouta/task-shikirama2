@@ -1911,6 +1911,7 @@
 
   // ===== 評価管理タブ共通: 曼荼羅形式で進捗%を表示（KGI+CSFの3x3・KPI廃止） =====
   // chart: {center, subs:[8], acts:[8][8]} / edits: mandala_charts.member_kpi_edits 形式 { 'si-ai': {progress, ...} }
+  // 現在は未使用（3x3表示はrenderMandalaSimpleに統一）。互換のため定義のみ残置。
   function renderEvalMandala(chart, edits, containerEl, opts) {
     // KPI廃止: 評価オーバーレイも KGI+CSF8項目 の3x3表示。
     // CSF進捗は opts.csfProgressOf(si)（画面側から紐付けタスク由来を注入）
@@ -1964,6 +1965,13 @@
     containerEl.innerHTML = html;
   }
 
+  // 記入者名→色のハッシュ（employee.html _editorColor / leader.html _ldEditorColor と同一アルゴリズム・同一パレット）
+  function _editorColorHash(name) {
+    var pal = ['#0D9488', '#EC4899', '#F59E0B', '#6366F1', '#10B981', '#EF4444', '#8B5CF6', '#06B6D4'];
+    var h = 0; for (var i = 0; i < (name || '').length; i++) h = (h * 31 + name.charCodeAt(i)) % pal.length;
+    return pal[h];
+  }
+
   // ===== 個人画面のチャート管理(renderCmSimpleGrid)と同じ見た目で曼荼羅を表示（参照のみ） =====
   // containerEl: 描画先DOM / chart: {center,subs,acts,color,bg} / edits: member_kpi_edits（keys: 'center' / 'csf-{si}' / '{si}-{ai}'）
   function renderMandalaSimple(containerEl, chart, edits, opts) {
@@ -1983,11 +1991,15 @@
       { cr: 4, cc: 3, oc: [4, 1], si: 3 }, { cr: 4, cc: 5, oc: [4, 7], si: 4 },
       { cr: 5, cc: 3, oc: [7, 1], si: 5 }, { cr: 5, cc: 4, oc: [7, 4], si: 6 }, { cr: 5, cc: 5, oc: [7, 7], si: 7 }
     ];
-    function badge(ed) {
+    function badge(ed, hours) {
       if (!ed) return '';
-      var b = '<span style="position:absolute;top:3px;right:5px;font-size:9px;color:#D97706" title="' + (ed.by || '') + '">✎</span>';
-      if (ed.progress != null) b += '<span style="font-size:9px;font-weight:800;margin-top:3px;color:' + (ed.progress >= 100 ? '#059669' : '#D97706') + '">' + ed.progress + '%' + (ed.hoursTotal ? ' / ' + ed.hoursTotal + 'h' : '') + '</span>';
-      if (ed.by) b += '<span style="font-size:7px;color:#D97706;font-weight:700">' + ed.by + '</span>';
+      var ec = ed.by ? _editorColorHash(ed.by) : '#D97706';
+      var b = '<span style="position:absolute;top:3px;right:5px;font-size:9px;color:' + ec + '" title="' + (ed.by || '') + '">✎</span>';
+      if (ed.progress != null) {
+        var pc = ed.progress >= 100 ? '#059669' : ec;
+        b += '<span style="font-size:9px;font-weight:800;margin-top:3px;color:' + pc + '">' + ed.progress + '%' + (hours ? ' / ' + hours + 'h' : '') + '</span>';
+      }
+      if (ed.by) b += '<span style="font-size:7px;color:' + ec + ';font-weight:700">' + ed.by + '</span>';
       return b;
     }
     function simpleHTML() {
@@ -1998,12 +2010,25 @@
           var ed = edits['center'];
           var eb = ed ? 'box-shadow:inset 0 0 0 2px #F59E0B;' : '';
           var tx = ((ed && ed.text != null ? ed.text : chart.center) || '').replace(/\n/g, '<br>');
-          h += '<div style="position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:13px;font-weight:800;color:#fff;background:' + color + ';border-radius:10px;padding:8px;line-height:1.4;' + eb + '">' + tx + badge(ed) + '</div>';
+          var kgiH = (typeof opts.hoursOf === 'function') ? opts.hoursOf('center', -1, null) : ((ed && ed.hoursTotal) || 0);
+          var kgiHov = kgiH ? '<span style="position:absolute;bottom:3px;right:6px;font-size:8px;font-weight:700;color:rgba(255,255,255,.9)">⏱' + kgiH + 'h</span>' : '';
+          var centerAttr = (clickable && opts.centerClickable) ? ' data-mnd-cell="center"' : '';
+          var extraC = (typeof opts.extraBadge === 'function') ? (opts.extraBadge('center', -1, null) || '') : '';
+          h += '<div' + centerAttr + ' style="position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:13px;font-weight:800;color:#fff;background:' + color + ';border-radius:10px;padding:8px;line-height:1.4;' + (opts.centerClickable ? cz : '') + eb + '">' + tx + badge(ed, kgiH) + extraC + kgiHov + '</div>';
         } else {
           var ed2 = edits['csf-' + si];
           var label = (ed2 && ed2.text != null ? ed2.text : subs[si]) || '';
           var eb2 = ed2 ? 'box-shadow:inset 0 0 0 2px #F59E0B;background:#FEF3C7;' : 'background:' + bg + ';';
-          h += '<div' + (clickable ? ' data-mnd-cell="csf-' + si + '"' : '') + ' style="position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:' + color + ';border:1.5px solid ' + color + ';border-radius:10px;padding:8px;line-height:1.4;' + cz + eb2 + '"><div style="font-size:8px;color:#9CA3AF;font-weight:600;margin-bottom:2px">CSF ' + (si + 1) + '</div>' + label + badge(ed2) + '</div>';
+          var csfH = (typeof opts.hoursOf === 'function') ? opts.hoursOf('csf', si, null) : ((ed2 && ed2.hoursTotal) || 0);
+          var extraPct = '';
+          if (!ed2 && typeof opts.pctOf === 'function') {
+            var p = opts.pctOf('csf', si, null);
+            if (p != null && p > 0) extraPct = '<span style="position:absolute;top:3px;right:5px;font-size:9px;font-weight:800;color:var(--text3, #6B7280)">' + Math.round(p) + '%</span>';
+          }
+          var ovSet = (typeof opts.hoursOverrideOf === 'function') && !!opts.hoursOverrideOf('csf', si, null);
+          var csfHov = csfH ? '<span title="' + (ovSet ? '直接入力（自動合計を上書き）' : 'CSF記入＋KPI・タスクの合計') + '" style="position:absolute;bottom:3px;right:6px;font-size:8px;font-weight:700;color:' + (ovSet ? '#B45309' : 'var(--text3, #6B7280)') + '">⏱' + csfH + 'h' + (ovSet ? '*' : '') + '</span>' : '';
+          var extraS = (typeof opts.extraBadge === 'function') ? (opts.extraBadge('csf', si, null) || '') : '';
+          h += '<div' + (clickable ? ' data-mnd-cell="csf-' + si + '"' : '') + ' style="position:relative;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:700;color:' + color + ';border:1.5px solid ' + color + ';border-radius:10px;padding:8px;line-height:1.4;' + cz + eb2 + '"><div style="font-size:8px;color:#9CA3AF;font-weight:600;margin-bottom:2px">CSF ' + (si + 1) + '</div>' + label + badge(ed2, csfH) + extraPct + extraS + csfHov + '</div>';
         }
       });
       h += '</div>';
@@ -2067,7 +2092,8 @@
         Array.prototype.forEach.call(cells, function (el) {
           el.onclick = function () {
             var key = el.getAttribute('data-mnd-cell');
-            if (key.indexOf('csf-') === 0) opts.onCellClick('csf', +key.slice(4), null);
+            if (key === 'center') opts.onCellClick('center', -1, null);
+            else if (key.indexOf('csf-') === 0) opts.onCellClick('csf', +key.slice(4), null);
             else { var p = key.split('-'); opts.onCellClick('kpi', +p[0], +p[1]); }
           };
         });
