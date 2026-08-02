@@ -213,6 +213,15 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
     <div class="card-body" id="assigned-list" style="padding:0"></div>
   </div>
+
+  <div class="card">
+    <div class="card-hd"><div><div class="card-title">個人チャートに記入して割当</div>
+      <div class="card-sub">KGI/CSFを直接書き込み「この内容を任せる」</div></div></div>
+    <div class="card-body">
+      <div class="fg"><label class="fl">対象メンバー</label><select class="fs" id="chartedit-member"></select></div>
+      <button class="f-submit" style="width:100%;background:var(--text3)" onclick="openChartEditor(document.getElementById('chartedit-member').value)">🧿 チャートを開いて記入</button>
+    </div>
+  </div>
   <span class="toast" id="asg-saved">✅ 保存しました</span>
 </div>
 
