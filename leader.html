@@ -773,25 +773,32 @@ function _ldMemberCharts(id){
   return [{center:m.center||'',subs:m.subs||[],acts:m.acts||[],name:(m.name||'')+' のチャート',member_kpi_edits:m.memberKpiEdits||{},end_date:m.chartEndDate||''}];
 }
 // KGI/CSFセルへの直接記入（タスク未紐付け）もダッシュボード統計に含める（従業員画面 _dashCellItems と同じロジック）。
-// メンバーが複数チャートを持つ場合も全て対象にする（_ldMemberCharts参照）。
+// 1人分・複数チャート分をまとめて{si,kind,due,pct}の配列で返す（idは付与しない汎用版）。
+// リーダー画面のどの画面（チームダッシュボード／個人DB）からも同じロジックで呼べるよう共通化する。
+function _ldCellItemsForCharts(charts,tasks){
+  const items=[];
+  (charts||[]).forEach(c=>{
+    const chartEnd=c.end_date||c.endDate||'';
+    const kgiName=((c.center||'').split('\n')[0]||'').trim();
+    if(kgiName&&chartEnd)items.push({si:null,kind:'kgi',due:chartEnd,pct:_mdKgiPct(c,tasks)});
+    (c.subs||[]).forEach((s,si)=>{
+      const ed=(_mdEdits(c)['csf-'+si])||{};
+      const text=(ed.text!=null?ed.text:s)||'';
+      if(!text)return;
+      const due=_ldCsfDue(c,tasks,si,chartEnd);
+      if(!due)return;
+      items.push({si,kind:'csf',due,pct:_mdCsfPct(c,tasks,si)});
+    });
+  });
+  return items;
+}
+// メンバー複数人分（チームダッシュボード用）。メンバーが複数チャートを持つ場合も全て対象にする。
 function _ldDashCellItems(ids){
   const items=[];
   (ids||[]).forEach(id=>{
     const m=MEMBERS[id];if(!m)return;
     const tasks=MEMBER_TASKS[id]||[];
-    _ldMemberCharts(id).forEach(c=>{
-      const chartEnd=c.end_date||c.endDate||'';
-      const kgiName=((c.center||'').split('\n')[0]||'').trim();
-      if(kgiName&&chartEnd)items.push({id,si:null,kind:'kgi',due:chartEnd,pct:_mdKgiPct(c,tasks)});
-      (c.subs||[]).forEach((s,si)=>{
-        const ed=(_mdEdits(c)['csf-'+si])||{};
-        const text=(ed.text!=null?ed.text:s)||'';
-        if(!text)return;
-        const due=_ldCsfDue(c,tasks,si,chartEnd);
-        if(!due)return;
-        items.push({id,si,kind:'csf',due,pct:_mdCsfPct(c,tasks,si)});
-      });
-    });
+    _ldCellItemsForCharts(_ldMemberCharts(id),tasks).forEach(it=>items.push(Object.assign({id},it)));
   });
   return items;
 }
@@ -903,6 +910,7 @@ function renderDashboard(){
     set('ld-hours',hours+'h');
   })();
   let h='';
+  const _mcToday=new Date().toISOString().slice(0,10);
   ids.forEach(id=>{
     const m=MEMBERS[id];const col=rateColor(m.rate);
     // 複数ロールはバッジを並べて表示（同一人物の二重カウント防止の集約結果）
@@ -910,9 +918,9 @@ function renderDashboard(){
     const badges=rolesArr.map(r=>`<span class="badge ${r==='リーダー'?'b-manager':'b-employee'}" style="margin-left:4px">${r}</span>`).join('');
     h+=`<div class="card"><div class="card-hd" style="border-left:4px solid ${m.color}"><div><div class="card-title">${m.name} ${badges}</div><div class="card-sub">${m.team}</div></div><span style="font-size:20px;font-weight:800;color:${col}">${m.rate}%</span></div><div class="card-body" style="padding:10px 14px">`;
     // メンバーカードはKGIのみ表示（CSFは出さない）。全チャート取得済みなら全KGI、無ければ主チャートのKGI1件
-    const kgiCharts=(window._chartsCache&&window._chartsCache[m.pid]&&window._chartsCache[m.pid].length)
-      ? window._chartsCache[m.pid]
-      : [{center:m.center,member_kpi_edits:m.memberKpiEdits}];
+    // ★ _ldMemberChartsで取得（チームダッシュボード統計カード・個人DBと同じチャート集合を使うことで、
+    //   同一メンバーの数値がどの表示でも一致するようにする）
+    const kgiCharts=_ldMemberCharts(id);
     const kgiRows=kgiCharts.map(c=>{
       const text=(c.center||'').replace(/\n/g,' ').trim();
       if(!text)return null;
@@ -934,7 +942,16 @@ function renderDashboard(){
     });
     const kpiEditCnt=m.memberKpiEdits?Object.keys(m.memberKpiEdits).length:0;
     const kpiEditBadge=kpiEditCnt>0?`<span style="font-size:9px;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;padding:2px 7px;border-radius:10px;font-weight:700">✏ KPI編集 ${kpiEditCnt}件</span>`:'';
-    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:10px;color:var(--text3)">完了 ${m.stats.done} ・ 進行 ${m.stats.wip} ・ 遅延 ${m.stats.late}</span>${kpiEditBadge}</div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMemberDash('${id}')">📊 個人DB</button></div></div></div></div>`;
+    // 「遅延」「完了」は個人DB・チームダッシュボードの統計カードと同じ基準（タスク＋KGI/CSFセル）で
+    // ここでも算出する。m.stats（DB保存時点のstatus列のみ）を直接使うと、他画面の
+    // 「タスク・KGI/CSF」込みの遅延数と食い違うため（進行中はタスクのみで従来通り）。
+    const _mcTasks=MEMBER_TASKS[id]||[];
+    const _mcCells=_ldCellItemsForCharts(kgiCharts,_mcTasks);
+    const _mcTaskDone=_mcTasks.filter(t=>effStatus(t)==='done').length;
+    const _mcTaskLate=_mcTasks.filter(t=>effStatus(t)==='late').length;
+    const _mcDone=_mcTaskDone+_mcCells.filter(c=>c.pct>=100).length;
+    const _mcLate=_mcTaskLate+_mcCells.filter(c=>c.due<_mcToday&&c.pct<100).length;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:10px;color:var(--text3)">完了 ${_mcDone} ・ 進行 ${m.stats.wip} ・ 遅延 ${_mcLate}</span>${kpiEditBadge}</div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openMemberDash('${id}')">📊 個人DB</button></div></div></div></div>`;
   });
   const con=document.getElementById('dash-members');
   con.innerHTML=ids.length?h:'<div class="card" style="grid-column:1/-1"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">条件に一致するメンバーがいません</div></div>';
@@ -1232,10 +1249,13 @@ function onMdTaskViewChange(){
 function mdRenderAllTasks(){
   const tasks=window._mdTasks||[];
   const charts=window._mdCharts||[];
-  // ①統計カードはモードAと同じ「全タスク」基準（モードで件数が変わる混乱を避ける）
-  const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length;
+  // 「完了」「遅延」はタスク＋KGI/CSFセル（チームダッシュボード・「割り当てタスクの状況」表示と
+  // 同じ基準）で算出する。タスクのみで数えると同一メンバーの遅延数が画面によって食い違うため。
+  const _mcToday=new Date().toISOString().slice(0,10);
+  const cells=_ldCellItemsForCharts(charts,tasks);
+  const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length+cells.filter(c=>c.pct>=100).length;
   const wip=tasks.filter(t=>t.status==='wip').length;
-  const late=tasks.filter(t=>effStatus(t)==='late').length;
+  const late=tasks.filter(t=>effStatus(t)==='late').length+cells.filter(c=>c.due<_mcToday&&c.pct<100).length;
   const totalH=tasks.reduce((a,t)=>a+(t.hours||0),0);
   const sc=document.getElementById('md-stat-cards');
   if(sc)sc.innerHTML=`<div class="stat-card" style="padding:14px"><div class="s-lbl">タスク</div><div class="s-val" style="font-size:22px;color:var(--accent)">${tasks.length}</div></div>
@@ -1358,9 +1378,15 @@ function mdRenderAllTasks(){
 // タスク一覧＋KPIサマリを再描画
 function mdRenderTasks(chartId){
   const tasks=mdFilterTasks(chartId);
-  const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length;
+  // 「完了」「遅延」はタスク＋KGI/CSFセル（チームダッシュボード・「全てのタスク」表示と同じ基準）で
+  // 算出する。タスクのみで数えると同一メンバーの遅延数が画面によって食い違うため。
+  const _mcToday=new Date().toISOString().slice(0,10);
+  const _allCharts=window._mdCharts||[];
+  const _cellCharts=chartId?_allCharts.filter(c=>String(c.id)===String(chartId)):_allCharts;
+  const cells=_ldCellItemsForCharts(_cellCharts,window._mdTasks||[]);
+  const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length+cells.filter(c=>c.pct>=100).length;
   const wip=tasks.filter(t=>t.status==='wip').length;
-  const late=tasks.filter(t=>effStatus(t)==='late').length;
+  const late=tasks.filter(t=>effStatus(t)==='late').length+cells.filter(c=>c.due<_mcToday&&c.pct<100).length;
   const totalH=tasks.reduce((a,t)=>a+(t.hours||0),0);
   const sc=document.getElementById('md-stat-cards');
   if(sc)sc.innerHTML=`<div class="stat-card" style="padding:14px"><div class="s-lbl">タスク</div><div class="s-val" style="font-size:22px;color:var(--accent)">${tasks.length}</div></div>
