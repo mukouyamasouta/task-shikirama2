@@ -328,8 +328,11 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
           <div id="evalin-to-ymd"></div>
         </div>
       </div>
-      <button class="f-submit" onclick="saveMemberEval()">💾 評価を保存</button>
-      <span class="toast" id="evalin-saved">✅ 評価を保存しました（評価記録に反映）</span>
+      <div style="display:flex;gap:10px;width:100%">
+        <button class="f-submit" style="flex:1;background:#6B7280" onclick="saveMemberEval(false)">💾 保存</button>
+        <button class="f-submit" style="flex:1;background:var(--accent)" onclick="saveMemberEval(true)">📤 提出（従業員・管理画面に反映）</button>
+      </div>
+      <span class="toast" id="evalin-saved">✅ 評価を保存しました</span>
     </div>
   </div>
   <div style="background:#F0FDF4;border:1px solid #10B981;border-radius:8px;padding:9px 14px;margin-bottom:14px;font-size:11px;color:#065F46;display:flex;gap:14px;flex-wrap:wrap;align-items:center">
@@ -2015,6 +2018,7 @@ function ensureEvalPeriodOptions(){
 async function renderMemberEval(){
   const sel=document.getElementById('evalin-member');if(!sel)return;const id=sel.value;if(!id)return;
   ensureEvalPeriodOptions();
+  window._evalRestoredNotice=false;
   const d=MEMBERS[id];const e=_meval(id);
   // メンバーの曼荼羅チャート一覧を取得
   let charts=window._chartsCache[d.pid];
@@ -2025,14 +2029,37 @@ async function renderMemberEval(){
   charts=charts||[];
   // チャート選択（未設定なら現メンバーの主チャート）
   if(!_evalChartId||!charts.some(c=>c.id===_evalChartId))_evalChartId=charts[0]?charts[0].id:'';
-  // 選択チャートの自己評価を取得
+  // 選択チャートの自己評価と、自分（このリーダー）が過去に保存した評価を取得
   let selfEval=null;
   if(API&&API.ready&&d.pid&&_evalChartId){
     try{
       const ck=d.pid+'|'+_evalChartId;
       let ev=window._evalCache[ck];
+      const freshlyFetched=!ev;
       if(!ev){ev=await API.loadEvaluationsFor(d.pid,_evalChartId);window._evalCache[ck]=ev;}
       if(ev.fromSelf.length)selfEval=ev.fromSelf[0];
+      // 自分（このリーダー）が過去に保存した評価（下書き・提出済み問わず）を復元する。
+      // ★スターをクリックするたびにsetMstar()経由でrenderMemberEval()が再実行されるため、
+      //   このメンバー・チャートの組み合わせで一度取得済み（キャッシュ済み）の場合は
+      //   復元処理をスキップする。毎回復元すると、クリック直後の未保存の変更が
+      //   サーバー上の古い値で上書きされ、スター評価が反映されない不具合になる。
+      // ★他のリーダーが同じ相手を評価している場合の取り違えを防ぐため、
+      //   evaluator_id（自分自身のprofile_id）が一致するもの限定で復元する
+      //   （文字列名の一致より確実。同姓同名の別リーダーとの混同を防ぐ）。
+      // ★_mevalはメンバーid単位のみで保持されるため、チャート切替時に前のチャートの
+      //   未保存入力が残ってしまわないよう、復元の有無に関わらずまず必ずリセットしてから
+      //   （一致する過去評価があれば）復元する。
+      if(freshlyFetched){
+        const me2=_meval(id);
+        me2.kgi.stars=0;me2.kgi.comment='';me2.csf.forEach(c=>{c.stars=0;c.comment='';});
+        const myId=window._meProfile&&window._meProfile.id;
+        const mine=myId?(ev.fromLeader||[]).find(x=>x.evaluatorId===myId):null;
+        window._evalRestoredNotice=!!mine;
+        if(mine){
+          me2.kgi.stars=mine.kgi||0; me2.kgi.comment=mine.kgiComment||'';
+          (mine.csf||[]).forEach((c,i)=>{ if(me2.csf[i]){me2.csf[i].stars=c.stars||0; me2.csf[i].comment=c.comment||'';} });
+        }
+      }
     }catch(err){console.warn(err);}
   }
   // チャートが選ばれてない＝全期間から自己評価取得（後方互換）
@@ -2057,7 +2084,10 @@ async function renderMemberEval(){
   if(charts.length){
     chartSelHTML=`<div style="background:#FAFCFC;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap"><label class="fl" style="margin:0">評価対象の期間（チャート）</label><select class="fs" style="width:auto;min-width:280px" onchange="onEvalChartChange(this.value)">${charts.map(c=>`<option value="${c.id}" ${c.id===_evalChartId?'selected':''}>${c.period||c.scope_label||'期間未設定'}${c.name?' ／ '+c.name:''}</option>`).join('')}</select>${selfEval?'<span style="font-size:11px;color:var(--amber);font-weight:700">📝 本人自己評価あり</span>':'<span style="font-size:11px;color:var(--text3)">自己評価なし</span>'}</div>`;
   }
-  let h=`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF）</div><div class="card-sub">${d.name} ／ ${d.team}</div></div><div style="display:flex;gap:6px"><button class="card-btn" style="background:var(--accent);color:#fff" onclick="openMandala('${id}',true)">🖊 曼荼羅で評価</button><button class="card-btn" style="background:var(--accent-l);color:var(--accent);font-weight:700" onclick="toggleEvalinMnd()">🔷 曼荼羅形式</button></div></div>${chartSelHTML}<div id="evalin-mnd-wrap" style="display:none;padding:14px;overflow-x:auto;border-bottom:1px solid var(--border)"></div><div class="card-body">`;
+  // 前回保存した評価（下書き・提出済み問わず）を復元した場合は、内容が古い可能性がある旨を
+  // 明示する（気づかずそのまま提出して古い評価を送ってしまう事故を防ぐ）
+  const restoredNotice=window._evalRestoredNotice?'<div style="background:#EFF6FF;border-bottom:1px solid #93C5FD;color:#1D4ED8;font-size:11px;font-weight:700;padding:8px 14px">📋 前回保存した内容を表示しています。内容をご確認のうえ、提出してください。</div>':'';
+  let h=`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF）</div><div class="card-sub">${d.name} ／ ${d.team}</div></div><div style="display:flex;gap:6px"><button class="card-btn" style="background:var(--accent);color:#fff" onclick="openMandala('${id}',true)">🖊 曼荼羅で評価</button><button class="card-btn" style="background:var(--accent-l);color:var(--accent);font-weight:700" onclick="toggleEvalinMnd()">🔷 曼荼羅形式</button></div></div>${chartSelHTML}${restoredNotice}<div id="evalin-mnd-wrap" style="display:none;padding:14px;overflow-x:auto;border-bottom:1px solid var(--border)"></div><div class="card-body">`;
   h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-kgi">KGI</span><span class="eval-goal">${(d.center||'').replace(/\n/g,' ')}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'kgi',-1)}</div><textarea class="eval-cmt" rows="2" placeholder="KGIへの評価コメント…" oninput="saveMeval('${id}','kgi',-1,this.value)">${e.kgi.comment}</textarea>${selfKgi}</div>`;
   for(let si=0;si<8;si++)h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-csf">CSF-${si+1}</span><span class="eval-goal">${d.subs[si]}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">5段階評価</span>${starHTML(id,'csf',si)}</div><textarea class="eval-cmt" rows="2" placeholder="CSF-${si+1}への評価コメント…" oninput="saveMeval('${id}','csf',${si},this.value)">${e.csf[si].comment}</textarea>${selfCsf(si)}</div>`;
   h+=`</div></div>`;
@@ -2086,7 +2116,9 @@ function renderEvalinMnd(){
     });
   }
 }
-function saveMemberEval(){
+// isSubmit=false: 下書き保存（通知を送らない・評価記録タブには残さない）
+// isSubmit=true: 提出（従業員・管理画面に反映。通知を送り、評価記録タブに記録する）
+function saveMemberEval(isSubmit){
   const id=document.getElementById('evalin-member').value;
   const _ef=ymdValue('evalin-from')||'',_et=ymdValue('evalin-to')||'';const _pd=new Date();const period=(_ef||_et)?((_ef||'')+'〜'+(_et||'')):(_pd.getFullYear()+' Q'+(Math.floor(_pd.getMonth()/3)+1));  // 期間未入力時は幹部画面と同じ'YYYY Qn'を自動算出
   const API0=window.VexumAPI;
@@ -2096,17 +2128,24 @@ function saveMemberEval(){
   const e=_meval(id);const name=MEMBERS[id].name;
   const avgCsf=Math.round(e.csf.reduce((a,c)=>a+c.stars,0)/8*10)/10;
   const cmt=e.kgi.comment||(e.csf.find(c=>c.comment)||{}).comment||'';
-  const rec={name,evaluator:LEADER.name,period,kgi:e.kgi.stars,csf:avgCsf,comment:cmt,status:'done'};
   const API=window.VexumAPI;
-  if(API&&API.ready){
-    API.saveEvalRecord({evaluateePid:pidOf(id),evaluateeName:name,period,kgi:e.kgi.stars,csf:avgCsf,comment:cmt});
-    // メンバー本人の個人画面に評価を届ける（選択中チャートに紐付け）
-    API.saveEvaluation({targetPid:pidOf(id),evaluatorRole:'leader',period,kgi:e.kgi.stars,kgiComment:e.kgi.comment||'',csf:e.csf.map(function(c){return {stars:c.stars,comment:c.comment};}),chartId:_evalChartId||null})
-      .then(function(res){if(res&&res.error)console.warn('eval deliver:',res.error); clearEvalCache();});
-  }
-  const idx=EVAL_RECORDS.findIndex(r=>r.name===name&&r.period===period);
-  if(idx>=0)EVAL_RECORDS[idx]=rec;else EVAL_RECORDS.unshift(rec);
-  showToast('evalin-saved');renderEvalRec();
+  if(!(API&&API.ready)){alert('サーバーに接続されていません');return;}
+  API.saveEvaluation({targetPid:pidOf(id),evaluatorRole:'leader',period,kgi:e.kgi.stars,kgiComment:e.kgi.comment||'',csf:e.csf.map(function(c){return {stars:c.stars,comment:c.comment};}),chartId:_evalChartId||null,submitted:!!isSubmit})
+    .then(function(res){
+      if(res&&res.error){alert('評価の保存に失敗しました: '+res.error);return;}
+      clearEvalCache();
+      if(isSubmit){
+        // eval_records（評価記録タブの履歴）への記録は提出時のみ
+        const rec={name,evaluator:LEADER.name,period,kgi:e.kgi.stars,csf:avgCsf,comment:cmt,status:'done'};
+        API.saveEvalRecord({evaluateePid:pidOf(id),evaluateeName:name,period,kgi:e.kgi.stars,csf:avgCsf,comment:cmt});
+        const idx=EVAL_RECORDS.findIndex(r=>r.name===name&&r.period===period);
+        if(idx>=0)EVAL_RECORDS[idx]=rec;else EVAL_RECORDS.unshift(rec);
+        renderEvalRec();
+      }
+      const toastEl=document.getElementById('evalin-saved');
+      if(toastEl)toastEl.textContent=isSubmit?'✅ 提出しました（従業員・管理画面に反映されます）':'💾 保存しました';
+      showToast('evalin-saved');
+    });
 }
 
 /* ===== 評価記録（メンバー選択→CSFまで網羅的に表示） ===== */
@@ -2147,7 +2186,8 @@ async function _evalRecDetail(){
   // 接続時: evaluations から CSF 詳細を取得
   if(API&&API.ready&&m&&m.pid){
     let data;try{data=await API.loadEvaluationsFor(m.pid);}catch(e){data=null;}
-    let evs=data?[].concat(data.fromLeader||[],data.fromExec||[],data.fromSelf||[]):[];
+    // 下書き（未提出）は評価記録として確定していないため除外する
+    let evs=data?[].concat(data.fromLeader||[],data.fromExec||[],data.fromSelf||[]).filter(x=>x.submitted):[];
     // チャート作成期間（mandala_charts.start_date/period）の選択肢を生成・絞り込み
     let charts=window._chartsCache[m.pid];
     if(!charts){try{charts=await API.loadChartsFor(m.pid);window._chartsCache[m.pid]=charts;}catch(e){charts=[];}}
@@ -2659,6 +2699,10 @@ function _ldGotoNotif(n){
             if(cid)_evalChartId=cid;
           }catch(e){}
         }
+        // 通知が届いた=直前にサーバー側のデータが更新されているため、セッション中に同じ
+        // メンバー・チャートを閲覧済みでキャッシュが残っていても必ず最新を取得し直す
+        // （キャッシュ hit のままだと、この通知の原因である提出直後の内容が反映されない）。
+        window._evalCache={};
         if(typeof renderMemberEval==='function')await renderMemberEval();
       },150);
     }

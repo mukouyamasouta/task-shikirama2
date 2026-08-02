@@ -969,9 +969,9 @@
     (r.data || []).forEach(function (ev) {
       var evp = byId[ev.evaluator_id] || {};
       var item = {
-        id: ev.id, evaluatorName: evp.full_name || '—', evaluatorRole: ev.evaluator_role,
+        id: ev.id, evaluatorId: ev.evaluator_id, evaluatorName: evp.full_name || '—', evaluatorRole: ev.evaluator_role,
         period: ev.period || '', kgi: ev.kgi_stars || 0, kgiComment: ev.kgi_comment || '',
-        csf: ev.csf || [], chartId: ev.chart_id, createdAt: ev.created_at,
+        csf: ev.csf || [], chartId: ev.chart_id, createdAt: ev.created_at, submitted: !!ev.submitted,
         execComment: ev.exec_comment || '', execCommentedAt: ev.exec_commented_at || null
       };
       if (ev.evaluator_id === pid) out.fromSelf.push(item);
@@ -1116,11 +1116,16 @@
   async function saveEvaluation(o) {
     if (!sb) return { error: 'Supabase未接続' };
     var me = await currentProfile();
+    // ★executive.html は下書き/提出の概念を持たず常に確定保存のUIのため、
+    //   evaluatorRole==='executive'のときはsubmittedを常にtrue扱いにする
+    //   （o.submitted未指定=falseのまま扱うと、幹部の評価が「下書き」判定されて
+    //   従業員・管理画面に一切見えなくなるリグレッションになるため）。
+    var submitted = (o.evaluatorRole === 'executive') ? true : !!o.submitted;
     var row = {
       target_type: 'user', target_user_id: o.targetPid || null,
       evaluator_id: me ? me.id : null, evaluator_role: o.evaluatorRole || 'leader',
       period: o.period || null, kgi_stars: o.kgi || 0, kgi_comment: o.kgiComment || '',
-      csf: o.csf || [], chart_id: o.chartId || null
+      csf: o.csf || [], chart_id: o.chartId || null, submitted: submitted
     };
     var lockKey = (me ? me.id : '') + '|' + (o.targetPid || '') + '|' + row.evaluator_role + '|' + (o.chartId || '') + '|' + (row.period || '');
     if (_evalSaveLocks[lockKey]) { try { await _evalSaveLocks[lockKey]; } catch (e) {} }
@@ -1132,14 +1137,22 @@
       // 過去の期間の評価を上書き消去してしまわないようにする。
       var existing = null;
       if (me && o.targetPid) {
-        var q = sb.from('evaluations').select('id')
+        var q = sb.from('evaluations').select('id,submitted')
           .eq('evaluator_id', me.id).eq('target_user_id', o.targetPid)
           .eq('evaluator_role', row.evaluator_role);
         q = o.chartId ? q.eq('chart_id', o.chartId) : q.is('chart_id', null);
         q = row.period ? q.eq('period', row.period) : q.is('period', null);
         var qr = await q.order('created_at', { ascending: false }).limit(1);
         if (qr.error) return { error: qr.error };
-        if (qr.data && qr.data[0]) existing = qr.data[0];
+        if (qr.data && qr.data[0]) {
+          var found = qr.data[0];
+          // 幹部評価（下書き概念が無くsubmittedは常にtrue）は常に上書き更新する。
+          // リーダー評価は、既に提出済みの行を後から「保存（下書き）」で誤って
+          // submitted=falseに戻してしまう（従業員・管理画面から突然消える）事故を防ぐため、
+          // 未提出の行のみ上書き対象とする。提出済みの行への再編集は新しい行として保存する
+          // （employee.htmlのupsertSelfEvalの「提出済みは新規作成し履歴を残す」と同じ設計）。
+          if (row.evaluator_role === 'executive' || !found.submitted) existing = found;
+        }
       }
       return existing
         ? await sb.from('evaluations').update(row).eq('id', existing.id)
@@ -1155,7 +1168,7 @@
     // そのまま insert すると 22P02 で通知ごと失われる。失敗時は ref_id 無しで再送し、
     // 通知自体は必ず届くようにする（マイグレーション適用後は1回目で成功する）。
     try {
-      if (o.targetPid && me && o.targetPid !== me.id) {
+      if (submitted && o.targetPid && me && o.targetPid !== me.id) {
         var ntfRow = {
           to_user_id: o.targetPid, to_team_id: null, type: 'evaluation_received',
           title: '評価が届きました', body: (o.period ? o.period + ' の' : '') + '評価が登録されました',
@@ -1247,6 +1260,7 @@
     var chartKeyByDbId = {};
     Object.keys(CHARTS).forEach(function (k) { var d = CHARTS[k]; if (d && d.dbId) chartKeyByDbId[d.dbId] = k; });
     raw.evaluations.forEach(function (ev) {
+      if (!ev.submitted) return;   // 下書き（未提出）は本人のフィードバック欄に出さない
       var ck = (ev.chart_id && chartKeyByDbId[ev.chart_id])
              ? chartKeyByDbId[ev.chart_id]
              : ev.chart_id === 'user_' + memberKey ? 'self_q3'

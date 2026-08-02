@@ -980,7 +980,7 @@ function adRenderReviews(){
   if(!AD.ready)return;
   const raw=AD.raw;
   const tb=document.getElementById('ad-reviews-tbody');if(!tb)return;
-  const rows=raw.evaluations.slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))).slice(0,50);
+  const rows=raw.evaluations.filter(ev=>ev.submitted).slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))).slice(0,50);
   tb.innerHTML=rows.map(ev=>{
     const target=ev.target_type==='team'?adTeamName(ev.target_team_id):adProfName(ev.target_user_id);
     const self=ev.evaluator_id&&ev.evaluator_id===ev.target_user_id;
@@ -1066,7 +1066,7 @@ window.vxNotifSource=function(){
   raw.tasks.filter(t=>!t.assignee_id).slice(0,5).forEach(t=>out.push({icon:'📋',bg:'#FEF3C7',color:'var(--amber)',text:`未割当タスク「${t.title}」`,time:'担当者の割当が必要',tab:'assign'}));
   raw.tasks.filter(t=>t.status==='late').slice(0,5).forEach(t=>out.push({icon:'⚠',bg:'#FEE2E2',color:'var(--red)',text:`「${t.title}」が期限超過（${adProfName(t.assignee_id)}）`,time:'期限 '+adFmtMD(t.due_date),tab:'tasks'}));
   raw.tasks.filter(t=>t.status==='done').sort((a,b)=>String(b.completed_date||'').localeCompare(String(a.completed_date||''))).slice(0,4).forEach(t=>out.push({icon:'✓',bg:'#D1FAE5',color:'var(--green)',text:`「${t.title}」が完了（${adProfName(t.assignee_id)}）`,time:t.completed_date||'',tab:'tasks'}));
-  (raw.evaluations||[]).slice(-4).reverse().forEach(ev=>out.push({icon:'★',bg:'#DAEEE9',color:'var(--accent)',text:`評価が登録されました（${adProfName(ev.target_user_id)||'チーム'}）`,time:ev.period||'',tab:'reviews'}));
+  (raw.evaluations||[]).filter(ev=>ev.submitted).slice(-4).reverse().forEach(ev=>out.push({icon:'★',bg:'#DAEEE9',color:'var(--accent)',text:`評価が登録されました（${adProfName(ev.target_user_id)||'チーム'}）`,time:ev.period||'',tab:'reviews'}));
   return out;
 };
 async function adReload(){

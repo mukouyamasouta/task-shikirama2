@@ -296,6 +296,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="sec-title">評価管理 <span style="font-size:11px;font-weight:400;color:var(--text3)">曼荼羅チャートのKGI / CSF / KPIを評価</span>
   </div>
   <div id="self-eval-status-card" style="background:#FFFBEB;border:1px solid #F59E0B;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#92400E;display:none"></div>
+  <div id="received-eval-card" style="margin-bottom:14px"></div>
 
   <!-- 自己評価モーダル（KGI＋CSF8項目） -->
   <div id="self-eval-modal" onclick="if(event.target===this)closeSelfEval()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
@@ -1677,6 +1678,38 @@ async function refreshSelfEvalStatusCard(){
   }catch(e){card.style.display='none';}
 }
 function setEvalView(v,btn){evalView=v;document.querySelectorAll('#seg-view .seg-btn').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');renderEval();}
+// リーダー・幹部から届いた評価（submitted=trueのみ）を表示する。
+// これまで従業員が「提出された評価の内容（★・コメント）」を確認する手段が
+// 存在しなかったため新設（通知は届いていても中身を見る画面が無かった）。
+let _receivedEvalReq=0;
+async function renderReceivedEval(){
+  const box=document.getElementById('received-eval-card');if(!box)return;
+  const API=window.VexumAPI;
+  if(!(API&&API.ready)){box.innerHTML='';return;}
+  // 連続してチャートを切り替えた場合、古い呼び出しの応答が新しい呼び出しより後に返ってきて
+  // 別チャートの内容で上書きしないよう、リクエストごとに採番して最新の呼び出しのみ描画反映する
+  const reqId=++_receivedEvalReq;
+  const me=await API.currentProfile();if(!me){if(reqId===_receivedEvalReq)box.innerHTML='';return;}
+  const k=evalChartKey;const c=CHARTS[k];
+  const chartId=(k&&c)?evalDbId(k,c):null;
+  let ev;
+  try{ev=await API.loadEvaluationsFor(me.id,chartId);}
+  catch(e){if(reqId===_receivedEvalReq)box.innerHTML='';return;}
+  if(reqId!==_receivedEvalReq)return;
+  const items=[...(ev.fromLeader||[]),...(ev.fromExec||[])].filter(x=>x.submitted);
+  if(!items.length){box.innerHTML='';return;}
+  items.sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  let h='<div class="card"><div class="card-hd"><div class="card-title">📩 上長・幹部からの評価</div></div><div class="card-body">';
+  items.forEach(it=>{
+    const roleLabel=it.evaluatorRole==='executive'?'幹部':'リーダー';
+    h+=`<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:700;color:var(--text2)">${it.evaluatorName||roleLabel}（${roleLabel}） ／ ${it.period||''}</div>
+      <div style="font-size:12px;margin-top:4px">KGI: ${'★'.repeat(it.kgi||0)}${'☆'.repeat(5-(it.kgi||0))} ${it.kgiComment?('「'+it.kgiComment+'」'):''}</div>
+    </div>`;
+  });
+  h+='</div></div>';
+  box.innerHTML=h;
+}
 
 /* ===== 自己評価（KGI + CSF8項目）— 下書き/提出/既存読込/ロック対応 ===== */
 let _seStars=0;
@@ -1819,6 +1852,7 @@ function populateEvalChartSel(){
 function renderEval(){
   populateEvalChartSel();
   _mountEvalDateFilter();
+  if(typeof renderReceivedEval==='function')renderReceivedEval();
   const k=evalChartKey;const d=getAllMnd()[k];
   if(!d)return;
   if(!evalStates[k])evalStates[k]={};
