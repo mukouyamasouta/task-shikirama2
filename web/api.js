@@ -160,20 +160,37 @@
     var tmByProfile = {};
     raw.team_members.forEach(function (m) { tmByProfile[m.profile_id] = m; });
 
-    // MEMBERS は「全アカウント」を対象（未所属・新規作成分も含む）
+    // MEMBERS は「全アカウント」を対象（未所属・新規作成分も含む）。
+    // ★同一人物が複数ロール（幹部⇄従業員紐づけ等）で別々のprofile_idを持つ場合、
+    //   profile_id単位でそのままエントリを作ると同じ人物が複数エントリに分裂してしまう
+    //   （executive.htmlの一覧・評価タブに同一人物が重複表示される不具合の原因だった。
+    //   このファイル内のTEAMS[key].memberCountは既にpersonsOfTeamで人物単位集約している
+    //   のに、MEMBERS自体はそうなっていなかった）。team_membersに行を持つ人物は
+    //   personsOfTeamで人物単位に集約し、pidToKeyで全profile_idを代表キーへ引けるようにする。
+    var persons = personsOfTeam(raw.team_members, prof);
+    var pidToKey = {};
     var MEMBERS = {};
-    raw.profiles.forEach(function (p) {
-      var key = memKey(p.id);
-      var tm = tmByProfile[p.id];
+    persons.forEach(function (person) {
+      var p = prof[person.primaryPid]; if (!p) return;
+      var key = memKey(person.primaryPid);
+      person.pids.forEach(function (pid) { pidToKey[pid] = key; });
+      var tm = tmByProfile[person.primaryPid];
       MEMBERS[key] = {
         pid: p.id,
         name: p.full_name,
         email: p.email,
-        role: (tm && tm.role_in_team === 'leader') ? 'リーダー' : roleJPFull(p.role),
+        role: person.isLeader ? 'リーダー' : roleJPFull(p.role),
         roleEnum: p.role,
         team: tm ? (TEAM_KEY[tm.team_id] || tm.team_id) : '',
-        rate: tm ? (tm.achievement_rate || 0) : 50
+        rate: person.rate || (tm ? (tm.achievement_rate || 0) : 50)
       };
+    });
+    // team_membersに行を持たないプロフィール（未所属・新規作成直後等）も個別に含める
+    raw.profiles.forEach(function (p) {
+      var key = memKey(p.id);
+      if (pidToKey[p.id] || MEMBERS[key]) return; // 既に人物単位で処理済み
+      pidToKey[p.id] = key;
+      MEMBERS[key] = { pid: p.id, name: p.full_name, email: p.email, role: roleJPFull(p.role), roleEnum: p.role, team: '', rate: 50 };
     });
 
     var MND = {}, EMP = {};
@@ -183,7 +200,7 @@
         var tk = TEAM_KEY[c.owner_team_id] || c.owner_team_id; if (!tk) return;
         base.team = c.name; MND[tk] = base;
       } else if (c.id !== 'user_nakamura_q2') {
-        var mk = memKey(c.owner_user_id); if (!mk) return;
+        var mk = pidToKey[c.owner_user_id] || memKey(c.owner_user_id); if (!mk) return;
         var mem = MEMBERS[mk] || {};
         base.team = letterName[mem.team] || ''; base.role = mem.role || 'メンバー';
         EMP[mk] = base;
@@ -1853,17 +1870,27 @@
     var raw = await fetchAll(); if (!raw) return null;
     var prof = byId(raw.profiles);
     var teamById = byId(raw.teams);
-    var members = teamUuid ? raw.team_members.filter(function (m) { return m.team_id === teamUuid; }) : raw.team_members;
-    members = members.slice();
-    members.sort(function (a, b) { return (a.role_in_team === 'leader' ? 0 : 1) - (b.role_in_team === 'leader' ? 0 : 1); });
+    var membersRaw = teamUuid ? raw.team_members.filter(function (m) { return m.team_id === teamUuid; }) : raw.team_members;
+    // 人物単位（email）で集約する。同一人物が複数ロール（幹部⇄従業員紐づけ等）で別々の
+    // profile_id・team_members行を持つ場合、生の行を直接key=memKey(profile_id)へ処理すると
+    // 同じ人物のはずが行の処理順序次第でrole/team表示が不定になり、かつ「勝たなかった方の
+    // profile_id」に割り当てられたタスクがMEMBER_TASKS構築時に行き先を失って消えてしまう
+    // 不具合があった（loadLeaderDataは既にpersonsOfTeam+pidToKeyで対応済み。同じ考え方を適用する）。
+    var persons = personsOfTeam(membersRaw, prof);
+    var tmByPid = {}; membersRaw.forEach(function (m) { tmByPid[m.profile_id] = m; });
     // メンバーの主チャート（個人曼荼羅）を owner_user_id で引けるように
     var chartByUser = {};
     raw.mandala_charts.forEach(function (c) { if (c.owner_type === 'user' && c.id.indexOf('_q2') < 0) chartByUser[c.owner_user_id] = c; });
     var MEMBERS = {}, DASH_IDS = [], EVAL_IDS = [];
-    members.forEach(function (m) {
-      var key = memKey(m.profile_id), p = prof[m.profile_id]; if (!key || !p) return;
-      var team = teamById[m.team_id] || { name: '' };
-      var tk = raw.tasks.filter(function (t) { return t.assignee_id === m.profile_id; });
+    var pidToKey = {};
+    persons.forEach(function (person) {
+      var p = prof[person.primaryPid]; if (!p) return;
+      var key = memKey(person.primaryPid);
+      person.pids.forEach(function (pid) { pidToKey[pid] = key; });
+      var tmRow = tmByPid[person.primaryPid];
+      var team = (tmRow && teamById[tmRow.team_id]) || { name: '' };
+      // この人物の全タスク（複数ロール分を合算）
+      var tk = raw.tasks.filter(function (t) { return person.pids.indexOf(t.assignee_id) >= 0; });
       // 完了/進行中/遅延はDBのstatus列だけでなく期限日からも判定する（画面側のeffStatus/stOfと同一基準。
       // status列は保存操作が起きた時点のスナップショットで、期限超過後にタスクへ触っていないと
       // 自動では'late'に変わらず古い値のまま残るため、期限日で都度補正する）。
@@ -1875,29 +1902,35 @@
         wip: tk.filter(function (t) { return !_isDone2(t) && !_isLate2(t) && (t.progress || 0) > 0; }).length,
         late: tk.filter(_isLate2).length
       };
-      var c = chartByUser[m.profile_id] || { subs: [], acts: [], center: '' };
+      // この人物のいずれかのprofileが持つ個人チャート（primaryPidだけでなく全pidを見る。
+      // 例えばリーダー行が優先されprimaryPidになっても、チャートは紐づけ元の従業員profileの
+      // owner_user_idで保存されている場合があり、primaryPidだけで引くと見つからずKPI/曼荼羅が
+      // 空欄になってしまう。loadLeaderDataと同じ考え方）
+      var c = null;
+      for (var pi = 0; pi < person.pids.length; pi++) { if (chartByUser[person.pids[pi]]) { c = chartByUser[person.pids[pi]]; break; } }
+      c = c || { subs: [], acts: [], center: '' };
       // KPI進捗 = そのCSFに紐づくタスクの平均進捗（タスクが無いCSFは達成率で代替）— リーダー画面と同ロジック
       var kpis = (c.subs || []).slice(0, 4).map(function (s) {
         var rel = tk.filter(function (t) { return t.related_kgi === s; });
         var pp = rel.length
           ? Math.round(rel.reduce(function (a, t) { return a + (t.progress || 0); }, 0) / rel.length)
-          : (m.achievement_rate || 0);
+          : (person.rate || 0);
         return { n: s, p: Math.max(0, Math.min(100, pp)) };
       });
       MEMBERS[key] = {
-        pid: p.id, name: p.full_name, role: m.role_in_team === 'leader' ? 'リーダー' : '従業員',
-        team: team.name, teamUuid: m.team_id, color: p.color, rate: m.achievement_rate || 0, stats: stats,
+        pid: p.id, name: p.full_name, role: person.isLeader ? 'リーダー' : '従業員',
+        team: team.name, teamUuid: tmRow ? tmRow.team_id : null, color: p.color, rate: person.rate || 0, stats: stats,
         kpis: kpis, memberKpiEdits: c.member_kpi_edits || {},
         center: c.center || '', subs: c.subs || [], acts: c.acts || [],
         startDate: c.start_date ? fmtYMD(c.start_date) : '', endDate: c.end_date ? fmtYMD(c.end_date) : '', period: c.period || ''
       };
       DASH_IDS.push(key);
-      if (m.role_in_team !== 'leader') EVAL_IDS.push(key);
+      if (!person.isLeader) EVAL_IDS.push(key);
     });
     var MEMBER_TASKS = {};
     raw.tasks.forEach(function (t) {
       if (teamUuid && t.team_id !== teamUuid) return;
-      var key = memKey(t.assignee_id); if (!key || !MEMBERS[key]) return;
+      var key = pidToKey[t.assignee_id]; if (!key || !MEMBERS[key]) return;
       (MEMBER_TASKS[key] = MEMBER_TASKS[key] || []).push({
         id: t.id, name: t.title, kpi: t.related_kgi || '—', start: fmtMD(t.start_date), due: fmtMD(t.due_date),
         startRaw: t.start_date || null, dueRaw: t.due_date || null,
@@ -1913,7 +1946,9 @@
     var memberPid = {};
     raw.profiles.forEach(function (p) { memberPid[memKey(p.id)] = p.id; });
     var teamsList = raw.teams.map(function (t) { return { uid: t.id, name: t.name }; });
-    return { MEMBERS: MEMBERS, MEMBER_TASKS: MEMBER_TASKS, DASH_IDS: DASH_IDS, EVAL_IDS: EVAL_IDS, memberPid: memberPid, teamsList: teamsList };
+    // pidToKeyも公開する（loadLeaderDataと同様）。マルチロール人物のprofile_idから
+    // 代表キーを引く必要がある呼び出し元（例: 日報のauthor_id→メンバー逆引き）向け。
+    return { MEMBERS: MEMBERS, MEMBER_TASKS: MEMBER_TASKS, DASH_IDS: DASH_IDS, EVAL_IDS: EVAL_IDS, memberPid: memberPid, pidToKey: pidToKey, teamsList: teamsList };
   }
 
   // ===== 幹部画面：日報（全社員／teamUuid指定時はそのチームのみ） =====
@@ -1929,7 +1964,11 @@
       return {
         id: r.id, authorPid: r.author_id, authorName: p.full_name || '—',
         teamName: team ? team.name : '（未所属）', teamUuid: tm ? tm.team_id : null,
-        date: r.report_date, hours: r.hours, done: r.done, plan: r.plan, issue: r.issue, cond: r.condition
+        date: r.report_date, hours: r.hours, done: r.done, plan: r.plan, issue: r.issue, cond: r.condition,
+        // 始業(予定)/終業(実績)の内訳。leader.htmlのREPORTS構築と同じ列から取得し、
+        // 幹部画面の日報カレンダーでも「提出済み/予定」の区別・出退勤の表示ができるようにする
+        planTasks: r.plan_tasks || '', planHours: r.plan_hours || '', goal: r.goal || '',
+        submitted: !!r.submitted_at
       };
     }).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
   }
@@ -1952,8 +1991,16 @@
       if (teamUuid && (!tm || tm.team_id !== teamUuid)) return false;
       return inRange(r.report_date);
     });
-    var done = tasksAll.filter(function (t) { return t.status === 'done'; }).length;
-    var late = tasksAll.filter(function (t) { return t.status === 'late'; }).length;
+    // 完了/遅延はDBのstatus列だけでなく期限日からも判定する（loadLeaderData/loadExecOverviewの
+    // MEMBERS[key].statsと同一基準。status列は保存操作が起きた時点のスナップショットで、
+    // 期限超過後にタスクへ触っていないと自動では'late'に変わらず古い値のまま残るため、
+    // 期限日で都度補正する。これが無いと、このダッシュボード集計カードの「遅延タスク」が
+    // メンバーカード側の遅延数の合計と食い違う）。
+    var _todayDs = new Date().toISOString().slice(0, 10);
+    var _isDoneDs = function (t) { return t.status === 'done' || (t.progress || 0) >= 100; };
+    var _isLateDs = function (t) { return !_isDoneDs(t) && (t.status === 'late' || (t.due_date && t.due_date < _todayDs)); };
+    var done = tasksAll.filter(_isDoneDs).length;
+    var late = tasksAll.filter(_isLateDs).length;
     var avgRate = tmsAll.length ? Math.round(tmsAll.reduce(function (a, m) { return a + (m.achievement_rate || 0); }, 0) / tmsAll.length) : 0;
     var byTeam = {};
     raw.teams.forEach(function (t) {
@@ -1967,8 +2014,8 @@
         name: t.name,
         avgRate: tms.length ? Math.round(tms.reduce(function (a, m) { return a + (m.achievement_rate || 0); }, 0) / tms.length) : 0,
         progress: calcTeamProgress(raw.mandala_charts, t.id, pids), // チャート基準（0件なら null='—'）
-        lateCount: tks.filter(function (x) { return x.status === 'late'; }).length,
-        doneCount: tks.filter(function (x) { return x.status === 'done'; }).length,
+        lateCount: tks.filter(_isLateDs).length,
+        doneCount: tks.filter(_isDoneDs).length,
         taskCount: tks.length,
         reportSubmitDays: new Set(reps.map(function (r) { return r.author_id + '|' + r.report_date; })).size,
         memberCount: persons.length                                // 人物単位（重複ロールを1人に）

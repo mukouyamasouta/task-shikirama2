@@ -366,7 +366,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="card" style="margin-bottom:16px">
     <div class="card-body" style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
       <div style="min-width:170px"><label class="fl">チーム</label><select class="fs" id="dash-team-sel" onchange="onDashTeamChange()"><option value="">全チーム</option></select></div>
-      <div style="min-width:170px"><label class="fl">担当者</label><select class="fs" id="dash-assignee-sel"><option value="">全員</option></select></div>
+      <div style="min-width:170px"><label class="fl">担当者</label><select class="fs" id="dash-assignee-sel" onchange="applyDashFilter()"><option value="">全員</option></select></div>
       <div>
         <label class="fl">期間</label>
         <div class="seg" id="dash-period-seg">
@@ -605,7 +605,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
       <span style="display:flex;align-items:center;gap:5px;font-size:10px;color:#6b7280"><span style="width:14px;height:14px;border-radius:2px;background:#f3f4f6;border:1px solid #e5e7eb;display:inline-block;flex-shrink:0"></span>アクション項目</span>
     </div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-      <div id="mandala-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:560px;margin:0 auto"></div>
+      <div id="mandala-grid"></div>
     </div>
   </div>
 </div>
@@ -709,7 +709,7 @@ function getRat(id){if(!RATINGS[id])RATINGS[id]={stars:0,comment:''};return RATI
 
 <script>
 /* ===== 年/月/日 入力ヘルパー（全ロール共通） ===== */
-function ymdHtml(idPrefix, labelText, required){
+function ymdHtml(idPrefix, labelText, required, onChangeFn){
   const y=new Date().getFullYear();
   const yOpts=['<option value="">年</option>'];
   for(let i=y-3;i<=y+5;i++) yOpts.push(`<option value="${i}">${i}年</option>`);
@@ -717,13 +717,14 @@ function ymdHtml(idPrefix, labelText, required){
   for(let i=1;i<=12;i++) mOpts.push(`<option value="${String(i).padStart(2,'0')}">${i}月</option>`);
   const dOpts=['<option value="">日</option>'];
   for(let i=1;i<=31;i++) dOpts.push(`<option value="${String(i).padStart(2,'0')}">${i}日</option>`);
+  const oc=onChangeFn?` onchange="${onChangeFn}"`:'';
   return `<div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap">
     ${labelText?`<span style="font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;margin-right:4px">${labelText}</span>`:''}
-    <select class="fs" id="${idPrefix}-y" style="padding:5px 4px;font-size:11px;width:72px">${yOpts.join('')}</select>
+    <select class="fs" id="${idPrefix}-y"${oc} style="padding:5px 4px;font-size:11px;width:72px">${yOpts.join('')}</select>
     <span style="font-size:11px;color:var(--text3)">/</span>
-    <select class="fs" id="${idPrefix}-m" style="padding:5px 4px;font-size:11px;width:56px">${mOpts.join('')}</select>
+    <select class="fs" id="${idPrefix}-m"${oc} style="padding:5px 4px;font-size:11px;width:56px">${mOpts.join('')}</select>
     <span style="font-size:11px;color:var(--text3)">/</span>
-    <select class="fs" id="${idPrefix}-d" style="padding:5px 4px;font-size:11px;width:52px">${dOpts.join('')}</select>
+    <select class="fs" id="${idPrefix}-d"${oc} style="padding:5px 4px;font-size:11px;width:52px">${dOpts.join('')}</select>
   </div>`;
 }
 function ymdValue(idPrefix){
@@ -1638,8 +1639,8 @@ async function submitExecAssign(){
 }
 function renderExecTasks(){
   // 期間（開始〜期限）YMDセレクトを初回生成
-  const efw=document.getElementById('exec-from-ymd');if(efw&&!efw.children.length)efw.innerHTML=ymdHtml('exec-from','');
-  const etw=document.getElementById('exec-to-ymd');if(etw&&!etw.children.length)etw.innerHTML=ymdHtml('exec-to','');
+  const efw=document.getElementById('exec-from-ymd');if(efw&&!efw.children.length)efw.innerHTML=ymdHtml('exec-from','',false,'renderExecTasks()');
+  const etw=document.getElementById('exec-to-ymd');if(etw&&!etw.children.length)etw.innerHTML=ymdHtml('exec-to','',false,'renderExecTasks()');
   if(!window._extfRestored){const f=_xfLoad();
     const ts=document.getElementById('task-team-sel');const ms=document.getElementById('task-f-member');
     const teamOk=!f.tTeam||(ts&&[...ts.options].some(o=>o.value===f.tTeam));
@@ -1678,7 +1679,9 @@ let EXEC_REP={members:[],byKey:{},list:[]};
 let _execRepKey='';
 let _execRepYear=new Date().getFullYear(),_execRepMonth=new Date().getMonth();
 let _execRepSelDate='';
-const EXEC_COND={great:['😀','とても良い','#10B981'],good:['🙂','良い','#06B6D4'],normal:['😐','普通','#F59E0B'],bad:['😟','やや不調','#EF4444']};
+// "HH:MM"の2点間の勤務時間(h)。employee.html _workHours と同ロジック
+function _workHoursExec(inT,outT){const a=_hm2minExec(inT),b=_hm2minExec(outT);if(a==null||b==null)return null;let d=b-a;if(d<0)d+=24*60;return Math.round(d/60*10)/10;}
+function _hm2minExec(t){if(!t)return null;const p=String(t).split(':');if(p.length<2)return null;const h=+p[0],m=+p[1];return isNaN(h)||isNaN(m)?null:h*60+m;}
 async function initExecReports(){
   const API=window.VexumAPI;
   const teamSel=document.getElementById('report-team-sel');
@@ -1691,8 +1694,12 @@ async function initExecReports(){
     }
     const teamUuid=teamSel?teamSel.value:'';
     const rows=await API.loadAllDailyReports(teamUuid||null);
-    const byPid={};
-    Object.keys(EXEC_OV.MEMBERS).forEach(k=>{byPid[EXEC_OV.MEMBERS[k].pid]=k;});
+    // マルチロール対応: 日報のauthor_idが、その人物の代表キー（primaryPid）とは別の
+    // profile_idになっているケースがある（例: リーダー行が優先されprimaryPidになった人物が、
+    // 紐づけ元の従業員profileで日報を提出している場合）。EXEC_OV.pidToKeyがあれば優先して使う
+    // （無ければ従来通りpid単純一致にフォールバック）。
+    const byPid=EXEC_OV.pidToKey||{};
+    if(!EXEC_OV.pidToKey)Object.keys(EXEC_OV.MEMBERS).forEach(k=>{byPid[EXEC_OV.MEMBERS[k].pid]=k;});
     EXEC_REP.list=rows;
     EXEC_REP.members=Object.keys(EXEC_OV.MEMBERS).filter(k=>!teamUuid||EXEC_OV.MEMBERS[k].teamUuid===teamUuid).map(k=>Object.assign({key:k},EXEC_OV.MEMBERS[k]));
     EXEC_REP.byKey={};
@@ -1742,35 +1749,58 @@ function renderExecReportCalendar(){
     const r=repByDateExec(_execRepKey,ds);
     const sel=ds===_execRepSelDate;
     if(r){
-      const c=EXEC_COND[r.cond]||EXEC_COND.normal;
-      h+=`<div onclick="showExecReportDetail('${ds}')" style="min-height:64px;border:1.5px solid ${sel?c[2]:'var(--border)'};border-radius:8px;padding:5px;cursor:pointer;background:${sel?c[2]+'1A':'#fff'};transition:.12s" title="${(r.done||'').replace(/"/g,'')}">
-        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;font-weight:700;color:var(--text2)">${day}</span><span style="font-size:13px">${c[0]}</span></div>
-        <div style="font-size:8.5px;color:var(--text3);margin-top:1px">${r.hours||''}</div>
-        <div style="font-size:8.5px;color:var(--text2);line-height:1.3;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${r.done||''}</div>
+      const ac=r.submitted?'var(--accent)':'#F59E0B';
+      h+=`<div onclick="showExecReportDetail('${ds}')" style="min-height:62px;border:1.5px solid ${sel?ac:'var(--border)'};border-radius:8px;padding:5px;cursor:pointer;background:${sel?ac+'1A':'#fff'};transition:.12s" title="${(r.done||'').replace(/"/g,'')}">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;font-weight:700;color:var(--text2)">${day}</span><span style="font-size:8px;font-weight:700;color:${ac}">${r.submitted?'提出':'予定'}</span></div>
+        <div style="font-size:8.5px;color:var(--text3);margin-top:1px">${r.hours&&r.hours!=='—'?r.hours:''}</div>
+        <div style="font-size:8.5px;color:var(--text2);line-height:1.3;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${r.done&&r.done!=='—'?r.done:''}</div>
       </div>`;
     }else{
-      h+=`<div style="min-height:64px;border:1px solid #F3F4F6;border-radius:8px;padding:5px;background:#FAFCFC"><span style="font-size:10px;color:var(--text3)">${day}</span></div>`;
+      h+=`<div style="min-height:62px;border:1px solid #F3F4F6;border-radius:8px;padding:5px;background:#FAFCFC"><span style="font-size:10px;color:var(--text3)">${day}</span></div>`;
     }
   }
   h+='</div>';
-  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:10px;color:var(--text2)">';
-  Object.values(EXEC_COND).forEach(c=>h+=`<span style="display:flex;align-items:center;gap:4px"><span>${c[0]}</span>${c[1]}</span>`);
-  h+='</div>';
   document.getElementById('exec-report-calendar').innerHTML=h;
+}
+// r.planHoursは常に"出勤〜退勤"の文字列連結(未入力でも"~"になる)のため、存在チェックだけでは
+// 常にtruthyになってしまう。出退勤いずれかが実際に入力されているか、今日やることが
+// 入力されているかで判定する（employee.html _hasMorningData / leader.html _hasMorningDataLd と同じ考え方）。
+function _hasMorningDataExec(r){
+  if(!r)return false;
+  const pt=String(r.planHours||'').split('~');
+  return !!((pt[0]&&pt[0].trim())||(pt[1]&&pt[1].trim())||r.planTasks);
 }
 function showExecReportDetail(ds){
   _execRepSelDate=ds;renderExecReportCalendar();
   const m=EXEC_REP.members.find(x=>x.key===_execRepKey);const r=repByDateExec(_execRepKey,ds);
   if(!m||!r){document.getElementById('exec-report-detail').innerHTML='';return;}
-  const c=EXEC_COND[r.cond]||EXEC_COND.normal;
   const p=ds.split('-');const dow=['日','月','火','水','木','金','土'][new Date(+p[0],+p[1]-1,+p[2]).getDay()];
+  // 表示構成はemployee.html showPReportDetail() / leader.html showReportDetail()と
+  // 同じ（始業=出退勤・やること／終業=出退勤・工数・振り返り）に統一
+  const pt=String(r.planHours||'').split('~');
+  const at=String(r.goal||'').split('~');
+  const hasMorning=_hasMorningDataExec(r);
+  const pw=_workHoursExec(pt[0],pt[1]),aw=_workHoursExec(at[0],at[1]);
+  const statusLabel=r.submitted?'終業提出済み':(hasMorning?'始業のみ（予定・終業未提出）':'—');
+  const morning=hasMorning?`<div style="grid-column:1/2;background:#FFF7ED;border:1px solid #FDBA74;border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:800;color:#C2410C;margin-bottom:4px">始業（予定）</div>
+      ${(pt[0]||pt[1])?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>出退勤:</b> ${pt[0]||'—'}〜${pt[1]||'—'}${pw!=null?'（'+pw+'h）':''}</div>`:''}
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;white-space:pre-wrap"><b>やること:</b> ${r.planTasks||'—'}</div>
+    </div>`:'';
+  const evening=r.submitted?`<div style="grid-column:${hasMorning?'2/3':'1/3'};background:#EFF6FF;border:1px solid #93C5FD;border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:800;color:#1D4ED8;margin-bottom:4px">終業（実績）</div>
+      ${(at[0]||at[1])?`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>出退勤:</b> ${at[0]||'—'}〜${at[1]||'—'}${aw!=null?'（'+aw+'h）':''}</div>`:''}
+      <div style="font-size:11px;color:var(--text2);line-height:1.6"><b>工数:</b> ${r.hours&&r.hours!=='—'?r.hours:'—'}</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;white-space:pre-wrap"><b>振り返り:</b> ${r.done&&r.done!=='—'?r.done:'—'}</div>
+    </div>`:(hasMorning?`<div style="grid-column:2/3;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:11px;text-align:center;background:#FAFAFA;border:1px dashed var(--border);border-radius:6px">終業（実績）はまだ提出されていません</div>`:'');
+  const refParts=[];
+  if(r.plan&&r.plan!=='—')refParts.push(`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>参考：明日の予定:</b> ${r.plan}</div>`);
+  if(r.issue&&r.issue!=='—')refParts.push(`<div style="font-size:11px;color:var(--text2);line-height:1.6"><b>参考：課題・相談:</b> ${r.issue}</div>`);
+  const ref=refParts.length?`<div style="grid-column:1/3;background:#FAFAFA;border:1px dashed var(--border);border-radius:6px;padding:8px 10px">${refParts.join('')}</div>`:'';
   const h=`<div class="card"><div class="card-hd" style="border-left:4px solid ${m.color||'#9CA3AF'}">
-      <div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:8px;background:${m.color||'#9CA3AF'};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px">${m.name.charAt(0)}</div><div><div class="card-title">${m.name} <span class="badge ${m.role==='リーダー'?'b-leader':'b-member'}" style="margin-left:2px">${m.role}</span></div><div class="card-sub">${m.team||'未所属'} ／ ${+p[0]}/${+p[1]}/${+p[2]} (${dow}) ／ 稼働 ${r.hours||'—'}</div></div></div>
-      <span style="font-size:12px;font-weight:700;color:${c[2]}">${c[0]} ${c[1]}</span>
+      <div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:8px;background:${m.color||'#9CA3AF'};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px">${m.name.charAt(0)}</div><div><div class="card-title">${m.name} <span class="badge ${m.role==='リーダー'?'b-leader':'b-member'}" style="margin-left:2px">${m.role}</span></div><div class="card-sub">${m.team||'未所属'} ／ ${+p[0]}/${+p[1]}/${+p[2]} (${dow}) ／ 稼働 ${r.hours||'—'} ／ ${statusLabel}</div></div></div>
     </div><div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div><div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:3px">✅ 本日の達成タスク</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.done||'—'}</div></div>
-      <div><div style="font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:3px">📅 明日の予定</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.plan||'—'}</div></div>
-      <div style="grid-column:1/3"><div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:3px">⚠ 課題・相談事項</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${r.issue||'—'}</div></div>
+      ${morning}${evening}${ref}
     </div></div>`;
   document.getElementById('exec-report-detail').innerHTML=h;
 }
@@ -1796,19 +1826,20 @@ function dashDateRange(){
     return {from:ymdValue('exec-dash-from')||null,to:ymdValue('exec-dash-to')||null};
   }
 }
-// 期間セグメントボタン：選択を切り替え、カスタム時のみ日付ピッカーを表示（適用は「絞り込む」）
+// 期間セグメントボタン：選択を切り替えると即座に反映する（ボタンを押さずに絞り込まれる）
 function setDashPeriod(p,btn){
   _dashPeriod=p;
   document.querySelectorAll('#dash-period-seg .seg-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   const wrap=document.getElementById('dash-custom-range');if(wrap)wrap.style.display=(p==='custom')?'flex':'none';
   if(p==='custom'){
-    const fw=document.getElementById('exec-dash-from-ymd');if(fw&&!fw.children.length)fw.innerHTML=ymdHtml('exec-dash-from','');
-    const tw=document.getElementById('exec-dash-to-ymd');if(tw&&!tw.children.length)tw.innerHTML=ymdHtml('exec-dash-to','');
+    const fw=document.getElementById('exec-dash-from-ymd');if(fw&&!fw.children.length)fw.innerHTML=ymdHtml('exec-dash-from','',false,'applyDashFilter()');
+    const tw=document.getElementById('exec-dash-to-ymd');if(tw&&!tw.children.length)tw.innerHTML=ymdHtml('exec-dash-to','',false,'applyDashFilter()');
   }
+  applyDashFilter();
 }
 // チーム変更時：担当者プルダウンをそのチームのメンバーに更新
-function onDashTeamChange(){populateDashAssignee();}
+function onDashTeamChange(){populateDashAssignee();applyDashFilter();}
 /* 絞り込み状態の永続化（従業員画面と同パターン: マージ保存・リセットでクリア） */
 function _xfLoad(){try{return JSON.parse(localStorage.getItem('vexum_filters_exec')||'{}')||{};}catch(e){return{};}}
 function _xfSave(patch){const f=_xfLoad();Object.assign(f,patch);try{localStorage.setItem('vexum_filters_exec',JSON.stringify(f));}catch(e){}}
@@ -1935,9 +1966,12 @@ async function openExecMemberDash(id){
   window._exmdCharts=charts;window._exmdMemberId=id;window._exmdMndOpen=false;
   // チャート由来タスクのみ（source_send_id / source_chart / source_cell のいずれかを持つ）
   const tasks=((EXEC_OV.MEMBER_TASKS||{})[id]||[]).filter(t=>t.sendId||t.chart||t.cell);
-  const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length;
-  const wip=tasks.filter(t=>t.status==='wip').length;
-  const late=tasks.filter(t=>t.status==='late').length;
+  // 完了/遅延はeffStatus()（期限日ベースの補正込み）で判定する。status列のみだと
+  // 期限超過後にタスクへ触っていない場合に古い値のまま残り、下の個別タスク行の
+  // ステータスチップ（同じくeffStatus使用）と数値が食い違う。
+  const done=tasks.filter(t=>effStatus(t)==='done').length;
+  const wip=tasks.filter(t=>effStatus(t)==='wip').length;
+  const late=tasks.filter(t=>effStatus(t)==='late').length;
   const totalH=tasks.reduce((a,t)=>a+(t.hours||0),0);
   let h=`<div class="g4" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
     <div class="card" style="margin:0"><div class="card-body" style="text-align:center;padding:12px"><div style="font-size:10px;color:var(--text3);font-weight:700">チャートタスク</div><div style="font-size:22px;font-weight:800;color:var(--accent)">${tasks.length}</div></div></div>
@@ -1971,7 +2005,10 @@ async function loadExecMemberReports(id,pid,teamUuid){
   const API=window.VexumAPI;
   if(!(API&&API.ready&&API.loadAllDailyReports&&pid)){box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">日報データを取得できません</div>';return;}
   let reps=[];
-  try{reps=(await API.loadAllDailyReports(teamUuid||null)).filter(r=>r.authorPid===pid).slice(0,5);}catch(e){reps=[];}
+  // マルチロール対応: この人物の他のprofile_id（紐づけ元の従業員profile等）で提出された
+  // 日報も拾えるよう、pid単純一致ではなくpidToKey経由でこのメンバーキーに属するか判定する
+  const pidToKey=EXEC_OV.pidToKey||{};
+  try{reps=(await API.loadAllDailyReports(teamUuid||null)).filter(r=>(pidToKey[r.authorPid]||r.authorPid)===(pidToKey[pid]||id)).slice(0,5);}catch(e){reps=[];}
   // モーダルが別メンバーに切り替わっていたら描画しない
   if(window._exmdMemberId!==id)return;
   if(!reps.length){box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">日報の提出がありません</div>';return;}
@@ -2011,7 +2048,6 @@ function execRenderMnd(chartId){
   if(!c){box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートがありません</div>';return;}
   const API=window.VexumAPI;
   if(API&&API.renderMandalaSimple)API.renderMandalaSimple(box,c,c.member_kpi_edits||c.memberKpiEdits||{});
-  else if(API&&API.renderEvalMandala)API.renderEvalMandala(c,c.member_kpi_edits||c.memberKpiEdits||{},box);
   else box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートを表示できません</div>';
 }
 // 全画面で曼荼羅を表示（現在選択中のチャート）
@@ -2027,23 +2063,36 @@ function closeExecMemberDash(){document.getElementById('exec-member-modal').styl
 
 /* ========== 曼荼羅モーダル ========== */
 function openMandala(k){
-  // KPI廃止: 全画面曼荼羅も KGI+CSF8項目 の3x3
+  // KPI廃止: 全画面曼荼羅も KGI+CSF8項目 の3x3。
+  // チャート管理タブ（従業員画面）と同じ見た目にするため、他画面と共通のrenderMandalaSimpleを使う
+  // （記入者のバッジ・進捗%・工数を表示。読み取り専用のためonCellClickは渡さない）。
   const d=getAllMnd()[k];if(!d)return;
   _curMndKey=k;
   document.getElementById('mandala-title').textContent=d.name+' — 曼荼羅チャート';
   const lc=document.getElementById('mleg-c'),ls=document.getElementById('mleg-s');
   if(lc)lc.style.background=d.color;
   if(ls){ls.style.background=d.bg;ls.style.borderColor=d.color;}
-  const order=[0,1,2,7,-1,3,6,5,4];
-  let h='';
-  order.forEach(si=>{
-    let sty='min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;line-height:1.35;padding:6px 5px;border-radius:3px;word-break:break-all;box-sizing:border-box;';
-    let tx='';
-    if(si<0){sty+=`background:${d.color};color:#fff;font-weight:800;font-size:12px;border:2px solid ${d.color};`;tx=(d.center||'').replace(/\n/g,'<br>');}
-    else{sty+=`background:${d.bg};color:${d.color};font-weight:700;border:1.5px solid ${d.color};`;tx=(d.subs||[])[si]||'';}
-    h+=`<div style="${sty}">${tx}</div>`;
-  });
-  document.getElementById('mandala-grid').innerHTML=h;
+  const box=document.getElementById('mandala-grid');
+  const API=window.VexumAPI;
+  if(API&&API.renderMandalaSimple){
+    // ★ renderMandalaSimpleは内部で独自のgrid divを差し込むため、外側のbox自体を
+    //   grid化すると入れ子で1マス分に押し込められ幅が潰れる（leader.html/employee.htmlで
+    //   実際に起きた不具合と同じパターン）。boxは通常のブロック要素のままにする。
+    box.style.display='block';box.style.gridTemplateColumns='';box.style.gap='';box.style.maxWidth='';box.style.margin='';
+    API.renderMandalaSimple(box,d,d.member_kpi_edits||d.memberKpiEdits||{});
+  }else{
+    box.style.display='grid';box.style.gridTemplateColumns='repeat(3,1fr)';box.style.gap='6px';box.style.maxWidth='560px';box.style.margin='0 auto';
+    const order=[0,1,2,7,-1,3,6,5,4];
+    let h='';
+    order.forEach(si=>{
+      let sty='min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:11px;line-height:1.35;padding:6px 5px;border-radius:3px;word-break:break-all;box-sizing:border-box;';
+      let tx='';
+      if(si<0){sty+=`background:${d.color};color:#fff;font-weight:800;font-size:12px;border:2px solid ${d.color};`;tx=(d.center||'').replace(/\n/g,'<br>');}
+      else{sty+=`background:${d.bg};color:${d.color};font-weight:700;border:1.5px solid ${d.color};`;tx=(d.subs||[])[si]||'';}
+      h+=`<div style="${sty}">${tx}</div>`;
+    });
+    box.innerHTML=h;
+  }
   const m=document.getElementById('mandala-modal');
   m.style.display='flex';m.scrollTop=0;
 }
@@ -2442,7 +2491,7 @@ function toggleExecEvalMnd(id,forceRerender){
     const charts=window._execChartsCache[id]||[];
     const chartId=window._execChartChoice[id];
     const chart=charts.find(c=>c.id===chartId)||charts[0]||EMP[id];
-    if(chart&&API&&API.renderEvalMandala)API.renderEvalMandala(chart,chart.member_kpi_edits||chart.memberKpiEdits||{},box);
+    if(chart&&API&&API.renderMandalaSimple)API.renderMandalaSimple(box,chart,chart.member_kpi_edits||chart.memberKpiEdits||{});
   }
 }
 
@@ -2519,20 +2568,35 @@ function vexumLogout(){
     if(typeof initExecDashboard==='function') initExecDashboard();
     console.log('[VEXUM] Supabaseデータを反映しました');
   }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:', e); });
-  // 別ユーザーでログインしたら前ユーザーの localStorage（vexum_*）を一掃する（従業員・リーダー画面と同パターン）
-  function clearOtherUserData(currentProfileId){
+  // 別ユーザーでログインしたら前ユーザーの localStorage（vexum_*）を一掃する（従業員・リーダー画面と同パターン）。
+  // ★マルチロール対応: currentProfile()は画面ごと(window.VEXUM_PAGE_ROLE)に別々のUUIDを返すため、
+  //   profile.idでの比較では、幹部が他ロールも兼務している場合に画面遷移のたびに「別ユーザー」と
+  //   誤判定され、vexum_filters_exec等の絞り込み保存状態が消えてしまう（leader.html/employee.htmlで
+  //   見つかったのと同じバグ構造）。判定基準をemail（大文字小文字無視）に変更する。
+  function clearOtherUserData(currentProfileId,currentEmail){
     try{
+      var prevEmail=localStorage.getItem('vexum_last_profile_email');
       var prevId=localStorage.getItem('vexum_last_profile_id');
-      if(prevId&&currentProfileId&&prevId!==currentProfileId){
-        Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id';}).forEach(function(k){localStorage.removeItem(k);});
+      var isDifferentUser;
+      if(prevEmail&&currentEmail){
+        isDifferentUser=prevEmail.toLowerCase()!==currentEmail.toLowerCase();
+      }else if(!prevEmail&&!prevId){
+        isDifferentUser=false;
+      }else{
+        // email記録がまだ無い場合（本修正の適用直後等）の安全側フォールバック
+        isDifferentUser=!!(prevId&&currentProfileId&&prevId!==currentProfileId);
+      }
+      if(isDifferentUser){
+        Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id'&&k!=='vexum_last_profile_email';}).forEach(function(k){localStorage.removeItem(k);});
       }
       if(currentProfileId)localStorage.setItem('vexum_last_profile_id',currentProfileId);
+      if(currentEmail)localStorage.setItem('vexum_last_profile_email',currentEmail);
     }catch(e){}
   }
   // 自分のプロフィールをサイドバーに反映
   API.currentProfile().then(function(p){
     if(!p)return;
-    clearOtherUserData(p.id);
+    clearOtherUserData(p.id,p.email);
     var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name;
     var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email;
   }).catch(function(){});
