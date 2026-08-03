@@ -191,11 +191,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <div>
       <div class="send-card">
         <div class="fg"><label class="fl">送信先（チームリーダー）</label>
-          <select class="fs" id="send-to">
-            <option value="tanaka">田中 花子（営業チームA · リーダー）</option>
-            <option value="suzuki">鈴木 一郎（開発チームB · リーダー）</option>
-            <option value="sato">佐藤 美咲（マーケチームC · リーダー）</option>
-          </select>
+          <select class="fs" id="send-to"></select>
         </div>
         <div class="fg"><label class="fl">テンプレート適用（任意）</label>
           <select class="fs" id="tpl-select" onchange="applyTemplate(this.value)">
@@ -927,6 +923,7 @@ async function reloadAllData(){
       repl(TEAMS,d.TEAMS);repl(MEMBERS,d.MEMBERS);repl(MND,d.MND);repl(EMP,d.EMP);}
   }catch(e){}
   if(typeof renderAccount==='function')renderAccount();
+  if(typeof populateSendToSelect==='function')populateSendToSelect();
 }
 /* 削除済み（is_active=false）アカウントの一覧＋復活ボタン */
 const ROLE_JP_ENUM={admin:'管理者',executive:'幹部',leader:'リーダー',member:'メンバー'};
@@ -1309,7 +1306,21 @@ async function confirmDeleteTeam(tid){
 }
 
 /* ========== チャート送信 ========== */
+// 送信先（チームリーダー）プルダウンをTEAMS/MEMBERSの現在値から再構築する。
+// ★ 以前はHTMLに田中/鈴木/佐藤という組込デモの3名が直書きされたまま一切更新されず、
+//   Supabase接続後（実データでMEMBERS/TEAMSが置き換わった後）も実在しないリーダーが
+//   選べてしまい、選択時はMEMBERS[toVal]が存在しないため送信先未設定（pid null）で
+//   送信されてしまう不具合があった。TEAMS各チームのleader（memKey）をMEMBERSから解決して
+//   都度作り直すことで、常に現在のチーム＋リーダーとプルダウンを一致させる。
+function populateSendToSelect(){
+  const sel=document.getElementById('send-to');if(!sel)return;
+  const cur=sel.value;
+  const opts=Object.values(TEAMS).filter(t=>t.leader&&MEMBERS[t.leader]).map(t=>`<option value="${t.leader}">${MEMBERS[t.leader].name}（${t.name} · リーダー）</option>`);
+  sel.innerHTML=opts.length?opts.join(''):'<option value="">— リーダーが設定されたチームがありません —</option>';
+  if([...sel.options].some(o=>o.value===cur))sel.value=cur;
+}
 function initSendForm(){
+  populateSendToSelect();
   populateTplSelect();
   const wrap=document.getElementById('send-subs-list');
   if(wrap&&wrap.children.length===0){
@@ -1851,6 +1862,109 @@ function populateDashAssignee(){
   asgSel.innerHTML='<option value="">全員</option>'+mems.map(([id,m])=>`<option value="${id}">${m.name}（${m.team||'—'}）</option>`).join('');
   if([...asgSel.options].some(o=>o.value===cur))asgSel.value=cur;else asgSel.value='';
 }
+// ===== メンバーカードのKGI/CSF進捗計算（leader.htmlの正典関数 _md* をそのまま移植。
+//   優先順位・丸めを変えないこと（変えると幹部/リーダー/従業員で%が食い違う＝過去の実バグ） =====
+function mdChartLabelSet(c){
+  const s=new Set();
+  (c&&c.subs||[]).forEach(x=>{if(x)s.add(String(x).trim());});
+  (c&&c.acts||[]).forEach(r=>(r||[]).forEach(a=>{if(a)s.add(String(a).trim());}));
+  return s;
+}
+function mdTaskMatchesChart(t,c){
+  if(!c)return false;
+  const labels=mdChartLabelSet(c);
+  if(t.kpi&&t.kpi!=='—'&&labels.has(String(t.kpi).trim()))return true;
+  const titles=new Set();
+  if(c.name)titles.add(String(c.name).trim());
+  if(c.center)titles.add(String(c.center).split('\n')[0].trim());
+  if(t.chart&&titles.has(String(t.chart).trim()))return true;
+  return false;
+}
+function _mdEdits(c){ return (c && (c.member_kpi_edits || c.memberKpiEdits)) || {}; }
+function _mdChartTasks(c, tasks){ return (tasks||[]).filter(t=>mdTaskMatchesChart(t,c)); }
+function _mdTaskPctSafe(t){return t.pct!=null?+t.pct:100;}
+function _mdKpiPct(c, tasks, si, ai){
+  const ed=_mdEdits(c)[si+'-'+ai];
+  if(ed&&ed.progress!=null)return Math.round(+ed.progress);
+  const ts=_mdChartTasks(c,tasks).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si&&t.kpiIdx!=null&&+t.kpiIdx===+ai);
+  if(ts.length)return Math.round(ts.reduce((s,t)=>s+_mdTaskPctSafe(t),0)/ts.length);
+  return 0;
+}
+function _mdCsfPct(c, tasks, si){
+  const ed=_mdEdits(c)['csf-'+si];
+  if(ed&&ed.progress!=null)return Math.round(+ed.progress);
+  const all=_mdChartTasks(c,tasks).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si);
+  if(!all.length)return 0;
+  const aiSet=new Set(all.filter(t=>t.kpiIdx!=null&&!isNaN(t.kpiIdx)).map(t=>+t.kpiIdx));
+  const direct=all.filter(t=>t.kpiIdx==null||isNaN(t.kpiIdx));
+  if(!aiSet.size)return Math.round(all.reduce((s,t)=>s+_mdTaskPctSafe(t),0)/all.length);
+  const parts=[];
+  aiSet.forEach(ai=>parts.push(_mdKpiPct(c,tasks,si,ai)));
+  direct.forEach(t=>parts.push(_mdTaskPctSafe(t)));
+  return Math.round(parts.reduce((s,v)=>s+v,0)/parts.length);
+}
+function _mdKgiPct(c, tasks){
+  const ed=_mdEdits(c)['center'];
+  if(ed&&ed.progress!=null)return Math.round(+ed.progress);
+  const edits=_mdEdits(c);
+  const cs=(c.subs||[]).map((s,si)=>{
+    const e=edits['csf-'+si]||{};
+    return {si,text:((e.text!=null?e.text:s)||'').replace(/\n/g,' ')};
+  }).filter(x=>x.text);
+  if(!cs.length)return 0;
+  return Math.round(cs.reduce((s,x)=>s+_mdCsfPct(c,tasks,x.si),0)/cs.length);
+}
+// CSFの期限解決（従業員・リーダー画面と同じ優先順位: 紐付けタスクの期限→明示的なセル期間→チャート全体の終了日）
+function _ldCsfDue(m,tasks,si,chartEnd){
+  const linked=_mdChartTasks(m,tasks).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si);
+  if(linked.length){
+    const withP=linked.find(t=>t.startRaw||t.dueRaw)||linked[0];
+    return withP.dueRaw||chartEnd||'';
+  }
+  const per=((_mdEdits(m).period)||{})['csf-'+si]||{};
+  return per.end||chartEnd||'';
+}
+// メンバー1人分のチャート一覧を返す（個人DBを開いてキャッシュ済みなら全チャート、
+// 未取得ならEXEC_OV.MEMBERSの主チャート1件を近似として返す。leader.html _ldMemberCharts と同じ考え方）
+function _execMemberCharts(id){
+  const m=(EXEC_OV.MEMBERS||{})[id];if(!m)return [];
+  const pid=pidOfExec(id);
+  const cached=_execChartsCache&&_execChartsCache[pid];
+  if(cached&&cached.length)return cached;
+  return [{center:m.center||'',subs:m.subs||[],acts:m.acts||[],name:(m.name||'')+' のチャート',member_kpi_edits:m.memberKpiEdits||{},end_date:m.endDate||''}];
+}
+// KGI/CSFセルへの直接記入（タスク未紐付け）もダッシュボード統計に含める（leader.html _ldCellItemsForCharts と同じ）
+function _execCellItemsForCharts(charts,tasks){
+  const items=[];
+  (charts||[]).forEach(c=>{
+    const chartEnd=c.end_date||c.endDate||'';
+    const kgiName=((c.center||'').split('\n')[0]||'').trim();
+    if(kgiName&&chartEnd)items.push({si:null,kind:'kgi',due:chartEnd,pct:_mdKgiPct(c,tasks)});
+    (c.subs||[]).forEach((s,si)=>{
+      const ed=(_mdEdits(c)['csf-'+si])||{};
+      const text=(ed.text!=null?ed.text:s)||'';
+      if(!text)return;
+      const due=_ldCsfDue(c,tasks,si,chartEnd);
+      if(!due)return;
+      items.push({si,kind:'csf',due,pct:_mdCsfPct(c,tasks,si)});
+    });
+  });
+  return items;
+}
+// 個人DBを一度も開いていないメンバーは主チャート1件分の近似値しか使えない。
+// バックグラウンドで全チャートを取得し、揃ったらダッシュボードを再描画して正確な値に切り替える。
+function _execWarmChartsCache(ids){
+  const API=window.VexumAPI;if(!(API&&API.ready))return;
+  const need=(ids||[]).filter(id=>{const pid=pidOfExec(id);return pid&&!_execChartsCache[pid];});
+  if(!need.length)return;
+  Promise.all(need.map(id=>{
+    const pid=pidOfExec(id);
+    return API.loadChartsFor(pid).then(cs=>{_execChartsCache[pid]=cs||[];}).catch(()=>{_execChartsCache[pid]=[];});
+  })).then(()=>{
+    const t=document.getElementById('tc-dashboard');
+    if(t&&t.classList.contains('active'))renderExecDashboard();
+  });
+}
 async function initExecDashboard(){
   const API=window.VexumAPI;
   const teamSel=document.getElementById('dash-team-sel');
@@ -1939,18 +2053,45 @@ function renderExecDashboard(){
     +statCard('完了タスク',doneC,'var(--green)','')
     +statCard('遅延タスク',lateC,'var(--red)','');
   // ===== メンバーカード（リーダーと同じ .g2 カード・チーム名つき） =====
+  // ★ カードの進捗表示・完了/遅延数はリーダー画面と同じ正典計算（_md*/_execCellItemsForCharts）を
+  //   使うこと。旧来の m.kpis（CSFの簡易平均・タスク未紐付けはrate代替）をそのまま出すと、
+  //   同じメンバーでもリーダー画面（KGIのみ・正典計算）と数値が食い違う（過去の実バグと同種）。
   let h='';
+  const _ecToday=new Date().toISOString().slice(0,10);
   fm.sort((a,b)=>(b[1].rate||0)-(a[1].rate||0)).forEach(([id,m])=>{
     const col=rateColor(m.rate||0);const st=m.stats||{};
-    const kpis=m.kpis||[];
     h+=`<div class="card"><div class="card-hd" style="border-left:4px solid ${m.color||'#9CA3AF'}"><div><div class="card-title">${m.name} <span class="badge ${m.role==='リーダー'?'b-manager':'b-employee'}" style="margin-left:4px">${m.role||''}</span></div><div class="card-sub">${m.team||'—'}</div></div><span style="font-size:20px;font-weight:800;color:${col}">${m.rate||0}%</span></div><div class="card-body" style="padding:10px 14px">`;
-    kpis.forEach(kp=>{const c=kp.p>=80?'var(--green)':kp.p>=50?'var(--amber)':'var(--accent)';h+=`<div class="team-row" style="padding:6px 0"><div class="tname" style="font-size:11px">${kp.n}</div><div class="pw" style="max-width:160px"><div class="pt"><div class="pf" style="width:${kp.p}%;background:${c}"></div></div><div class="pp" style="color:${c}">${kp.p}%</div></div></div>`;});
-    if(!kpis.length)h+=`<div style="font-size:10px;color:var(--text3);padding:6px 0">CSF/KPIデータがありません</div>`;
+    // メンバーカードはKGIのみ表示（CSFは出さない）。全チャート取得済みなら全KGI、無ければ主チャートのKGI1件
+    const kgiCharts=_execMemberCharts(id);
+    const kgiRows=kgiCharts.map(c=>{
+      const text=(c.center||'').replace(/\n/g,' ').trim();
+      if(!text)return null;
+      const ed=(c.member_kpi_edits||{})['center'];
+      let p;
+      if(ed&&ed.progress!=null)p=Math.max(0,Math.min(100,+ed.progress));
+      else if(kgiCharts.length===1)p=(m.rate||0);
+      else p=null;
+      return {n:text,p};
+    }).filter(Boolean);
+    if(!kgiRows.length){h+=`<div style="font-size:11px;color:var(--text3);padding:6px 0">KGI未設定</div>`;}
+    else kgiRows.forEach(kp=>{
+      if(kp.p==null){h+=`<div class="team-row" style="padding:6px 0"><div class="tname" style="font-size:11px">${kp.n}</div><div style="font-size:11px;color:var(--text3)">—</div></div>`;return;}
+      const c=kp.p>=80?'var(--green)':kp.p>=50?'var(--amber)':'var(--accent)';
+      h+=`<div class="team-row" style="padding:6px 0"><div class="tname" style="font-size:11px">${kp.n}</div><div class="pw" style="max-width:160px"><div class="pt"><div class="pf" style="width:${kp.p}%;background:${c}"></div></div><div class="pp" style="color:${c}">${kp.p}%</div></div></div>`;
+    });
     const kpiEditCnt=m.memberKpiEdits?Object.keys(m.memberKpiEdits).length:0;
     const kpiEditBadge=kpiEditCnt>0?`<span style="font-size:9px;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;padding:2px 7px;border-radius:10px;font-weight:700">✏ KPI編集 ${kpiEditCnt}件</span>`:'';
-    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:10px;color:var(--text3)">完了 ${st.done||0} ・ 進行 ${st.wip||0} ・ 遅延 ${st.late||0}</span>${kpiEditBadge}</div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openExecMemberDash('${id}')">📊 個人DB</button></div></div></div></div>`;
+    // 「遅延」「完了」は個人DB・チームダッシュボード統計カードと同じ基準（タスク＋KGI/CSFセル）で算出
+    const _ecTasks=(EXEC_OV.MEMBER_TASKS||{})[id]||[];
+    const _ecCells=_execCellItemsForCharts(kgiCharts,_ecTasks);
+    const _ecTaskDone=_ecTasks.filter(t=>effStatus(t)==='done').length;
+    const _ecTaskLate=_ecTasks.filter(t=>effStatus(t)==='late').length;
+    const _ecDone=_ecTaskDone+_ecCells.filter(c=>c.pct>=100).length;
+    const _ecLate=_ecTaskLate+_ecCells.filter(c=>c.due<_ecToday&&c.pct<100).length;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:10px;color:var(--text3)">完了 ${_ecDone} ・ 進行 ${st.wip||0} ・ 遅延 ${_ecLate}</span>${kpiEditBadge}</div><div style="display:flex;gap:6px"><button class="card-btn" onclick="openExecMemberDash('${id}')">📊 個人DB</button></div></div></div></div>`;
   });
   members.innerHTML=h;
+  _execWarmChartsCache(fm.map(([id])=>id));
 }
 // 個人DB（個人ダッシュボード）— チャート由来タスクのみ表示
 let _execChartsCache={};
@@ -2354,11 +2495,27 @@ async function injectEvalRefs(memberId,pid){
       if(!self)self=(evAll.fromSelf||[]).find(x=>x.submitted)||null;
       if(!leader)leader=(evAll.fromLeader||[]).find(x=>x.submitted)||null;
     }
-    // 達成率（曼荼羅と同じく member_kpi_edits の進捗から算出）
+    // 達成率（曼荼羅と同じく member_kpi_edits の進捗から算出）。
+    // ★ 未記入のKPI/CSFスロットを0%として平均に含めると、他画面（リーダー/従業員の
+    //   _mdKgiPct/_mdCsfPct）と違って「空欄で薄まった」低い達成率になってしまう。
+    //   実際に文言のあるスロットのみを対象に平均する（他画面と同じ「空欄で薄めない」原則）。
     const selChart=(charts||[]).find(c=>c.id===chartId)||(charts||[])[0]||null;
     const kpiEdits=(selChart&&selChart.member_kpi_edits)||{};
-    const csfRate=si=>{let s=0;for(let ai=0;ai<8;ai++){const e=kpiEdits[si+'-'+ai];s+=e&&e.progress!=null?Math.round(+e.progress):0;}return Math.round(s/8);};
-    const kgiRate=()=>{let s=0;for(let si=0;si<8;si++)s+=csfRate(si);return Math.round(s/8);};
+    const csfRate=si=>{
+      const ed=kpiEdits['csf-'+si];
+      if(ed&&ed.progress!=null)return Math.round(+ed.progress);
+      const actRow=(selChart&&selChart.acts&&selChart.acts[si])||[];
+      const ais=[];for(let ai=0;ai<8;ai++){const t=((actRow[ai]||'')+'').trim();const e=kpiEdits[si+'-'+ai];if(t||(e&&e.progress!=null))ais.push(ai);}
+      if(!ais.length)return 0;
+      const s=ais.reduce((a,ai)=>{const e=kpiEdits[si+'-'+ai];return a+(e&&e.progress!=null?Math.round(+e.progress):0);},0);
+      return Math.round(s/ais.length);
+    };
+    const kgiRate=()=>{
+      const sis=[];for(let si=0;si<8;si++){const t=((selChart&&selChart.subs&&selChart.subs[si])||'').trim();if(t)sis.push(si);}
+      if(!sis.length)return 0;
+      const s=sis.reduce((a,si)=>a+csfRate(si),0);
+      return Math.round(s/sis.length);
+    };
     const renderRef=(targetId,sLabel,sStars,sComment,lLabel,lStars,lComment,hasSelf,hasLeader,sRate)=>{
       const el=document.getElementById(targetId);if(!el)return;
       let h='';
@@ -2566,6 +2723,7 @@ function vexumLogout(){
     if(typeof renderTeamEval==='function') renderTeamEval();
     if(typeof renderMemberEval==='function') renderMemberEval();
     if(typeof initExecDashboard==='function') initExecDashboard();
+    if(typeof populateSendToSelect==='function') populateSendToSelect();
     console.log('[VEXUM] Supabaseデータを反映しました');
   }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:', e); });
   // 別ユーザーでログインしたら前ユーザーの localStorage（vexum_*）を一掃する（従業員・リーダー画面と同パターン）。
