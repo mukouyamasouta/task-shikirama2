@@ -1453,10 +1453,18 @@ async function initSendForm(){
   const wrap=document.getElementById('send-subs-list');
   if(wrap&&wrap.children.length===0){
     let h='';
-    for(let i=1;i<=8;i++)h+=`<div class="mnd-sub-row" style="flex-direction:column;align-items:stretch;gap:4px">
-      <div style="display:flex;align-items:center;gap:6px"><span class="mnd-sub-num">${i}</span><input class="mnd-sub-input" id="ssub-${i}" placeholder="サブ目標 ${i}" oninput="csfInput(${i},this.value)" style="flex:1"></div>
-      <label style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--text3);padding-left:28px"><input type="checkbox" id="csf-period-chk-${i}" onchange="toggleCsfPeriod(${i},this.checked)">この項目の期間を個別設定する</label>
-      <div id="csf-period-${i}" style="display:none;padding-left:28px;gap:6px;align-items:center">
+    // ★ .mnd-sub-row は display:grid（grid-template-columns:34px 1fr）である。
+    //   番号と入力欄を1つのdivで包むと、その包みが「34px側の列」に入ってしまい
+    //   入力欄が幅ゼロに潰れてCSFを記入できなくなる（flex-direction指定はgridには効かない）。
+    //   従業員画面と同じく span.mnd-sub-num と input.mnd-sub-input を直接の子にすること。
+    //   CSF個別期間の行は grid-column:1/-1 で全幅に回す。
+    // 番号バッジは行の高さいっぱいに伸ばす。CSF個別期間の開閉で行の段数が変わるため
+    // grid-row:1/-1（明示グリッド=1行しか無く効かない）ではなく絶対配置で確実に全高にする。
+    for(let i=1;i<=8;i++)h+=`<div class="mnd-sub-row" style="position:relative">
+      <span class="mnd-sub-num" style="position:absolute;left:0;top:0;bottom:0;width:34px">${i}</span>
+      <input class="mnd-sub-input" id="ssub-${i}" style="grid-column:2" placeholder="CSF（サブ目標）${i}" oninput="csfInput(${i},this.value)">
+      <label style="grid-column:2;display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--text3);padding:0 10px 6px;cursor:pointer"><input type="checkbox" id="csf-period-chk-${i}" onchange="toggleCsfPeriod(${i},this.checked)">この項目の期間を個別設定する</label>
+      <div id="csf-period-${i}" style="grid-column:2;display:none;gap:6px;align-items:center;padding:0 10px 8px">
         <input class="fi" type="date" id="csf-start-${i}" style="flex:1;font-size:11px" onchange="csfPeriodInput(${i},'start',this.value)">
         <span style="color:var(--text3);font-size:11px">〜</span>
         <input class="fi" type="date" id="csf-end-${i}" style="flex:1;font-size:11px" onchange="csfPeriodInput(${i},'end',this.value)">
