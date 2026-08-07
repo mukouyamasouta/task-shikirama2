@@ -1133,11 +1133,13 @@
   async function saveEvaluation(o) {
     if (!sb) return { error: 'Supabase未接続' };
     var me = await currentProfile();
-    // ★executive.html は下書き/提出の概念を持たず常に確定保存のUIのため、
-    //   evaluatorRole==='executive'のときはsubmittedを常にtrue扱いにする
-    //   （o.submitted未指定=falseのまま扱うと、幹部の評価が「下書き」判定されて
-    //   従業員・管理画面に一切見えなくなるリグレッションになるため）。
-    var submitted = (o.evaluatorRole === 'executive') ? true : !!o.submitted;
+    // submitted の決定:
+    //   ・呼び出し側が明示指定していればそれを尊重する（幹部画面の「保存(下書き)」/「提出」2段階に対応）
+    //   ・未指定のときは従来どおり evaluatorRole==='executive' なら true
+    //     （幹部の評価が「下書き」判定されて従業員・管理画面から消えるリグレッションを防ぐため）
+    var submitted = (o.submitted !== undefined && o.submitted !== null)
+      ? !!o.submitted
+      : (o.evaluatorRole === 'executive');
     var row = {
       target_type: 'user', target_user_id: o.targetPid || null,
       evaluator_id: me ? me.id : null, evaluator_role: o.evaluatorRole || 'leader',
@@ -1168,7 +1170,11 @@
           // submitted=falseに戻してしまう（従業員・管理画面から突然消える）事故を防ぐため、
           // 未提出の行のみ上書き対象とする。提出済みの行への再編集は新しい行として保存する
           // （employee.htmlのupsertSelfEvalの「提出済みは新規作成し履歴を残す」と同じ設計）。
-          if (row.evaluator_role === 'executive' || !found.submitted) existing = found;
+          // 幹部評価は従来どおり同一行を上書きして重複を作らない。ただし
+          // 「提出済みの行を後から下書き保存でsubmitted=falseに戻す」（従業員・管理画面から
+          // 突然消える）事故は防ぐため、提出済み行の上書きは提出時のみ許可する。
+          if (row.evaluator_role === 'executive') { if (!found.submitted || submitted) existing = found; }
+          else if (!found.submitted) existing = found;
         }
       }
       return existing

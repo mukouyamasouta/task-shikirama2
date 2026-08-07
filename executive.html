@@ -377,6 +377,18 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
         <option value="C">マーケチームC</option>
       </select>
     </div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-body" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px">
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:12px;font-weight:700">一括操作</div>
+          <div style="font-size:10.5px;color:var(--text3)">いま表示中のメンバーのうち、評価を入力済みの人がまとめて対象になります</div>
+          <div id="bulk-eval-count" style="font-size:10.5px;color:var(--accent);font-weight:700;margin-top:2px"></div>
+          <div id="bulk-eval-status" style="font-size:10.5px;color:var(--text3);margin-top:2px"></div>
+        </div>
+        <button class="f-submit" id="bulk-eval-save" style="padding:8px 18px;font-size:12px;background:#6B7280" onclick="bulkSaveMemberEval(false)">💾 一括保存</button>
+        <button class="f-submit" id="bulk-eval-submit" style="padding:8px 18px;font-size:12px" onclick="bulkSaveMemberEval(true)">📤 一括提出（従業員・リーダーに反映）</button>
+      </div>
+    </div>
     <div id="member-eval-container"></div>
   </div>
   <div id="ep-history" class="epane">
@@ -2591,8 +2603,12 @@ function setMevStar(id,type,si,n){
   if(type==='kgi')e.kgi.stars=(e.kgi.stars===n?0:n);else e.csf[si].stars=(e.csf[si].stars===n?0:n);
   const row=document.getElementById(`mevstars-${id}-${type}-${si}`);
   if(row)row.innerHTML=mevStarHTML(id,type,si);
+  if(typeof updateBulkEvalBar==='function')updateBulkEvalBar();
 }
-function saveMevCmt(id,type,si,v){const e=_mev(id);if(type==='kgi')e.kgi.comment=v;else e.csf[si].comment=v;}
+function saveMevCmt(id,type,si,v){
+  const e=_mev(id);if(type==='kgi')e.kgi.comment=v;else e.csf[si].comment=v;
+  if(typeof updateBulkEvalBar==='function')updateBulkEvalBar();
+}
 function toggleCsf(id){
   const el=document.getElementById('csf-'+id),ar=document.getElementById('csfarrow-'+id);
   if(!el)return;const open=el.style.display!=='none';
@@ -2634,7 +2650,51 @@ async function openEvalRefs(id){
 }
 function closeEvalRefs(){document.getElementById('evalref-modal').style.display='none';}
 
-function saveMemberEvalExec(id,name){
+// ===== 「リーダーの評価」パネル（メンバーカード上部・常時表示・チャート非依存） =====
+// 提出済みのリーダー評価を全件（複数リーダー・複数期間ぶん）表示する。
+// KGIコメントに加え、記入のあるCSFも折りたたみで確認できるようにする。
+function renderLeaderEvalPanel(memberId,evAll){
+  const box=document.getElementById('leadereval-'+memberId);if(!box)return;
+  const list=((evAll&&evAll.fromLeader)||[]).filter(x=>x.submitted);
+  if(!list.length){
+    box.innerHTML=`<div style="background:#F9FAFB;border:1px dashed var(--border);border-radius:8px;padding:9px 12px;font-size:11px;color:var(--text3)">👔 リーダーの評価：まだ提出されていません</div>`;
+    return;
+  }
+  let h=`<div style="background:#CCEDE9;border:1px solid var(--accent);border-radius:8px;padding:10px 12px">
+    <div style="font-size:11px;font-weight:800;color:#0F766E;margin-bottom:7px">👔 リーダーの評価（${list.length}件）</div>`;
+  list.forEach((evx,i)=>{
+    const csfFilled=(evx.csf||[]).map((c,si)=>({si,stars:(c&&c.stars)||0,comment:(c&&c.comment)||''}))
+      .filter(c=>c.stars>0||c.comment);
+    const detId='ldreval-det-'+memberId+'-'+i;
+    h+=`<div style="background:#fff;border-radius:6px;padding:8px 10px;margin-bottom:${i===list.length-1?'0':'6px'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;font-weight:700">
+        <span>${evx.evaluatorName||'—'} <span style="font-weight:400;color:var(--text3)">／ ${evx.period||'期間未設定'}</span></span>
+        <span style="color:var(--amber);letter-spacing:1px">KGI ${starStr(evx.kgi)} <span style="color:#0F766E">${evx.kgi||0}/5</span></span>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:5px">💬 ${evx.kgiComment||'—'}</div>
+      ${csfFilled.length?`<button class="card-btn" style="margin-top:6px;font-size:10px;padding:3px 9px" onclick="(function(el){var d=document.getElementById('${detId}');var o=d.style.display!=='none';d.style.display=o?'none':'block';el.textContent=(o?'▸':'▾')+' CSF評価 ${csfFilled.length}件';})(this)">▸ CSF評価 ${csfFilled.length}件</button>
+      <div id="${detId}" style="display:none;margin-top:6px">
+        ${csfFilled.map(c=>`<div style="border-top:1px solid var(--border);padding:5px 0;font-size:10.5px"><span style="font-weight:700;color:var(--accent)">CSF-${c.si+1}</span> <span style="color:var(--amber);letter-spacing:1px">${starStr(c.stars)}</span> <span style="color:var(--text2)">${c.comment||'—'}</span></div>`).join('')}
+      </div>`:''}
+    </div>`;
+  });
+  h+=`</div>`;
+  box.innerHTML=h;
+}
+
+// 評価入力が1つでもあるか（★も コメントも空なら「未入力」）。
+// 一括保存／一括提出で、触っていないメンバーにまで空評価を送らないための判定。
+function execEvalHasInput(id){
+  const e=(memberEval[id]);if(!e)return false;
+  if(e.kgi.stars>0||(e.kgi.comment||'').trim())return true;
+  return e.csf.some(c=>c.stars>0||(c.comment||'').trim());
+}
+// isSubmit=false: 保存（下書き。従業員・リーダーには出さない）
+// isSubmit=true : 提出（submitted=true → 従業員画面の「上長・幹部からの評価」と
+//                 リーダー画面の評価記録に反映され、対象者へ通知も飛ぶ）
+// 一括処理から await できるよう必ず Promise を返す。
+async function saveMemberEvalExec(id,name,isSubmit,opts){
+  opts=opts||{};
   const e=_mev(id);
   const avg=Math.round(e.csf.reduce((a,c)=>a+c.stars,0)/8*10)/10;
   const API=window.VexumAPI;
@@ -2645,17 +2705,73 @@ function saveMemberEvalExec(id,name){
   if(!chartId){const cc=(window._execChartsCache&&window._execChartsCache[id])||[];if(cc.length)chartId=cc[0].id;}
   // 評価期間は保存日から自動算出（旧: '2025 Q2' 固定のデモ実装の名残を是正）
   const _pd=new Date();const period=_pd.getFullYear()+' Q'+(Math.floor(_pd.getMonth()/3)+1);
-  if(API&&API.ready&&m&&m.pid){
-    API.saveEvaluation({targetPid:m.pid,evaluatorRole:'executive',period,kgi:e.kgi.stars,kgiComment:e.kgi.comment||'',csf:e.csf.map(function(c){return {stars:c.stars,comment:c.comment};}),chartId})
-      .then(function(res){if(res&&res.error)console.warn('eval deliver:',res.error);if(typeof injectEvalRefs==='function')injectEvalRefs(id,m.pid);});
-    API.saveEvalRecord({evaluateePid:m.pid,evaluateeName:name,period,kgi:e.kgi.stars,csf:avg,task:0,comment:e.kgi.comment||''});
+  if(!(API&&API.ready&&m&&m.pid)){
+    if(!opts.silent)showToast('Supabase未接続のため保存できません');
+    return {error:'未接続'};
   }
-  // 履歴に即時反映
-  const rec={name,evaluator:(document.getElementById('sb-uname')||{}).textContent||'幹部',period,kgi:e.kgi.stars,csf:avg,task:0,comment:e.kgi.comment||'',status:'done'};
-  const idx=EVAL_HISTORY.findIndex(r=>r.name===name&&r.period===rec.period);
-  if(idx>=0)EVAL_HISTORY[idx]=rec;else EVAL_HISTORY.unshift(rec);
+  const res=await API.saveEvaluation({targetPid:m.pid,evaluatorRole:'executive',period,
+    kgi:e.kgi.stars,kgiComment:e.kgi.comment||'',
+    csf:e.csf.map(function(c){return {stars:c.stars,comment:c.comment};}),
+    chartId,submitted:!!isSubmit});
+  if(res&&res.error){
+    if(!opts.silent)showToast('保存に失敗しました: '+res.error);
+    return {error:res.error};
+  }
+  // 評価記録・履歴は「提出」時のみ残す（下書きが履歴に混ざらないようにする）
+  if(isSubmit){
+    API.saveEvalRecord({evaluateePid:m.pid,evaluateeName:name,period,kgi:e.kgi.stars,csf:avg,task:0,comment:e.kgi.comment||''});
+    const rec={name,evaluator:(document.getElementById('sb-uname')||{}).textContent||'幹部',period,kgi:e.kgi.stars,csf:avg,task:0,comment:e.kgi.comment||'',status:'done'};
+    const idx=EVAL_HISTORY.findIndex(r=>r.name===name&&r.period===rec.period);
+    if(idx>=0)EVAL_HISTORY[idx]=rec;else EVAL_HISTORY.unshift(rec);
+    if(!opts.silent)renderEvalHistory();
+  }
+  if(!opts.silent){
+    if(typeof injectEvalRefs==='function')injectEvalRefs(id,m.pid);
+    showToast(isSubmit?`📤 ${name} の評価を提出しました（従業員・リーダーに反映）✓`:`💾 ${name} の評価を保存しました（下書き）`);
+  }
+  return {ok:true};
+}
+// ===== 一括保存 / 一括提出 =====
+// 対象は「いま個人評価タブに表示されているメンバー」かつ「評価入力があるメンバー」。
+let _execBulkBusy=false;
+async function bulkSaveMemberEval(isSubmit){
+  if(_execBulkBusy)return;
+  const API=window.VexumAPI;
+  if(!(API&&API.ready)){showToast('Supabase未接続のため実行できません');return;}
+  const mems=execEvalFilteredMembers().filter(([id])=>execEvalHasInput(id));
+  if(!mems.length){showToast('入力済みの評価がありません（★またはコメントを入力してください）');return;}
+  if(isSubmit&&!confirm(`表示中の ${mems.length}名 の評価を提出します。\n提出すると対象の従業員本人と、そのリーダーが内容を確認できるようになります。\n\n対象: ${mems.map(([,m])=>m.name).join('・')}\n\n実行しますか？`))return;
+  _execBulkBusy=true;
+  const btnS=document.getElementById('bulk-eval-save'),btnP=document.getElementById('bulk-eval-submit');
+  const st=document.getElementById('bulk-eval-status');
+  if(btnS)btnS.disabled=true; if(btnP)btnP.disabled=true;
+  const okNames=[],ngNames=[];
+  try{
+    for(let i=0;i<mems.length;i++){
+      const [id,m]=mems[i];
+      if(st)st.textContent=`処理中… ${i+1}/${mems.length}（${m.name}）`;
+      const r=await saveMemberEvalExec(id,m.name,isSubmit,{silent:true});
+      if(r&&r.error)ngNames.push(m.name);else okNames.push(m.name);
+    }
+  }finally{
+    _execBulkBusy=false;
+    if(btnS)btnS.disabled=false; if(btnP)btnP.disabled=false;
+  }
+  if(st)st.textContent='';
   renderEvalHistory();
-  showToast(`${name} の評価を保存しました（CSF平均 ${avg}★）✓`);
+  // 反映後に参照欄（自己評価・リーダー評価・幹部評価）を貼り直す
+  mems.forEach(([id,m])=>{if(m.pid&&typeof injectEvalRefs==='function')injectEvalRefs(id,m.pid);});
+  const verb=isSubmit?'提出':'保存';
+  showToast(ngNames.length
+    ? `${verb}: 成功 ${okNames.length}名 ／ 失敗 ${ngNames.length}名（${ngNames.join('・')}）`
+    : `✅ ${okNames.length}名の評価を${verb}しました${isSubmit?'（従業員・リーダーに反映）':'（下書き）'}`);
+}
+// 一括バーの件数表示を更新
+function updateBulkEvalBar(mems){
+  const el=document.getElementById('bulk-eval-count');if(!el)return;
+  const list=mems||execEvalFilteredMembers();
+  const filled=list.filter(([id])=>execEvalHasInput(id)).length;
+  el.textContent=`表示中 ${list.length}名 ／ 入力済み ${filled}名`;
 }
 /* ===== 評価履歴 ===== */
 let EVAL_HISTORY=[];
@@ -2737,16 +2853,19 @@ async function injectEvalRefs(memberId,pid){
       }
     }
     const chartId=window._execChartChoice[memberId]||null;
-    const ev=await API.loadEvaluationsFor(pid,chartId);
+    // 全チャート分をまとめて取得しておく（チャート絞り込みのフォールバックと、
+    // 下の「リーダーの評価」パネル＝チャート非依存の一覧の両方で使う）
+    const evAll=await API.loadEvaluationsFor(pid);
+    const ev=chartId?await API.loadEvaluationsFor(pid,chartId):evAll;
     // 下書き（未提出）は参照しない（提出済みのみを「本人/リーダーの評価」として表示する）
     let self=(ev.fromSelf||[]).find(x=>x.submitted)||null;
     let leader=(ev.fromLeader||[]).find(x=>x.submitted)||null;
     // chart_id 指定で取れなかった項目は chartId なし（全期間最新）でフォールバック
-    if(!self||!leader){
-      const evAll=await API.loadEvaluationsFor(pid);
-      if(!self)self=(evAll.fromSelf||[]).find(x=>x.submitted)||null;
-      if(!leader)leader=(evAll.fromLeader||[]).find(x=>x.submitted)||null;
-    }
+    if(!self)self=(evAll.fromSelf||[]).find(x=>x.submitted)||null;
+    if(!leader)leader=(evAll.fromLeader||[]).find(x=>x.submitted)||null;
+    // 「リーダーの評価」パネル: 各KGI/CSFブロック内の参照だけだと CSF が折りたたみで
+    // 気づけないため、カード上部に提出済みリーダー評価を全件まとめて常時表示する
+    renderLeaderEvalPanel(memberId,evAll);
     // 達成率（曼荼羅と同じく member_kpi_edits の進捗から算出）。
     // ★ 未記入のKPI/CSFスロットを0%として平均に含めると、他画面（リーダー/従業員の
     //   _mdKgiPct/_mdCsfPct）と違って「空欄で薄まった」低い達成率になってしまう。
@@ -2822,19 +2941,26 @@ function populateMemberTeamFilter(){
   const cur=sel.value||'';
   sel.innerHTML='<option value="">全チーム</option>'+Object.values(TEAMS).map(t=>`<option value="${t.id}"${t.id===cur?' selected':''}>${t.name}</option>`).join('');
 }
-function renderMemberEval(){
-  const con=document.getElementById('member-eval-container');if(!con)return;
-  populateMemberTeamFilter();
+// 個人評価タブで現在表示中（検索・チーム・自己評価フィルタ適用後）のメンバー[id,m]配列。
+// 一括保存／一括提出は必ずこの関数を使い、画面の表示内容と操作対象を完全に一致させる
+// （別々に絞り込み条件を書くと「見えていない人にも提出されてしまう」事故になる）。
+function execEvalFilteredMembers(){
   const q=(document.getElementById('member-search')||{}).value||'';
   const tf=(document.getElementById('member-team-filter')||{}).value||'';
   const sf=(document.getElementById('member-self-filter')||{}).value||'';
-  const mems=Object.entries(MEMBERS).filter(([id,m])=>{
+  return Object.entries(MEMBERS).filter(([id,m])=>{
     if(m.roleEnum==='admin'||m.roleEnum==='executive')return false;
     if(tf&&m.team!==tf)return false;
     if(q&&!m.name.includes(q))return false;
     if(sf==='hasSelf'&&!(m.pid&&window._selfEvalMembers&&window._selfEvalMembers[m.pid]))return false;
     return true;
   });
+}
+function renderMemberEval(){
+  const con=document.getElementById('member-eval-container');if(!con)return;
+  populateMemberTeamFilter();
+  const mems=execEvalFilteredMembers();
+  updateBulkEvalBar(mems);
   if(mems.length===0){con.innerHTML='<div style="text-align:center;padding:32px;color:var(--text3)">該当するメンバーがいません</div>';return;}
   let h='';
   mems.forEach(([id,m])=>{
@@ -2857,6 +2983,7 @@ function renderMemberEval(){
         <button class="card-btn" style="background:#FEF3C7;color:#92400E" onclick="openEvalRefs('${id}')">📋 評価を参照（リーダー・本人）</button>
       </div>
       <div id="execeval-mnd-${id}" style="display:none;padding:10px;overflow-x:auto;background:#FAFCFC;border:1px solid var(--border);border-radius:8px;margin-bottom:12px"></div>
+      <div id="leadereval-${id}" style="margin-bottom:12px"></div>
       <div id="chart-sel-${id}" style="display:flex;align-items:center;gap:8px;background:#FAFCFC;padding:8px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:12px;flex-wrap:wrap">
         <span style="font-size:11px;font-weight:700;color:var(--text2)">📊 評価対象チャート:</span>
         <select class="fs" style="width:auto;min-width:240px;font-size:11px;padding:5px 8px" onchange="onExecChartChange('${id}',this.value)">
@@ -2881,7 +3008,10 @@ function renderMemberEval(){
     }else{
       h+=evalBlock(id,'kgi',-1,'総合','#0D9488','総合評価');
     }
-    h+=`<button class="f-submit" style="margin-top:4px;padding:8px 20px;font-size:12px" onclick="saveMemberEvalExec('${id}','${m.name}')">評価を保存</button>
+    h+=`<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+        <button class="f-submit" style="flex:1;min-width:120px;padding:8px 20px;font-size:12px;background:#6B7280" onclick="saveMemberEvalExec('${id}','${m.name}',false)">💾 保存</button>
+        <button class="f-submit" style="flex:1;min-width:120px;padding:8px 20px;font-size:12px" onclick="saveMemberEvalExec('${id}','${m.name}',true)">📤 提出（従業員・リーダーに反映）</button>
+      </div>
       </div>
     </div>`;
   });
