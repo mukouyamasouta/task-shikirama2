@@ -140,6 +140,16 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   [style*="240px 1fr"],[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr !important}
   .sec-title{font-size:16px}
 }
+/* ===== グリッドで作成（送信用） ===== */
+.create-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px}
+.ctab{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;border:1.5px solid var(--border);background:var(--card);color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s}
+.ctab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.cpane{display:none}.cpane.active{display:block}
+.grid-editor-wrap{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:#D1D5DB;border-radius:6px;overflow:hidden}
+.ge-cell{min-height:54px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:9px;line-height:1.3;padding:4px 3px;cursor:pointer;word-break:break-all;position:relative;transition:filter .12s}
+.ge-cell:hover{filter:brightness(.9)}
+#send-cell-editor-overlay{display:none;position:fixed;inset:0;z-index:9995;background:transparent}
+#send-cell-editor-box{display:none;position:fixed;z-index:9996;background:#fff;border:2px solid var(--accent);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px;min-width:180px}
 </style>
 </head>
 <body>
@@ -181,37 +191,72 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
 <!-- チャート送信 -->
 <div id="tc-send" class="tab-content">
-  <div class="sec-title">チャート送信 <span style="font-size:12px;font-weight:400;color:var(--text3)">チームリーダーにタスクを割り当て</span>
+  <div class="sec-title">チャート送信 <span style="font-size:12px;font-weight:400;color:var(--text3)">送信先を選び、個人チャートとして自動追加</span>
     <button class="f-submit" style="padding:8px 16px;font-size:12px;background:var(--cyan)" onclick="openTplManager()">🗂 テンプレート管理</button>
   </div>
   <div id="send-success" style="display:none;align-items:center;gap:10px;background:#D1FAE5;border:1px solid #10B981;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#065F46;font-size:13px;font-weight:600">
     <span style="font-size:18px">✅</span><span id="send-success-msg">チャートを送信しました</span>
   </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-hd"><div><div class="card-title">① 送信先を選択</div><div class="card-sub">チームで絞り込み、送信する従業員を複数選択できます</div></div>
+      <span id="send-to-count" style="font-size:11px;font-weight:700;color:var(--accent)">0名選択中</span>
+    </div>
+    <div class="card-body">
+      <div class="fg" style="max-width:320px"><label class="fl">チームで絞り込み</label>
+        <select class="fs" id="send-team-sel" onchange="onSendTeamChange()"><option value="">— チームを選択 —</option></select>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button class="card-btn" onclick="sendToSelectAll(true)">すべて選択</button>
+        <button class="card-btn" onclick="sendToSelectAll(false)">すべて解除</button>
+      </div>
+      <div id="send-to-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
+  </div>
   <div class="g2">
     <div>
-      <div class="send-card">
-        <div class="fg"><label class="fl">送信先（チームリーダー）</label>
-          <select class="fs" id="send-to"></select>
-        </div>
-        <div class="fg"><label class="fl">テンプレート適用（任意）</label>
-          <select class="fs" id="tpl-select" onchange="applyTemplate(this.value)">
-            <option value="">— 空白から作成 —</option>
-          </select>
-        </div>
-        <div class="fg"><label class="fl">中心目標（KGI）</label>
-          <input class="fi" id="send-center" placeholder="例: Q3チーム売上 ¥50M達成" oninput="updateSendPreview()">
-        </div>
-        <div class="fg"><label class="fl">期間（KGI / 必須）</label>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input class="fi" type="date" id="send-start" style="flex:1" onchange="SEND.startDate=this.value">
-            <span style="color:var(--text3);font-size:12px">〜</span>
-            <input class="fi" type="date" id="send-end" style="flex:1" onchange="SEND.endDate=this.value">
+      <div class="create-tabs">
+        <button class="ctab active" onclick="swSendCreate('form',this)">📝 フォームで作成</button>
+        <button class="ctab" onclick="swSendCreate('grid',this);initSendGridEditor()">◎ グリッドで作成</button>
+      </div>
+      <div id="send-cp-form" class="cpane active">
+        <div class="send-card">
+          <div class="fg"><label class="fl">テンプレート適用（任意）</label>
+            <select class="fs" id="tpl-select" onchange="applyTemplate(this.value)">
+              <option value="">— 空白から作成 —</option>
+            </select>
+          </div>
+          <div class="fg"><label class="fl">中心目標（KGI）</label>
+            <input class="fi" id="send-center" placeholder="例: Q3チーム売上 ¥50M達成" oninput="updateSendPreview()">
+          </div>
+          <div class="fg"><label class="fl">期間（KGI / 必須）</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input class="fi" type="date" id="send-start" style="flex:1" onchange="SEND.startDate=this.value">
+              <span style="color:var(--text3);font-size:12px">〜</span>
+              <input class="fi" type="date" id="send-end" style="flex:1" onchange="SEND.endDate=this.value">
+            </div>
+          </div>
+          <div class="fg"><label class="fl">サブ目標（CSF / 8項目）</label>
+            <div class="mnd-subs-wrap" id="send-subs-list"></div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="f-submit" style="flex:1;background:var(--text3)" onclick="previewSendFull()">🔍 全画面プレビュー</button>
+            <button class="f-submit" style="flex:1" onclick="sendChart()">✈ 送信する</button>
           </div>
         </div>
-        <div class="fg"><label class="fl">サブ目標（CSF / 8項目）</label>
-          <div class="mnd-subs-wrap" id="send-subs-list"></div>
+      </div>
+      <div id="send-cp-grid" class="cpane">
+        <div class="card">
+          <div class="card-hd"><div><div class="card-title">曼荼羅グリッド入力</div><div class="card-sub">セルをクリックして編集</div></div>
+            <button class="card-btn" onclick="clearSendGridEditor()">クリア</button>
+          </div>
+          <div class="card-body">
+            <div style="overflow-x:auto">
+              <div id="send-grid-container" style="min-width:520px"></div>
+            </div>
+            <div id="send-grid-summary" style="margin-top:14px"></div>
+          </div>
         </div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;margin-top:12px">
           <button class="f-submit" style="flex:1;background:var(--text3)" onclick="previewSendFull()">🔍 全画面プレビュー</button>
           <button class="f-submit" style="flex:1" onclick="sendChart()">✈ 送信する</button>
         </div>
@@ -229,9 +274,9 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
           </div>
           <div style="padding:10px;background:var(--accent-l);border-radius:6px;font-size:11px;color:var(--text2);line-height:1.6">
             <strong style="color:var(--accent)">使い方</strong><br>
-            ① テンプレートを適用するか目標・サブ目標を手動入力<br>
-            ② 「全画面プレビュー」で確認<br>
-            ③ 「送信する」でリーダーに固定タスクとして付与
+            ① 上部で送信先チームとメンバーを選択（複数可）<br>
+            ② 「フォームで作成」または「グリッドで作成」でチャートを作成<br>
+            ③ 「送信する」で選択した全員の個人チャートとして自動追加
           </div>
         </div>
       </div>
@@ -392,6 +437,17 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 
   </div><!-- /content -->
 </div><!-- /main -->
+
+<!-- 送信チャート用セル編集オーバーレイ（グリッドで作成タブ） -->
+<div id="send-cell-editor-overlay" onclick="closeSendCellEditor()"></div>
+<div id="send-cell-editor-box">
+  <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:5px" id="send-cell-editor-label">セルを編集</div>
+  <textarea id="send-cell-editor-ta" rows="2" style="width:100%;padding:6px 8px;border:1.5px solid var(--accent);border-radius:6px;font-size:12px;font-family:inherit;resize:none;outline:none"></textarea>
+  <div style="display:flex;gap:6px;margin-top:7px">
+    <button onclick="confirmSendCellEdit()" style="flex:1;padding:6px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">決定</button>
+    <button onclick="closeSendCellEditor()" style="padding:6px 10px;background:#F3F4F6;border:none;border-radius:6px;font-size:12px;cursor:pointer">✕</button>
+  </div>
+</div>
 
 <!-- アカウント発行モーダル -->
 <div id="acc-modal" onclick="if(event.target===this)closeAccModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
@@ -923,7 +979,7 @@ async function reloadAllData(){
       repl(TEAMS,d.TEAMS);repl(MEMBERS,d.MEMBERS);repl(MND,d.MND);repl(EMP,d.EMP);}
   }catch(e){}
   if(typeof renderAccount==='function')renderAccount();
-  if(typeof populateSendToSelect==='function')populateSendToSelect();
+  if(typeof populateSendTeamSelect==='function')populateSendTeamSelect();
 }
 /* 削除済み（is_active=false）アカウントの一覧＋復活ボタン */
 const ROLE_JP_ENUM={admin:'管理者',executive:'幹部',leader:'リーダー',member:'メンバー'};
@@ -1306,21 +1362,66 @@ async function confirmDeleteTeam(tid){
 }
 
 /* ========== チャート送信 ========== */
-// 送信先（チームリーダー）プルダウンをTEAMS/MEMBERSの現在値から再構築する。
-// ★ 以前はHTMLに田中/鈴木/佐藤という組込デモの3名が直書きされたまま一切更新されず、
-//   Supabase接続後（実データでMEMBERS/TEAMSが置き換わった後）も実在しないリーダーが
-//   選べてしまい、選択時はMEMBERS[toVal]が存在しないため送信先未設定（pid null）で
-//   送信されてしまう不具合があった。TEAMS各チームのleader（memKey）をMEMBERSから解決して
-//   都度作り直すことで、常に現在のチーム＋リーダーとプルダウンを一致させる。
-function populateSendToSelect(){
-  const sel=document.getElementById('send-to');if(!sel)return;
+// 送信先メンバー選択（チーム絞り込み＋複数チェックボックス）
+// 選択中の送信先メンバーキー（EXEC_OV.MEMBERS のキー）。
+// ★ チームを切り替えても保持する（他チームの人も混ぜて送れる仕様）。そのため
+//   updateSendToCount() は「現在表示中の人数」ではなく「全選択数」を表示する。
+let _sendToSelected={};
+
+// チーム絞り込みプルダウンを EXEC_OV.teamsList から構築
+function populateSendTeamSelect(){
+  const sel=document.getElementById('send-team-sel');if(!sel)return;
   const cur=sel.value;
-  const opts=Object.values(TEAMS).filter(t=>t.leader&&MEMBERS[t.leader]).map(t=>`<option value="${t.leader}">${MEMBERS[t.leader].name}（${t.name} · リーダー）</option>`);
-  sel.innerHTML=opts.length?opts.join(''):'<option value="">— リーダーが設定されたチームがありません —</option>';
+  sel.innerHTML='<option value="">— チームを選択 —</option>'
+    +(EXEC_OV.teamsList||[]).map(t=>`<option value="${t.uid}">${t.name}</option>`).join('');
   if([...sel.options].some(o=>o.value===cur))sel.value=cur;
+  renderSendToList();
 }
-function initSendForm(){
-  populateSendToSelect();
+// 選択チームに所属するメンバーをチェックボックスで描画
+function renderSendToList(){
+  const box=document.getElementById('send-to-list');if(!box)return;
+  const teamUid=(document.getElementById('send-team-sel')||{}).value||'';
+  if(!teamUid){
+    box.innerHTML='<div style="font-size:11px;color:var(--text3);padding:6px 0">先にチームを選択してください</div>';
+    updateSendToCount();return;
+  }
+  const ids=Object.keys(EXEC_OV.MEMBERS||{}).filter(id=>EXEC_OV.MEMBERS[id].teamUuid===teamUid);
+  if(!ids.length){
+    box.innerHTML='<div style="font-size:11px;color:var(--text3);padding:6px 0">このチームに所属するメンバーがいません</div>';
+    updateSendToCount();return;
+  }
+  box.innerHTML=ids.map(id=>{
+    const m=EXEC_OV.MEMBERS[id];
+    const on=!!_sendToSelected[id];
+    return `<label style="display:flex;align-items:center;gap:6px;border:1px solid ${on?'var(--accent)':'var(--border)'};background:${on?'var(--accent-l)':'#fff'};border-radius:8px;padding:7px 11px;cursor:pointer;font-size:12px">
+      <input type="checkbox" ${on?'checked':''} onchange="toggleSendTo('${id}',this.checked)">
+      <span style="font-weight:600">${m.name}</span>
+      <span class="badge ${m.role==='リーダー'?'b-manager':'b-employee'}">${m.role||''}</span>
+    </label>`;
+  }).join('');
+  updateSendToCount();
+}
+function onSendTeamChange(){renderSendToList();}
+function toggleSendTo(id,on){if(on)_sendToSelected[id]=1;else delete _sendToSelected[id];renderSendToList();}
+function sendToSelectAll(on){
+  const teamUid=(document.getElementById('send-team-sel')||{}).value||'';
+  if(!teamUid)return;
+  Object.keys(EXEC_OV.MEMBERS||{}).forEach(id=>{
+    if(EXEC_OV.MEMBERS[id].teamUuid!==teamUid)return;
+    if(on)_sendToSelected[id]=1;else delete _sendToSelected[id];
+  });
+  renderSendToList();
+}
+function updateSendToCount(){
+  const e=document.getElementById('send-to-count');
+  if(e)e.textContent=Object.keys(_sendToSelected).length+'名選択中';
+}
+async function initSendForm(){
+  const API=window.VexumAPI;
+  if(API&&API.ready){
+    if(!EXEC_OV.teamsList.length){const d=await API.loadExecOverview(null);if(d)EXEC_OV=d;}
+  }
+  populateSendTeamSelect();
   populateTplSelect();
   const wrap=document.getElementById('send-subs-list');
   if(wrap&&wrap.children.length===0){
@@ -1420,32 +1521,142 @@ function previewSendFull(){
     acts:Array.from({length:8},(_,i)=>Array.from({length:8},(_,j)=>(SEND.acts[i]||[])[j]||'—'))};
   openMandala('__sendprev__');
 }
+/* ===== グリッドで作成（送信）===== */
+function swSendCreate(id,btn){
+  document.querySelectorAll('.cpane').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.ctab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('send-cp-'+id).classList.add('active');
+  if(btn)btn.classList.add('active');
+}
+let _sendEditingCell=null;
+function initSendGridEditor(){renderSendGrid();}
+function renderSendGrid(){
+  const order=[0,1,2,7,-1,3,6,5,4];
+  let h='<div class="grid-editor-wrap">';
+  order.forEach(si=>{
+    let sty='';let txt='';let click='';
+    if(si<0){sty+='background:#0D9488;color:#fff;font-weight:800;font-size:10px;';txt=SEND.center||'<span style="opacity:.5">KGI</span>';click=`openSendCellEditor('center',-1,event)`;}
+    else{sty+='background:#CCEDE9;color:#0D9488;font-weight:700;font-size:9px;';txt=SEND.subs[si]||`<span style="opacity:.5">CSF${si+1}</span>`;click=`openSendCellEditor('sub',${si},event)`;}
+    h+=`<div class="ge-cell" style="${sty}" onclick="${click}">${txt}</div>`;
+  });
+  h+='</div>';
+  const con=document.getElementById('send-grid-container');if(con)con.innerHTML=h;
+  updateSendGridSummary();
+}
+function openSendCellEditor(type,si,evt){
+  evt.stopPropagation();
+  const labels={center:'KGI（中心目標）',sub:'CSF（サブ目標）'};
+  const cur=type==='center'?SEND.center:SEND.subs[si];
+  _sendEditingCell={type,si};
+  document.getElementById('send-cell-editor-label').textContent=labels[type];
+  document.getElementById('send-cell-editor-ta').value=cur||'';
+  const box=document.getElementById('send-cell-editor-box');
+  const ov=document.getElementById('send-cell-editor-overlay');
+  const rect=evt.target.getBoundingClientRect();
+  let top=rect.bottom+4,left=rect.left;
+  if(top+150>window.innerHeight)top=rect.top-160;
+  if(left+200>window.innerWidth)left=window.innerWidth-210;
+  box.style.top=top+'px';box.style.left=left+'px';
+  box.style.display='block';ov.style.display='block';
+  document.getElementById('send-cell-editor-ta').focus();
+}
+function confirmSendCellEdit(){
+  if(!_sendEditingCell)return;
+  const val=document.getElementById('send-cell-editor-ta').value;
+  const {type,si}=_sendEditingCell;
+  if(type==='center')SEND.center=val;else SEND.subs[si]=val;
+  closeSendCellEditor();
+  syncSendInputs();renderSendPreview();renderSendGrid();
+}
+function closeSendCellEditor(){
+  document.getElementById('send-cell-editor-box').style.display='none';
+  document.getElementById('send-cell-editor-overlay').style.display='none';
+  _sendEditingCell=null;
+}
+function clearSendGridEditor(){
+  SEND.center='';SEND.subs=Array(8).fill('');
+  syncSendInputs();renderSendPreview();renderSendGrid();
+}
+function updateSendGridSummary(){
+  const con=document.getElementById('send-grid-summary');if(!con)return;
+  const filledSubs=SEND.subs.filter(v=>v).length;
+  let h=`<div style="font-size:12px;margin-bottom:10px"><strong>KGI:</strong> <span style="color:var(--accent)">${SEND.center||'（未入力）'}</span></div>`;
+  h+=`<div style="font-size:11px;color:var(--text3);margin-bottom:8px">CSF入力済み: ${filledSubs}/8</div>`;
+  if(filledSubs>0){h+='<div style="font-size:11px">';SEND.subs.forEach((s,i)=>{if(s)h+=`<div style="padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--accent);font-weight:700">CSF-${i+1}</span> ${s}</div>`;});h+='</div>';}
+  con.innerHTML=h;
+}
 async function sendChart(){
   if(!SEND.center){showToast('中心目標(KGI)を入力してください');return;}
   if(!SEND.startDate||!SEND.endDate){showToast('KGIの開始日・終了日を入力してください');return;}
-  const toEl=document.getElementById('send-to');
-  const toVal=toEl?toEl.value:'';
-  const toText=toEl?toEl.options[toEl.selectedIndex].text:'リーダー';
-  const toName=toText.split('（')[0];
+  const targets=Object.keys(_sendToSelected).filter(id=>EXEC_OV.MEMBERS&&EXEC_OV.MEMBERS[id]);
+  if(!targets.length){showToast('送信先の従業員を1名以上選択してください');return;}
+
   const API=window.VexumAPI;
-  if(API&&API.ready){
-    const toPid=MEMBERS[toVal]?MEMBERS[toVal].pid:null;
-    const res=await API.createSend({center:SEND.center,title:SEND.center,subs:SEND.subs,acts:SEND.acts,toName,toPid,toTeam:(MEMBERS[toVal]?MEMBERS[toVal].team:''),startDate:SEND.startDate,endDate:SEND.endDate,csfPeriods:SEND.csfPeriods});
-    if(res&&res.error){showToast('送信失敗: '+res.error);return;}
-    if(res&&res.data)SENDS.unshift(res.data);
-  }else{
-    SENDS.unshift({id:'s'+Date.now(),center:SEND.center,subs:SEND.subs,acts:SEND.acts,to_name:toName,status:'sent',progress:0,sent_at:new Date().toISOString(),cell_status:{},edited_by:{}});
+  if(!(API&&API.ready)){showToast('Supabase未接続のため送信できません');return;}
+
+  // CSF個別期間 → member_kpi_edits.period 形式へ変換
+  // （リーダー/従業員画面の _ldCsfDue / _mdCellPeriod が読む形式は {'csf-N':{start,end}}）
+  const periodEdits={};
+  Object.keys(SEND.csfPeriods||{}).forEach(i=>{
+    const p=SEND.csfPeriods[i];if(!p)return;
+    periodEdits['csf-'+i]={start:p.start||'',end:p.end||''};
+  });
+
+  const okNames=[],ngNames=[];
+  for(let i=0;i<targets.length;i++){
+    const key=targets[i];
+    const m=EXEC_OV.MEMBERS[key];
+    const pid=pidOfExec(key);
+    if(!pid){ngNames.push(m.name);continue;}
+
+    // ★ 一意なIDを必ず渡す（渡さないと 'user_'+pid になり本人のメインチャートを破壊する）
+    const dbId='user_'+pid+'_'+Date.now()+'_'+i;
+    const res=await API.upsertMemberChart({
+      pid,id:dbId,name:(SEND.center||'チャート').slice(0,20),
+      center:SEND.center,subs:[...SEND.subs],acts:SEND.acts.map(r=>[...r]),
+      color:'#0D9488',bg:'#CCEDE9'
+    });
+    if(res&&res.error){ngNames.push(m.name);continue;}
+
+    // 期間・scope_label を付与（employee.html persistMyChart と同じ 42703 フォールバック付き）
+    if(API.updateChart){
+      const patch={scope_label:'個人',start_date:SEND.startDate||null,end_date:SEND.endDate||null};
+      if(Object.keys(periodEdits).length)patch.member_kpi_edits={period:periodEdits};
+      try{
+        const ur=await API.updateChart(dbId,patch);
+        if(ur&&ur.error&&/end_date|start_date|member_kpi_edits|column|42703/i.test(ur.error)){
+          delete patch.end_date;delete patch.start_date;delete patch.member_kpi_edits;
+          await API.updateChart(dbId,patch);
+        }
+      }catch(e){}
+    }
+
+    // 送信履歴（chart_sends）にも1行残す。既存の送信履歴タブ・進捗追跡を壊さないため必須
+    const sres=await API.createSend({
+      center:SEND.center,title:SEND.center,subs:SEND.subs,acts:SEND.acts,
+      toName:m.name,toPid:pid,toTeam:m.team||'',
+      startDate:SEND.startDate,endDate:SEND.endDate,csfPeriods:SEND.csfPeriods
+    });
+    if(sres&&sres.data)SENDS.unshift(sres.data);
+    okNames.push(m.name);
   }
+
+  if(!okNames.length){showToast('送信に失敗しました: '+ngNames.join('・'));return;}
   const s=document.getElementById('send-success'),st=document.getElementById('send-success-msg');
-  if(st)st.textContent=`「${SEND.center}」を ${toName} に送信しました`;
-  if(s){s.style.display='flex';setTimeout(()=>{s.style.display='none';},5000);}
-  showToast('チャートを送信しました ✓');
+  if(st)st.textContent=`「${SEND.center}」を ${okNames.length}名（${okNames.join('・')}）に送信しました`
+    +(ngNames.length?` ／ 失敗: ${ngNames.join('・')}`:'');
+  if(s){s.style.display='flex';setTimeout(()=>{s.style.display='none';},6000);}
+  showToast(`✅ ${okNames.length}名にチャートを送信しました`);
   if(typeof renderSendHistory==='function')renderSendHistory();
-  // 送信フォームをリセット（次回開いたときに前回内容・期間チェックが残らないように）
+
+  // フォームをリセット（送信先の選択も解除する）
   SEND.center='';SEND.subs=Array(8).fill('');SEND.acts=Array.from({length:8},()=>Array(8).fill(''));
   SEND.startDate='';SEND.endDate='';SEND.csfPeriods={};
+  _sendToSelected={};
   if(typeof syncSendInputs==='function')syncSendInputs();
   if(typeof renderSendPreview==='function')renderSendPreview();
+  if(typeof renderSendGrid==='function')renderSendGrid();
+  renderSendToList();
 }
 /* ===== テンプレート管理 ===== */
 function openTplManager(){renderTplManager();document.getElementById('tpl-modal').style.display='flex';}
@@ -2723,7 +2934,7 @@ function vexumLogout(){
     if(typeof renderTeamEval==='function') renderTeamEval();
     if(typeof renderMemberEval==='function') renderMemberEval();
     if(typeof initExecDashboard==='function') initExecDashboard();
-    if(typeof populateSendToSelect==='function') populateSendToSelect();
+    if(typeof populateSendTeamSelect==='function') populateSendTeamSelect();
     console.log('[VEXUM] Supabaseデータを反映しました');
   }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:', e); });
   // 別ユーザーでログインしたら前ユーザーの localStorage（vexum_*）を一掃する（従業員・リーダー画面と同パターン）。
