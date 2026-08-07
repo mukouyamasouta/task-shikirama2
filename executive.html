@@ -2909,8 +2909,9 @@ async function injectEvalRefs(memberId,pid){
     window._execCommentEvalId[memberId]=leader&&leader.id||null;
     const ecInput=document.getElementById('execcomment-input-'+memberId);
     if(ecInput){
-      if(leader){ecInput.value=leader.execComment||'';ecInput.placeholder='リーダーの評価に対する幹部コメントを入力…';ecInput.disabled=false;}
-      else{ecInput.value='';ecInput.placeholder='リーダーがまだこのメンバーを評価していません…';ecInput.disabled=true;}
+      ecInput.placeholder='このメンバーの目標・タスクへのコメントを入力…';
+      if(leader){ecInput.value=leader.execComment||'';ecInput.disabled=false;}
+      else{ecInput.value='';ecInput.disabled=true;}
     }
     const ecMeta=document.getElementById('execcomment-meta-'+memberId);
     if(ecMeta)ecMeta.textContent=(leader&&leader.execCommentedAt)?('最終保存: '+String(leader.execCommentedAt).slice(0,16).replace('T',' ')):'';
@@ -2991,8 +2992,8 @@ function renderMemberEval(){
         </select>
       </div>
       <div id="execcomment-${id}" style="background:#F3E8FF;border:1px solid #9333EA;border-radius:8px;padding:10px 12px;margin-bottom:12px">
-        <div style="font-size:11px;font-weight:700;color:#7C3AED;margin-bottom:6px">◆ 幹部コメント（リーダー評価に対するコメント）</div>
-        <textarea class="fi" rows="2" id="execcomment-input-${id}" style="resize:vertical;font-size:12px" placeholder="リーダーがまだこのメンバーを評価していません…"></textarea>
+        <div style="font-size:11px;font-weight:700;color:#7C3AED;margin-bottom:6px">◆ 幹部コメント</div>
+        <textarea class="fi" rows="2" id="execcomment-input-${id}" style="resize:vertical;font-size:12px" placeholder="このメンバーの目標・タスクへのコメントを入力…"></textarea>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
           <span id="execcomment-meta-${id}" style="font-size:10px;color:var(--text3)"></span>
           <button class="card-btn" onclick="saveExecCommentFor('${id}')">💾 幹部コメントを保存</button>
