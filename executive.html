@@ -95,6 +95,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 .mnd-sub-input{border:none;outline:none;padding:8px 10px;font-size:12px;font-family:inherit;width:100%;color:var(--text);background:transparent}
 .mnd-preview-wrap{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#D1D5DB;border-radius:4px;overflow:hidden}
 .fg{margin-bottom:16px}
+/* 2カラムの入力行（従業員画面と同じ定義。開始期間／終了期間の並びで使用） */
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .fl{display:block;font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;letter-spacing:.04em}
 .f-btn{padding:7px 14px;border:1px solid var(--border);border-radius:var(--r-sm,6px);background:var(--card,#fff);color:var(--text2);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}
 .f-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -219,39 +221,54 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
         <button class="ctab" onclick="swSendCreate('grid',this);initSendGridEditor()">◎ グリッドで作成</button>
       </div>
       <div id="send-cp-form" class="cpane active">
-        <div class="send-card">
-          <div class="fg"><label class="fl">テンプレート適用（任意）</label>
-            <select class="fs" id="tpl-select" onchange="applyTemplate(this.value)">
-              <option value="">— 空白から作成 —</option>
-            </select>
-          </div>
-          <div class="fg"><label class="fl">中心目標（KGI）</label>
-            <input class="fi" id="send-center" placeholder="例: Q3チーム売上 ¥50M達成" oninput="updateSendPreview()">
-          </div>
-          <div class="fg"><label class="fl">期間（KGI / 必須）</label>
-            <div style="display:flex;gap:8px;align-items:center">
-              <input class="fi" type="date" id="send-start" style="flex:1" onchange="SEND.startDate=this.value">
-              <span style="color:var(--text3);font-size:12px">〜</span>
-              <input class="fi" type="date" id="send-end" style="flex:1" onchange="SEND.endDate=this.value">
+        <div class="card">
+          <div class="card-hd"><div><div class="card-title">作成設定</div><div class="card-sub">中心=KGI ／ サブ=CSF（8項目）。施策はCSF紐付けタスクで管理</div></div></div>
+          <div class="card-body">
+            <div class="fg"><label class="fl">KGI（中心目標）</label>
+              <input class="fi" id="send-center" placeholder="例: Q3チーム売上 ¥50M達成" oninput="updateSendPreview()">
             </div>
-          </div>
-          <div class="fg"><label class="fl">サブ目標（CSF / 8項目）</label>
-            <div class="mnd-subs-wrap" id="send-subs-list"></div>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="f-submit" style="flex:1;background:var(--text3)" onclick="previewSendFull()">🔍 全画面プレビュー</button>
-            <button class="f-submit" style="flex:1" onclick="sendChart()">✈ 送信する</button>
+            <div class="fr">
+              <div class="fg"><label class="fl">開始期間</label><input class="fi" type="date" id="send-start" onchange="onSendPeriodChange('start',this.value)"></div>
+              <div class="fg"><label class="fl">終了期間</label><input class="fi" type="date" id="send-end" onchange="onSendPeriodChange('end',this.value)"></div>
+            </div>
+            <div class="fg"><label class="fl">テンプレート適用（任意）</label>
+              <select class="fs" id="tpl-select" onchange="applyTemplate(this.value)">
+                <option value="">— 空白から作成 —</option>
+              </select>
+            </div>
+            <div class="fg"><label class="fl">CSF（サブ目標 · 8項目）</label>
+              <div class="mnd-subs-wrap" id="send-subs-list"></div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="f-submit" style="flex:1;background:var(--text3)" onclick="previewSendFull()">🔍 全画面プレビュー</button>
+              <button class="f-submit" style="flex:1" onclick="sendChart()">✈ 送信する</button>
+            </div>
           </div>
         </div>
       </div>
       <div id="send-cp-grid" class="cpane">
+        <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
+          <span style="font-size:14px">✏️</span><span>セルをクリックして直接テキストを入力できます。<strong style="color:var(--accent)">中心セル=KGI</strong> ／ <strong style="color:var(--accent)">第2層=CSF</strong>（施策はCSF紐付けタスクで管理）</span>
+        </div>
         <div class="card">
           <div class="card-hd"><div><div class="card-title">曼荼羅グリッド入力</div><div class="card-sub">セルをクリックして編集</div></div>
-            <button class="card-btn" onclick="clearSendGridEditor()">クリア</button>
+            <div style="display:flex;gap:6px">
+              <button class="card-btn" onclick="clearSendGridEditor()">クリア</button>
+              <button class="card-btn" onclick="previewSendFull()">🔍 プレビュー</button>
+            </div>
           </div>
           <div class="card-body">
+            <div class="fr" style="margin-bottom:14px">
+              <div class="fg" style="margin-bottom:0"><label class="fl">開始期間</label><input class="fi" type="date" id="send-grid-start" onchange="onSendPeriodChange('start',this.value)"></div>
+              <div class="fg" style="margin-bottom:0"><label class="fl">終了期間</label><input class="fi" type="date" id="send-grid-end" onchange="onSendPeriodChange('end',this.value)"></div>
+            </div>
             <div style="overflow-x:auto">
               <div id="send-grid-container" style="min-width:520px"></div>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:12px;flex-wrap:wrap;font-size:10px">
+              <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:2px;background:#0D9488;display:inline-block"></span>KGI（中心）</span>
+              <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:2px;background:#CCEDE9;border:1px solid #0D9488;display:inline-block"></span>CSF（第2層）</span>
+              <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:2px;background:#F9FAFB;border:1px solid #E5E7EB;display:inline-block"></span>KPI（外周）</span>
             </div>
             <div id="send-grid-summary" style="margin-top:14px"></div>
           </div>
@@ -268,9 +285,9 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
         <div class="card-body">
           <div id="send-preview" class="mnd-preview-wrap" style="margin-bottom:10px"></div>
           <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text2);margin-bottom:14px">
-            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--accent);display:inline-block"></span>中心目標</span>
-            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--accent-l);border:1px solid var(--accent);display:inline-block"></span>サブ目標</span>
-            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#F9FAFB;border:1px solid #D1D5DB;display:inline-block"></span>アクション</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--accent);display:inline-block"></span>KGI（中心）</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--accent-l);border:1px solid var(--accent);display:inline-block"></span>CSF（サブ目標）</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#F9FAFB;border:1px solid #D1D5DB;display:inline-block"></span>KPI（アクション）</span>
           </div>
           <div style="padding:10px;background:var(--accent-l);border-radius:6px;font-size:11px;color:var(--text2);line-height:1.6">
             <strong style="color:var(--accent)">使い方</strong><br>
@@ -1368,9 +1385,21 @@ async function confirmDeleteTeam(tid){
 //   updateSendToCount() は「現在表示中の人数」ではなく「全選択数」を表示する。
 let _sendToSelected={};
 
-// チーム絞り込みプルダウンを EXEC_OV.teamsList から構築
-function populateSendTeamSelect(){
+// チーム絞り込みプルダウンを EXEC_OV.teamsList から構築。
+// ★ この関数自身が EXEC_OV の読み込みまで面倒を見ること（呼び出し順に依存させない）。
+//   理由: web/api.js は本体スクリプトより後の <script src> で読み込まれるため、
+//   ①「直前のタブを復元」でこの画面がチャート送信タブから始まる場合、initSendForm() が
+//     走る時点では window.VexumAPI がまだ存在せず EXEC_OV を読み込めない。
+//   ② Supabase接続後のブート処理から呼ばれる箇所でも、直前の initExecDashboard() は
+//     async で await 前に戻ってくるため EXEC_OV.teamsList はまだ空。
+//   結果、どちらの経路でもプルダウンが「— チームを選択 —」だけになり、
+//   チームを選べない＝メンバーのチェックボックスも一切出せない状態になっていた。
+async function populateSendTeamSelect(){
   const sel=document.getElementById('send-team-sel');if(!sel)return;
+  const API=window.VexumAPI;
+  if(API&&API.ready&&!((EXEC_OV.teamsList||[]).length)){
+    try{const d=await API.loadExecOverview(null);if(d)EXEC_OV=d;}catch(e){}
+  }
   const cur=sel.value;
   sel.innerHTML='<option value="">— チームを選択 —</option>'
     +(EXEC_OV.teamsList||[]).map(t=>`<option value="${t.uid}">${t.name}</option>`).join('');
@@ -1417,11 +1446,9 @@ function updateSendToCount(){
   if(e)e.textContent=Object.keys(_sendToSelected).length+'名選択中';
 }
 async function initSendForm(){
-  const API=window.VexumAPI;
-  if(API&&API.ready){
-    if(!EXEC_OV.teamsList.length){const d=await API.loadExecOverview(null);if(d)EXEC_OV=d;}
-  }
-  populateSendTeamSelect();
+  // EXEC_OVの読み込みは populateSendTeamSelect() 側で行う（api.js未ロードのタイミングで
+  // 呼ばれても、後から必ずチーム一覧が埋まるようにするため）
+  await populateSendTeamSelect();
   populateTplSelect();
   const wrap=document.getElementById('send-subs-list');
   if(wrap&&wrap.children.length===0){
@@ -1453,11 +1480,17 @@ function csfPeriodInput(i,key,val){
   if(!SEND.csfPeriods[i-1])SEND.csfPeriods[i-1]={start:'',end:''};
   SEND.csfPeriods[i-1][key]=val;
 }
+// 期間はフォームタブ／グリッドタブの2箇所に入力欄がある。どちらから変更しても
+// SENDへ書き戻し、もう一方の入力欄にも反映させる（従業員画面と同じく両タブに期間欄を置くため）
+function onSendPeriodChange(kind,v){
+  if(kind==='start')SEND.startDate=v;else SEND.endDate=v;
+  syncSendInputs();
+}
 function syncSendInputs(){
   const ci=document.getElementById('send-center');if(ci)ci.value=SEND.center;
   for(let i=1;i<=8;i++){const el=document.getElementById('ssub-'+i);if(el)el.value=SEND.subs[i-1]||'';}
-  const sd=document.getElementById('send-start');if(sd)sd.value=SEND.startDate||'';
-  const ed=document.getElementById('send-end');if(ed)ed.value=SEND.endDate||'';
+  ['send-start','send-grid-start'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=SEND.startDate||'';});
+  ['send-end','send-grid-end'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=SEND.endDate||'';});
   for(let i=1;i<=8;i++){
     const p=SEND.csfPeriods[i-1];
     const chk=document.getElementById('csf-period-chk-'+i),box=document.getElementById('csf-period-'+i);
