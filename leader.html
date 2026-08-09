@@ -1241,22 +1241,32 @@ function onMdTaskViewChange(){
   else mdRenderTasks((document.getElementById('md-task-chart-sel')||{}).value||'');
 }
 // 「全てのタスク」= 従業員画面のタスク管理タブと同じKGI→CSF→KPI→タスク階層で全チャートを表示
-function mdRenderAllTasks(){
-  const tasks=window._mdTasks||[];
-  const charts=window._mdCharts||[];
-  // 「完了」「遅延」はタスク＋KGI/CSFセル（チームダッシュボード・「割り当てタスクの状況」表示と
-  // 同じ基準）で算出する。タスクのみで数えると同一メンバーの遅延数が画面によって食い違うため。
+// 統計カード（タスク/完了/進行中/遅延）を指定チャートID基準で更新する。
+// chartId省略時は全チャート横断。「完了」「遅延」はタスク＋KGI/CSFセル（チームダッシュボード・
+// 「割り当てタスクの状況」表示と同じ基準）で算出する。タスク一覧タブ（絞り込みあり/なし）・
+// 曼荼羅チャートタブのどこから切り替えても必ずこの関数経由で更新すること。
+// ★以前はmdRenderMnd（曼荼羅タブ）だけがこの更新を行っておらず、タスク一覧→曼荼羅に切り替えると
+// 統計カードが直前のチャートの数値のまま取り残されるバグがあった。
+function _mdUpdateStatCards(chartId){
+  const allTasks=window._mdTasks||[];
+  const tasks=mdFilterTasks(chartId||'');
   const _mcToday=new Date().toISOString().slice(0,10);
-  const cells=_ldCellItemsForCharts(charts,tasks);
+  const _allCharts=window._mdCharts||[];
+  const _cellCharts=chartId?_allCharts.filter(c=>String(c.id)===String(chartId)):_allCharts;
+  const cells=_ldCellItemsForCharts(_cellCharts,allTasks);
   const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length+cells.filter(c=>c.pct>=100).length;
   const wip=tasks.filter(t=>t.status==='wip').length;
   const late=tasks.filter(t=>effStatus(t)==='late').length+cells.filter(c=>c.due<_mcToday&&c.pct<100).length;
-  const totalH=tasks.reduce((a,t)=>a+(t.hours||0),0);
   const sc=document.getElementById('md-stat-cards');
   if(sc)sc.innerHTML=`<div class="stat-card" style="padding:14px"><div class="s-lbl">タスク</div><div class="s-val" style="font-size:22px;color:var(--accent)">${tasks.length}</div></div>
     <div class="stat-card" style="padding:14px"><div class="s-lbl">完了</div><div class="s-val" style="font-size:22px;color:var(--green)">${done}</div></div>
     <div class="stat-card" style="padding:14px"><div class="s-lbl">進行中</div><div class="s-val" style="font-size:22px">${wip}</div></div>
     <div class="stat-card" style="padding:14px"><div class="s-lbl">遅延</div><div class="s-val" style="font-size:22px;color:var(--red)">${late}</div></div>`;
+}
+function mdRenderAllTasks(){
+  const tasks=window._mdTasks||[];
+  const charts=window._mdCharts||[];
+  _mdUpdateStatCards('');
 
   const el=document.getElementById('md-task-list');if(!el)return;
   const noChart=tasks.filter(t=>!t.chart);
@@ -1373,21 +1383,7 @@ function mdRenderAllTasks(){
 // タスク一覧＋KPIサマリを再描画
 function mdRenderTasks(chartId){
   const tasks=mdFilterTasks(chartId);
-  // 「完了」「遅延」はタスク＋KGI/CSFセル（チームダッシュボード・「全てのタスク」表示と同じ基準）で
-  // 算出する。タスクのみで数えると同一メンバーの遅延数が画面によって食い違うため。
-  const _mcToday=new Date().toISOString().slice(0,10);
-  const _allCharts=window._mdCharts||[];
-  const _cellCharts=chartId?_allCharts.filter(c=>String(c.id)===String(chartId)):_allCharts;
-  const cells=_ldCellItemsForCharts(_cellCharts,window._mdTasks||[]);
-  const done=tasks.filter(t=>t.status==='done'||(t.pct||0)>=100).length+cells.filter(c=>c.pct>=100).length;
-  const wip=tasks.filter(t=>t.status==='wip').length;
-  const late=tasks.filter(t=>effStatus(t)==='late').length+cells.filter(c=>c.due<_mcToday&&c.pct<100).length;
-  const totalH=tasks.reduce((a,t)=>a+(t.hours||0),0);
-  const sc=document.getElementById('md-stat-cards');
-  if(sc)sc.innerHTML=`<div class="stat-card" style="padding:14px"><div class="s-lbl">タスク</div><div class="s-val" style="font-size:22px;color:var(--accent)">${tasks.length}</div></div>
-    <div class="stat-card" style="padding:14px"><div class="s-lbl">完了</div><div class="s-val" style="font-size:22px;color:var(--green)">${done}</div></div>
-    <div class="stat-card" style="padding:14px"><div class="s-lbl">進行中</div><div class="s-val" style="font-size:22px">${wip}</div></div>
-    <div class="stat-card" style="padding:14px"><div class="s-lbl">遅延</div><div class="s-val" style="font-size:22px;color:var(--red)">${late}</div></div>`;
+  _mdUpdateStatCards(chartId);
   const el=document.getElementById('md-task-list');if(!el)return;
   if(!tasks.length){el.innerHTML=`<div style="padding:14px;color:var(--text3);font-size:12px">${chartId?'このチャートに紐づくタスクはありません':'割り当てられているタスクはありません'}</div>`;return;}
   let h='';
@@ -1405,6 +1401,9 @@ function mdRenderMnd(chartId){
   const c=charts.find(x=>String(x.id)===String(chartId))||charts[0];
   if(!c){box.innerHTML='<div style="padding:14px;color:var(--text3);font-size:12px">チャートがありません</div>';return;}
   window._mdCurChart=c;
+  // 曼荼羅チャートに切り替えたときも、上部の統計カード（タスク/完了/進行中/遅延）を
+  // 選択中チャートに合わせて更新する（タスク一覧タブと同じ基準）
+  _mdUpdateStatCards(String(c.id));
   const API=window.VexumAPI;
   // hoursOf/pctOfはローカルのMEMBER_TASKS/正典関数のみで完結するためAPI接続状態に関わらず常に有効にする。
   // onCellClick（期間設定モーダル→DB保存）だけはAPI接続時のみ・読み取り専用ではない
