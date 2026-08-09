@@ -209,7 +209,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="sb-item" onclick="swTab('chartmgr',this);initChartMgr()"><span class="sb-icon">🗂</span>チャート管理</button>
     <button class="sb-item" onclick="swTab('inbox',this);openInboxTab()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="inbox-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('assign',this)"><span class="sb-icon">📌</span>割り当て<span class="sb-badge" id="assign-badge">3</span></button>
-    <button class="sb-item" onclick="swTab('reviews',this);renderEval();refreshSelfEvalStatusCard()"><span class="sb-icon">★</span>評価管理</button>
+    <button class="sb-item" onclick="swTab('reviews',this);renderEval()"><span class="sb-icon">★</span>評価管理</button>
     <button class="sb-item" onclick="swTab('report',this)"><span class="sb-icon">📝</span>日報</button>
   </div>
   <div class="sb-footer">v2.4.1 © 2025 VEXUM Inc.</div>
@@ -295,7 +295,6 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <div id="tc-reviews" class="tab-content">
   <div class="sec-title">評価管理 <span style="font-size:11px;font-weight:400;color:var(--text3)">曼荼羅チャートのKGI / CSF / KPIを評価</span>
   </div>
-  <div id="self-eval-status-card" style="background:#FFFBEB;border:1px solid #F59E0B;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#92400E;display:none"></div>
 
   <!-- 自己評価モーダル（KGI＋CSF8項目） -->
   <div id="self-eval-modal" onclick="if(event.target===this)closeSelfEval()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto">
@@ -1652,27 +1651,7 @@ function downloadCSV(k){
 }
 
 /* ===== 評価管理 ===== */
-function onEvalChartChange(){evalChartKey=document.getElementById('eval-chart-sel').value;renderEval();refreshSelfEvalStatusCard();}
-async function refreshSelfEvalStatusCard(){
-  const card=document.getElementById('self-eval-status-card');if(!card)return;
-  const API=window.VexumAPI;if(!(API&&API.ready)){card.style.display='none';return;}
-  const k=evalChartKey;const c=CHARTS[k];
-  if(!c){card.style.display='none';return;}
-  const dbId=evalDbId(k,c);
-  if(!dbId){card.style.display='none';return;}
-  try{
-    const ex=await API.loadMySelfEval(dbId);
-    if(!ex){card.style.display='block';card.style.background='#F3F4F6';card.style.borderColor='#9CA3AF';card.style.color='var(--text2)';card.innerHTML=`📝 このチャートの自己評価は<b>未入力</b>です。「自己評価を入力」ボタンから保存できます。`;return;}
-    card.style.display='block';
-    if(ex.submitted){
-      card.style.background='#D1FAE5';card.style.borderColor='#10B981';card.style.color='#065F46';
-      card.innerHTML=`✅ <b>提出済み</b>（${ex.period||'—'} / KGI ★${ex.kgi}） — 編集不可。リーダー・幹部画面に反映されています。`;
-    }else{
-      card.style.background='#FEF3C7';card.style.borderColor='#F59E0B';card.style.color='#92400E';
-      card.innerHTML=`📝 <b>下書き保存中</b>（${ex.period||'—'} / KGI ★${ex.kgi}） — 編集可。提出するとリーダー・幹部画面に反映されます。`;
-    }
-  }catch(e){card.style.display='none';}
-}
+function onEvalChartChange(){evalChartKey=document.getElementById('eval-chart-sel').value;renderEval();}
 function setEvalView(v,btn){evalView=v;document.querySelectorAll('#seg-view .seg-btn').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');renderEval();}
 // リーダー・幹部から届いた評価（submitted=trueのみ）を表示する。
 // これまで従業員が「提出された評価の内容（★・コメント）」を確認する手段が
@@ -1714,11 +1693,22 @@ async function onSeChartChange(){
   await loadExistingSelfEval();
 }
 async function loadExistingSelfEval(){
-  const API=window.VexumAPI;if(!(API&&API.ready))return;
+  // ★入力欄のロック解除は必ずこの関数の最後（applyLock）で行うこと。
+  //   以前は「既存の下書きが見つからない場合」に途中でreturnしており、その分岐だけ
+  //   ロック解除処理を素通りしていた。同じモーダルDOMは複数回使い回されるため、
+  //   直前に開いた別チャートが提出済み（ロック中）だった場合、新しく開いたチャートに
+  //   下書きが1件もないと disabled=true が残ったまま消えず、「書き込めない」不具合になっていた。
+  const applyLock=()=>{
+    document.querySelectorAll('#self-eval-modal input,#self-eval-modal textarea,#self-eval-modal select').forEach(el=>{
+      if(el.id==='se-chart')return;el.disabled=_seLocked;
+    });
+    const act=document.getElementById('se-actions');if(act)act.style.display=_seLocked?'none':'flex';
+  };
+  const API=window.VexumAPI;if(!(API&&API.ready)){applyLock();return;}
   const cid=(document.getElementById('se-chart')||{}).value||null;
   try{
     const ex=await API.loadMySelfEval(cid);
-    if(!ex)return;
+    if(!ex){applyLock();return;}
     _seStars=ex.kgi||0;
     _seCsfStars=Array.from({length:8},(_,i)=>(ex.csf[i]&&ex.csf[i].stars)||0);
     _seCsfComments=Array.from({length:8},(_,i)=>(ex.csf[i]&&ex.csf[i].comment)||'');
@@ -1726,12 +1716,8 @@ async function loadExistingSelfEval(){
     const cm=document.getElementById('se-comment');if(cm)cm.value=ex.kgiComment||'';
     const sb=document.getElementById('se-period');if(sb&&ex.period)sb.value=ex.period;
     renderSeStars();renderSeCsf();updateSeStatusBar();
-    // ロック制御
-    document.querySelectorAll('#self-eval-modal input,#self-eval-modal textarea,#self-eval-modal select').forEach(el=>{
-      if(el.id==='se-chart')return;el.disabled=_seLocked;
-    });
-    const act=document.getElementById('se-actions');if(act)act.style.display=_seLocked?'none':'flex';
-  }catch(e){console.warn(e);}
+    applyLock();
+  }catch(e){console.warn(e);applyLock();}
 }
 function updateSeStatusBar(){
   const el=document.getElementById('se-status-bar');if(!el)return;
@@ -4676,7 +4662,7 @@ try{
   if(_lt&&document.getElementById('tc-'+_lt)){
     gotoTab(_lt);
     if(_lt==='chartmgr'&&typeof initChartMgr==='function')initChartMgr();
-    else if(_lt==='reviews'){if(typeof renderEval==='function')renderEval();if(typeof refreshSelfEvalStatusCard==='function')refreshSelfEvalStatusCard();}
+    else if(_lt==='reviews'){if(typeof renderEval==='function')renderEval();}
     else if(_lt==='inbox'&&typeof openInboxTab==='function')openInboxTab();
   }
 }catch(e){}

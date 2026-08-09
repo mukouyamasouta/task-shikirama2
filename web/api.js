@@ -997,12 +997,17 @@
     });
     return out;
   }
-  // 自分が自分につけた自己評価の最新1件を取得（チャート別）
+  // 自分が自分につけた自己評価の最新1件を取得（チャート別）。
+  // ★ chartId未指定時に「絞り込み無しで最新1件」を返すと、呼び出し元（従業員画面の
+  //   自己評価モーダル）が別チャートの提出済み評価を誤って拾い、そのチャートの
+  //   submitted=trueで入力欄をロックしてしまう事故になる（無関係なチャートのせいで
+  //   別のチャートに書き込めなくなるバグの実際の原因だった）。chartId省略時は
+  //   「チャート未指定で保存された評価」のみに厳密に絞り、他チャートの行を拾わない。
   async function loadMySelfEval(chartId) {
     if (!sb) return null;
     var me = await currentProfile(); if (!me) return null;
     var q = sb.from('evaluations').select('*').eq('target_user_id', me.id).eq('evaluator_id', me.id).order('created_at', { ascending: false }).limit(1);
-    if (chartId) q = q.eq('chart_id', chartId);
+    q = chartId ? q.eq('chart_id', chartId) : q.is('chart_id', null);
     var r = await q;
     if (r.error || !r.data || !r.data.length) return null;
     var ev = r.data[0];
