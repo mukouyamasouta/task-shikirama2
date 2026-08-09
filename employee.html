@@ -1478,6 +1478,8 @@ function starHTML(k,type,si){
 }
 function setStar(k,type,si,n){
   const r=_rat(k);
+  // ユーザー編集をマーク（進行中の非同期復元にこの入力を上書きさせないため）
+  _evalBarHydrated[k]=true;_evalEditSeq[k]=(_evalEditSeq[k]||0)+1;
   if(type==='kgi')r.kgi.stars=(r.kgi.stars===n?0:n);
   else r.csf[si].stars=(r.csf[si].stars===n?0:n);
   // localStorage即時保存（ページリロード後も星が残る）
@@ -1491,6 +1493,8 @@ function setStar(k,type,si,n){
 }
 function saveRat(k,type,si,field,val){
   const r=_rat(k);
+  // ユーザー編集をマーク（setStarと同じ理由）
+  _evalBarHydrated[k]=true;_evalEditSeq[k]=(_evalEditSeq[k]||0)+1;
   // localStorage即時保存
   try{
     const _sd=JSON.parse(localStorage.getItem('vexum_eval_draft_'+k)||'null')||{r:{}};
@@ -1799,6 +1803,12 @@ async function submitSelfEval(isSubmit){
 }
 
 let _evalDataCache={};   // chartKey -> {kgi,kgiComment,csf:[{stars,comment}],submitted} | null
+// ★評価タブ（バー形式）のサーバ/localStorage復元は「チャートごとに初回だけ」行う。
+//   星をクリックすると setStar() → renderEval() → _loadAndRestoreEvalBar() と再入するため、
+//   毎回復元すると直前にクリックした★が保存済みの値で即座に上書きされ、
+//   「★を変更できない／保存・提出しても反映されない」不具合になる（実際に発生していた）。
+let _evalBarHydrated={};  // chartKey -> true（初回復元済み）
+let _evalEditSeq={};      // chartKey -> 編集回数。非同期復元の完了時に編集済みなら適用しない
 // チャートキー→DB上のチャートID。実データ接続時はデモID（user_nakamura等）へ
 // フォールバックしない（他人のシードチャートへ評価が誤保存されるのを防ぐ）。dbId不明なら null。
 function evalDbId(k,d){
@@ -2030,6 +2040,11 @@ function updateCsfBar(k,si,val){
 }
 async function _loadAndRestoreEvalBar(k){
   const d=CHARTS[k];if(!d)return;
+  // ★初回のみ復元する（2回目以降はメモリ上の_rat(k)が最新＝ユーザーの入力値）。
+  //   これを行わないと、★クリックのたびに走る再描画でサーバ値へ巻き戻ってしまう。
+  if(_evalBarHydrated[k])return;
+  _evalBarHydrated[k]=true;
+  const seq0=_evalEditSeq[k]||0;   // 非同期取得の間にユーザーが編集したかの判定用
   const r=_rat(k);
   let loaded=false;
   // まずSupabaseから取得（キャッシュ優先）
@@ -2040,6 +2055,8 @@ async function _loadAndRestoreEvalBar(k){
         _evalDataCache[k]=await API.loadMySelfEval(evalDbId(k,d));
       }
       const ev=_evalDataCache[k];
+      // 取得を待っている間にユーザーが★やコメントを編集していたら、その入力を優先して復元しない
+      if((_evalEditSeq[k]||0)!==seq0)return;
       if(ev){
         r.kgi.stars=ev.kgi||0;r.kgi.comment=ev.kgiComment||'';
         (ev.csf||[]).forEach((c,i)=>{if(r.csf[i]){r.csf[i].stars=c.stars||0;r.csf[i].comment=c.comment||'';}});
@@ -4803,6 +4820,9 @@ function vexumLogout(){
   function _applyPersonal(d){
     if(!d) return;
     repl(CHARTS,d.CHARTS); repl(FEEDBACK,d.FEEDBACK);
+    // サーバから最新データを取り込んだ直後は、評価タブの初回復元をやり直させる
+    // （以降のユーザー編集中はsetStar/saveRat側のフラグで巻き戻りを防ぐ）
+    _evalBarHydrated={};_evalEditSeq={};
     replArr(ASSIGNMENTS,d.ASSIGNMENTS); replArr(ASSIGN_HISTORY,d.ASSIGN_HISTORY); replArr(PREPORTS,d.PREPORTS);
     window._epTeam=d.TEAM; window._epKpis=d.KPIS; window._epStats=d.STATS;
     if(typeof restoreTasksFromLS==='function')restoreTasksFromLS();   // ローカル保存の進捗・工数を反映
