@@ -1289,6 +1289,13 @@
     Object.keys(CHARTS).forEach(function (k) { var d = CHARTS[k]; if (d && d.dbId) chartKeyByDbId[d.dbId] = k; });
     raw.evaluations.forEach(function (ev) {
       if (!ev.submitted) return;   // 下書き（未提出）は本人のフィードバック欄に出さない
+      // ★自己評価（upsertSelfEvalの保存行）は evaluator_id === target_user_id で、
+      //   DB上は evaluator_role が便宜上 'leader' のまま保存されている（fromSelf/fromLeaderの
+      //   判定を evaluator_id の一致で行う設計のため）。ここで除外しないと、本人の自己評価が
+      //   「役割: リーダー ／ 氏名: 本人」という体で「リーダー・幹部からの評価」カードに
+      //   混入し、従業員なのに「リーダー」の評価であるかのように誤表示されてしまう
+      //   （本人の自己評価は自己評価モーダル側に既に別で表示されているため、ここでは不要）。
+      if (ev.evaluator_id === ev.target_user_id) return;
       var ck = (ev.chart_id && chartKeyByDbId[ev.chart_id])
              ? chartKeyByDbId[ev.chart_id]
              : ev.chart_id === 'user_' + memberKey ? 'self_q3'
