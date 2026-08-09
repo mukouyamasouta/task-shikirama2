@@ -286,7 +286,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     </div>
   </div>
   <div style="background:var(--accent-l);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:8px">
-    <span style="font-size:14px">💡</span><span>「✏ 進捗・作業時間を記入」ボタンから達成度・本日の作業時間・コメントを入力して保存。達成度を100%で保存すると、自動で「過去の履歴」へ移動します。</span>
+    <span style="font-size:14px">💡</span><span>タスクをクリックすると開く編集画面で達成度・本日の作業時間・コメントを入力して保存。達成度を100%で保存すると、自動で「過去の履歴」へ移動します。</span>
   </div>
   <div id="assign-container"></div>
 </div>
@@ -916,7 +916,7 @@ function renderAssign(){
     }
     const totAll=rows.reduce((s,x)=>s+(x.a.hours!=null?x.a.hours:0),0);
     h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">📌 割り当てられたタスク</div><div class="card-sub">${rows.length}件 ／ 合計時間 ${Math.round(totAll*10)/10}h（自動計算）</div></div></div><div class="card-body" style="padding:0">`;
-    // タスク管理タブと同じ行デザイン: 行＋緑の「✏ 進捗・作業時間を記入」ボタン → 編集モーダル
+    // タスク管理タブと同じ行デザイン: 行自体をクリックすると編集モーダルが開く（緑ボタンは廃止）
     const priMap={hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低'],urgent:['s-hi','緊急']};
     rows.forEach(({a,i})=>{
       const chartChip=a.chart?`<span style="font-size:9px;background:#FFEDD5;color:#C2410C;padding:1px 7px;border-radius:8px;font-weight:700;margin-left:6px">📊 ${a.chart}</span>`:'';
@@ -926,16 +926,13 @@ function renderAssign(){
       const col=a.pct>=100?'var(--green)':a.pct>=40?'var(--accent)':'var(--amber)';
       const totH=a.hours!=null?a.hours:0;
       const planH=a.planned!=null?` / 予定 ${a.planned}h`:'';
-      h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6" id="asg-card-${i}">
+      h+=`<div style="padding:11px 14px;border-bottom:1px solid #F3F4F6;cursor:pointer" id="asg-card-${i}" onclick="openTaskEdit('A${i}')" onmouseover="this.style.background='#F9FAFB'" onmouseout="this.style.background=''">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
           <div style="min-width:0"><div style="font-size:12px;font-weight:600">${a.name}${chartChip} <span class="asg-from ${a.fromClass}" style="margin-left:6px">${a.from}</span></div>
           <div style="font-size:10px;color:${late?'var(--red)':'var(--text3)'}">開始 ${a.start} ／ 期限 ${a.end}${late?' ⚠ 超過':''} ／ 合計 ${totH}h${planH}</div></div>
           <div style="display:flex;gap:6px;align-items:center"><span class="chip ${pc[0]}">${pc[1]}</span>${stChip}<div class="pw" style="min-width:80px"><div class="pt"><div class="pf" style="width:${a.pct}%;background:${col}"></div></div><div class="pp" style="font-size:10px;color:${col}">${a.pct}%</div></div></div>
         </div>
         ${a.comment?`<div style="margin-top:6px;font-size:11px;color:var(--text2);background:#FAFAFA;border:1px solid var(--border);border-radius:6px;padding:6px 10px;line-height:1.5">💬 ${a.comment}</div>`:''}
-        <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
-          <button class="card-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="openTaskEdit('A${i}')">✏ 進捗・作業時間を記入</button>
-        </div>
       </div>`;
     });
     h+=`</div></div>`;
