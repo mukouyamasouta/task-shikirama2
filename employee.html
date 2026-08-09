@@ -303,8 +303,9 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
         <div style="font-size:16px;font-weight:800;color:var(--amber)">📝 自己評価を保存</div>
         <button onclick="closeSelfEval()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:14px">KGI・CSF8項目を自己評価できます。<b>下書き保存</b>は何度でも編集可、<b>提出</b>すると確定（編集不可）になり、リーダー・幹部画面に反映されます。</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:14px">KGI・CSF8項目を自己評価できます。<b>下書き保存</b>・<b>提出</b>とも何度でも変更できます。提出するとその時点の内容がリーダー・幹部画面に反映され、提出履歴として残ります（過去の提出内容は消えません）。</div>
       <div id="se-status-bar" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:6px;font-size:11px;font-weight:700"></div>
+      <div id="se-history" style="display:none;margin-bottom:12px"></div>
       <div class="fg"><label class="fl">対象チャート</label><select class="fs" id="se-chart" onchange="onSeChartChange()"></select></div>
       <div class="fg"><label class="fl">期間</label><input class="fi" id="se-period" placeholder="例: 2025年 Q3"></div>
       <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px;margin-bottom:12px">
@@ -1656,11 +1657,18 @@ function setEvalView(v,btn){evalView=v;document.querySelectorAll('#seg-view .seg
 // リーダー・幹部から届いた評価（submitted=trueのみ）を表示する。
 // これまで従業員が「提出された評価の内容（★・コメント）」を確認する手段が
 // 存在しなかったため新設（通知は届いていても中身を見る画面が無かった）。
-/* ===== 自己評価（KGI + CSF8項目）— 下書き/提出/既存読込/ロック対応 ===== */
+/* ===== 自己評価（KGI + CSF8項目）— 下書き/提出/既存読込/提出履歴対応 =====
+   ★仕様変更: 以前は提出済みになると全入力欄を disabled にして「二度と変更できない」
+   仕様だったが、これが「星評価を変更できない」不具合として報告された。
+   upsertSelfEval は元々「最新行が提出済みなら新規行としてinsertする」設計になっており、
+   再度保存・提出しても過去の提出内容は上書きされず履歴として残る。この設計に合わせて
+   フロント側のロック（disabled化）を撤廃し、常に編集・再提出できるようにした。
+   提出済みかどうかは #se-status-bar の表示のみで案内し、過去の提出内容は
+   #se-history に一覧表示することで「提出履歴が残る」ことを目に見える形にする。 */
 let _seStars=0;
 let _seCsfStars=[0,0,0,0,0,0,0,0];
 let _seCsfComments=['','','','','','','',''];
-let _seLocked=false;   // true なら全入力ロック（提出済み）
+let _seLocked=false;   // true = 直近の保存が提出済み（表示用の情報のみ。入力のロックには使わない）
 function openSelfEval(){
   _seStars=0;_seCsfStars=[0,0,0,0,0,0,0,0];_seCsfComments=['','','','','','','',''];_seLocked=false;
   const sb=document.getElementById('se-period');if(sb)sb.value='2025年 Q3';
@@ -1682,8 +1690,9 @@ function openSelfEval(){
   }
   renderSeStars();renderSeCsf();updateSeStatusBar();
   document.getElementById('self-eval-modal').style.display='flex';
-  // 既存自己評価を読み込み
+  // 既存自己評価・提出履歴を読み込み
   loadExistingSelfEval();
+  renderSeHistory();
 }
 function closeSelfEval(){document.getElementById('self-eval-modal').style.display='none';}
 async function onSeChartChange(){
@@ -1691,24 +1700,19 @@ async function onSeChartChange(){
   const cm=document.getElementById('se-comment');if(cm)cm.value='';
   renderSeStars();renderSeCsf();updateSeStatusBar();
   await loadExistingSelfEval();
+  renderSeHistory();
 }
 async function loadExistingSelfEval(){
-  // ★入力欄のロック解除は必ずこの関数の最後（applyLock）で行うこと。
-  //   以前は「既存の下書きが見つからない場合」に途中でreturnしており、その分岐だけ
-  //   ロック解除処理を素通りしていた。同じモーダルDOMは複数回使い回されるため、
-  //   直前に開いた別チャートが提出済み（ロック中）だった場合、新しく開いたチャートに
-  //   下書きが1件もないと disabled=true が残ったまま消えず、「書き込めない」不具合になっていた。
-  const applyLock=()=>{
-    document.querySelectorAll('#self-eval-modal input,#self-eval-modal textarea,#self-eval-modal select').forEach(el=>{
-      if(el.id==='se-chart')return;el.disabled=_seLocked;
-    });
-    const act=document.getElementById('se-actions');if(act)act.style.display=_seLocked?'none':'flex';
+  const setEnabled=()=>{
+    // 入力欄は常に編集可能（提出済みでもロックしない）。se-actionsも常に表示する。
+    document.querySelectorAll('#self-eval-modal input,#self-eval-modal textarea,#self-eval-modal select').forEach(el=>{el.disabled=false;});
+    const act=document.getElementById('se-actions');if(act)act.style.display='flex';
   };
-  const API=window.VexumAPI;if(!(API&&API.ready)){applyLock();return;}
+  const API=window.VexumAPI;if(!(API&&API.ready)){setEnabled();return;}
   const cid=(document.getElementById('se-chart')||{}).value||null;
   try{
     const ex=await API.loadMySelfEval(cid);
-    if(!ex){applyLock();return;}
+    if(!ex){setEnabled();return;}
     _seStars=ex.kgi||0;
     _seCsfStars=Array.from({length:8},(_,i)=>(ex.csf[i]&&ex.csf[i].stars)||0);
     _seCsfComments=Array.from({length:8},(_,i)=>(ex.csf[i]&&ex.csf[i].comment)||'');
@@ -1716,13 +1720,36 @@ async function loadExistingSelfEval(){
     const cm=document.getElementById('se-comment');if(cm)cm.value=ex.kgiComment||'';
     const sb=document.getElementById('se-period');if(sb&&ex.period)sb.value=ex.period;
     renderSeStars();renderSeCsf();updateSeStatusBar();
-    applyLock();
-  }catch(e){console.warn(e);applyLock();}
+    setEnabled();
+  }catch(e){console.warn(e);setEnabled();}
+}
+// このチャートで過去に提出した自己評価の履歴（新しい順）を一覧表示する
+async function renderSeHistory(){
+  const box=document.getElementById('se-history');if(!box)return;
+  const API=window.VexumAPI;
+  const cid=(document.getElementById('se-chart')||{}).value||null;
+  if(!(API&&API.ready&&cid&&API.loadMySelfEvalHistory)){box.style.display='none';box.innerHTML='';return;}
+  let list=[];
+  try{list=await API.loadMySelfEvalHistory(cid);}catch(e){list=[];}
+  if(!list.length){box.style.display='none';box.innerHTML='';return;}
+  const starStr=n=>{let s='';for(let i=1;i<=5;i++)s+=i<=n?'★':'☆';return s;};
+  let h=`<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
+    <div style="background:#F9FAFB;padding:7px 10px;font-size:10.5px;font-weight:700;color:var(--text2)">📜 提出履歴（${list.length}件）</div>`;
+  list.forEach(ev=>{
+    const d=(ev.createdAt||'').slice(0,10);
+    h+=`<div style="padding:7px 10px;border-top:1px solid var(--border);font-size:10.5px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <span style="color:var(--text2)">${ev.period||'期間未設定'} <span style="color:var(--text3)">（提出日 ${d}）</span></span>
+      <span style="color:var(--amber);letter-spacing:1px">${starStr(ev.kgi)} <span style="color:var(--text3)">${ev.kgi}/5</span></span>
+    </div>`;
+  });
+  h+=`</div>`;
+  box.style.display='block';
+  box.innerHTML=h;
 }
 function updateSeStatusBar(){
   const el=document.getElementById('se-status-bar');if(!el)return;
-  if(_seLocked){el.style.display='block';el.style.background='#D1FAE5';el.style.color='#065F46';el.style.border='1px solid #10B981';el.textContent='✅ 提出済み — 変更不可（リーダー・幹部画面に反映済み）';}
-  else if(_seStars||_seCsfStars.some(s=>s>0)){el.style.display='block';el.style.background='#FEF3C7';el.style.color='#92400E';el.style.border='1px solid #F59E0B';el.textContent='📝 下書きあり — 編集可。提出すると確定します';}
+  if(_seLocked){el.style.display='block';el.style.background='#D1FAE5';el.style.color='#065F46';el.style.border='1px solid #10B981';el.textContent='✅ 提出済み（内容を変更して再度保存・提出できます。再提出すると新しい提出履歴として記録されます）';}
+  else if(_seStars||_seCsfStars.some(s=>s>0)){el.style.display='block';el.style.background='#FEF3C7';el.style.color='#92400E';el.style.border='1px solid #F59E0B';el.textContent='📝 下書きあり — 編集可。提出すると確定し、履歴に記録されます';}
   else{el.style.display='none';}
 }
 function renderSeStars(){
@@ -1750,12 +1777,13 @@ function renderSeCsf(){
   el.innerHTML=h;
 }
 async function submitSelfEval(isSubmit){
-  if(_seLocked){alert('既に提出済みです');return;}
   const period=(document.getElementById('se-period')||{}).value||'2025年 Q3';
   const comment=(document.getElementById('se-comment')||{}).value||'';
   if(!_seStars){alert('KGIの星評価を選択してください');return;}
   if(isSubmit){
-    if(!confirm('提出すると、この自己評価は変更できなくなり、リーダー・幹部画面に確定として反映されます。よろしいですか？'))return;
+    // ★以前は「提出すると変更できなくなる」と案内していたが、再提出は常に可能な仕様に
+    //   変更したため文言も合わせて修正（提出済みでも引き続き編集・再提出できる）
+    if(!confirm('提出すると、この内容がリーダー・幹部画面に反映され、提出履歴に記録されます。よろしいですか？'))return;
   }
   const API=window.VexumAPI;
   if(API&&API.ready){
@@ -1765,7 +1793,7 @@ async function submitSelfEval(isSubmit){
     if(res&&res.error){alert('保存失敗: '+res.error);return;}
   }
   _evalDataCache={};
-  if(isSubmit){alert('✅ 提出しました。リーダー・幹部画面に反映されます。');closeSelfEval();}
+  if(isSubmit){alert('✅ 提出しました。リーダー・幹部画面に反映されます。引き続きこの画面で変更・再提出できます。');await loadExistingSelfEval();renderSeHistory();}
   else{alert('💾 下書きを保存しました。引き続き編集できます。');await loadExistingSelfEval();}
   if(document.getElementById('tc-reviews').classList.contains('active'))renderEval();
 }
@@ -1895,7 +1923,11 @@ function openEvalDetailModal(kind,index,data){
       h+=`<div style="font-weight:700;margin-bottom:4px">自己評価</div><div style="font-size:18px;margin-bottom:10px">${evalStars(ev.kgi)} <span style="font-size:12px;color:var(--text3)">${ev.kgi} / 5</span></div>`;
       if(ev.kgiComment)h+=`<div style="font-weight:700;margin-bottom:4px">所感・振り返り</div><div style="margin-bottom:10px;color:var(--text2)">${ev.kgiComment}</div>`;
       h+=`<div style="font-weight:700;margin-bottom:4px">達成率</div>${evalBar(pct,col.fg)}`;
-      h+=`<div style="font-size:11px;color:#065F46;background:#D1FAE5;display:inline-block;padding:3px 10px;border-radius:10px;font-weight:700">✅ 提出済み</div>`;
+      h+=`<div style="font-size:11px;color:#065F46;background:#D1FAE5;display:inline-block;padding:3px 10px;border-radius:10px;font-weight:700;margin-bottom:10px">✅ 提出済み</div>`;
+      // ★以前は提出済みだとここに何も表示されず、この画面から再評価する手段が
+      //   一切なかった（＝曼荼羅形式では星評価が変更できないように見えるバグの一因）。
+      //   提出済みでも常に編集ボタンを出す（再提出すると新しい提出履歴として記録される）。
+      h+=`<button class="f-submit" style="background:var(--text3)" onclick="closeEvalDetailModal();openSelfEval()">✏ 自己評価を編集する</button>`;
     }else{
       h+=`<div style="font-weight:700;margin-bottom:4px">達成率</div>${evalBar(pct,col.fg)}`;
       h+=`<div style="font-size:11px;color:var(--text3);background:#F3F4F6;display:inline-block;padding:3px 10px;border-radius:10px;font-weight:700;margin-bottom:10px">未評価</div>`;
@@ -1910,6 +1942,8 @@ function openEvalDetailModal(kind,index,data){
     if(evCsf&&data.ev.submitted){
       h+=`<div style="font-weight:700;margin-bottom:4px">自己評価</div><div style="font-size:18px;margin-bottom:10px">${evalStars(evCsf.stars)} <span style="font-size:12px;color:var(--text3)">${evCsf.stars||0} / 5</span></div>`;
       if(evCsf.comment)h+=`<div style="font-weight:700;margin-bottom:4px">コメント</div><div style="margin-bottom:10px;color:var(--text2)">${evCsf.comment}</div>`;
+      // ★KGIと同様、提出済みでも常に編集ボタンを出す（再提出すると新しい提出履歴として記録される）
+      h+=`<button class="f-submit" style="background:var(--text3);margin-bottom:10px" onclick="closeEvalDetailModal();openSelfEval()">✏ 自己評価を編集する</button>`;
     }else{
       h+=`<div style="font-size:11px;color:var(--text3);background:#F3F4F6;display:inline-block;padding:3px 10px;border-radius:10px;font-weight:700;margin-bottom:10px">未評価</div>`;
       h+=`<button class="f-submit" style="margin-bottom:10px" onclick="closeEvalDetailModal();openSelfEval()">📝 自己評価を入力</button>`;

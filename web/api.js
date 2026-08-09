@@ -1014,6 +1014,21 @@
     return { id: ev.id, chartId: ev.chart_id, period: ev.period || '', kgi: ev.kgi_stars || 0, kgiComment: ev.kgi_comment || '',
       csf: ev.csf || [], submitted: !!ev.submitted, createdAt: ev.created_at };
   }
+  // 自己評価の提出履歴（そのチャートで過去に提出=confirmedした評価を全件、新しい順）。
+  // upsertSelfEvalは「最新行が提出済みなら新規行を追加」する設計のため、
+  // 提出のたびに履歴として過去分がそのまま残る。ここではその履歴を一覧取得する。
+  async function loadMySelfEvalHistory(chartId) {
+    if (!sb || !chartId) return [];
+    var me = await currentProfile(); if (!me) return [];
+    var r = await sb.from('evaluations').select('*')
+      .eq('target_user_id', me.id).eq('evaluator_id', me.id).eq('chart_id', chartId).eq('submitted', true)
+      .order('created_at', { ascending: false });
+    if (r.error || !r.data) return [];
+    return r.data.map(function (ev) {
+      return { id: ev.id, period: ev.period || '', kgi: ev.kgi_stars || 0, kgiComment: ev.kgi_comment || '',
+        csf: ev.csf || [], createdAt: ev.created_at };
+    });
+  }
   // 自己評価を保存（下書き or 提出）。同チャートに下書きがあれば更新、なければ新規。
   async function upsertSelfEval(o) {
     if (!sb) return { error: 'Supabase未接続' };
@@ -2307,6 +2322,7 @@
     loadEvaluationsFor: loadEvaluationsFor,
     loadChartsFor: loadChartsFor,
     loadMySelfEval: loadMySelfEval,
+    loadMySelfEvalHistory: loadMySelfEvalHistory,
     upsertSelfEval: upsertSelfEval,
     saveMemberKpiEdits: saveMemberKpiEdits,
     notifyLeaderChartEdit: notifyLeaderChartEdit,
