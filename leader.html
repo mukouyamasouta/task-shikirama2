@@ -1045,9 +1045,12 @@ function toggleMdMndKpi(){
   const b=document.getElementById('md-mnd-kpi-toggle');if(b)b.textContent=box._kpiOn?'− KPIを隠す':'＋ KPIを表示';
 }
 // チャートの表示ラベル（KGI中心テキスト優先・コードに合わせ chart.center を使用）
+// 日付は従業員画面 _chartLabel と同じ表示（YYYY/MM/DD）に揃える。
+// loadChartsFor はDB生値（ハイフン区切り）のまま返すため、ここでスラッシュに整形する。
 function mdChartLabel(c){
   const kgi=((c.center||'').replace(/\n/g,' ').trim().slice(0,40))||(c.name||'').trim()||c.scope_label||'チャート';
-  const sd=c.start_date||c.startDate||'';const ed=c.end_date||c.endDate||'';
+  const fmtD=v=>(v||'').replace(/-/g,'/');
+  const sd=fmtD(c.start_date||c.startDate||'');const ed=fmtD(c.end_date||c.endDate||'');
   const dateStr=(sd||ed)?` (${sd}〜${ed||'?'})`:( c.period?` (${c.period})`:'');
   return kgi+dateStr;
 }
@@ -2082,7 +2085,9 @@ async function renderMemberEval(){
   // チャート選択プルダウン
   let chartSelHTML='';
   if(charts.length){
-    chartSelHTML=`<div style="background:#FAFCFC;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap"><label class="fl" style="margin:0">評価対象の期間（チャート）</label><select class="fs" style="width:auto;min-width:280px" onchange="onEvalChartChange(this.value)">${charts.map(c=>`<option value="${c.id}" ${c.id===_evalChartId?'selected':''}>${c.period||c.scope_label||'期間未設定'}${c.name?' ／ '+c.name:''}</option>`).join('')}</select>${selfEval?'<span style="font-size:11px;color:var(--amber);font-weight:700">📝 本人自己評価あり</span>':'<span style="font-size:11px;color:var(--text3)">自己評価なし</span>'}</div>`;
+    // チャート名の横に期間を表示（従業員画面 _chartLabel と同じ書式: 名前 (開始〜終了)）。
+    // 既存の mdChartLabel を流用する（start_date/end_date の両表記に対応済み）。
+    chartSelHTML=`<div style="background:#FAFCFC;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap"><label class="fl" style="margin:0">評価対象の期間（チャート）</label><select class="fs" style="width:auto;min-width:280px" onchange="onEvalChartChange(this.value)">${charts.map(c=>`<option value="${c.id}" ${c.id===_evalChartId?'selected':''}>${mdChartLabel(c)}</option>`).join('')}</select>${selfEval?'<span style="font-size:11px;color:var(--amber);font-weight:700">📝 本人自己評価あり</span>':'<span style="font-size:11px;color:var(--text3)">自己評価なし</span>'}</div>`;
   }
   // 前回保存した評価（下書き・提出済み問わず）を復元した場合は、内容が古い可能性がある旨を
   // 明示する（気づかずそのまま提出して古い評価を送ってしまう事故を防ぐ）
