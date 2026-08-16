@@ -2029,6 +2029,18 @@ async function renderMemberEval(){
     try{charts=await API.loadChartsFor(d.pid);window._chartsCache[d.pid]=charts;}catch(err){charts=[];}
   }
   charts=charts||[];
+  // ★担当チャートが1件も無いメンバーには評価入力欄を出さない。
+  //   従来は charts が空でも MEMBERS の center/subs（実データでは空文字）を使って
+  //   「KGI＋CSF8項目」の空の入力枠を描画してしまい、チャートが無いのに
+  //   例示のような評価枠が並んで見える状態になっていた。
+  if(API&&API.ready&&!charts.length){
+    _evalChartId='';   // 前のメンバーのチャートIDを引き継がせない（誤保存防止）
+    document.getElementById('evalin-container').innerHTML=
+      `<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);font-size:12px;padding:28px">`
+      +`${d.name} さんの担当チャートがありません。<br>チャートが作成・割り当てされると、ここで評価を入力できます。`
+      +`</div></div>`;
+    return;
+  }
   // チャート選択（未設定なら現メンバーの主チャート）
   if(!_evalChartId||!charts.some(c=>c.id===_evalChartId))_evalChartId=charts[0]?charts[0].id:'';
   // 選択チャートの自己評価と、自分（このリーダー）が過去に保存した評価を取得
@@ -2124,6 +2136,16 @@ function renderEvalinMnd(){
 // isSubmit=true: 提出（従業員・管理画面に反映。通知を送り、評価記録タブに記録する）
 function saveMemberEval(isSubmit){
   const id=document.getElementById('evalin-member').value;
+  // 担当チャートが無いメンバーは評価入力欄自体を出していないため、保存・提出も受け付けない
+  // （ボタンはコンテナ外にあり押せてしまうため、ここでガードする）
+  {
+    const _d=MEMBERS[id];
+    const _cs=(_d&&window._chartsCache)?window._chartsCache[_d.pid]:null;
+    const _api=window.VexumAPI;
+    if(_api&&_api.ready&&_cs&&!_cs.length){
+      alert('このメンバーは担当しているチャートがないため、評価を保存できません。');return;
+    }
+  }
   const _ef=ymdValue('evalin-from')||'',_et=ymdValue('evalin-to')||'';const _pd=new Date();const period=(_ef||_et)?((_ef||'')+'〜'+(_et||'')):(_pd.getFullYear()+' Q'+(Math.floor(_pd.getMonth()/3)+1));  // 期間未入力時は幹部画面と同じ'YYYY Qn'を自動算出
   const API0=window.VexumAPI;
   if(API0&&API0.ready&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pidOf(id))){

@@ -3006,14 +3006,19 @@ function renderMemberEval(){
         <div id="csf-${id}" style="display:none">`;
       for(let si=0;si<8;si++)h+=evalBlock(id,'csf',si,'CSF-'+(si+1),'#F59E0B',d.subs[si]);
       h+=`</div>`;
-    }else{
-      h+=evalBlock(id,'kgi',-1,'総合','#0D9488','総合評価');
     }
-    h+=`<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+    // ★担当チャートが無いメンバーには評価入力欄も保存/提出ボタンも出さない。
+    //   従来は代わりに「総合評価」というダミーのKGIブロックを描画しており、
+    //   チャートが1件も無い新規従業員にも例示のような評価枠が並んで見えていた。
+    if(d){
+      h+=`<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
         <button class="f-submit" style="flex:1;min-width:120px;padding:8px 20px;font-size:12px;background:#6B7280" onclick="saveMemberEvalExec('${id}','${m.name}',false)">💾 保存</button>
         <button class="f-submit" style="flex:1;min-width:120px;padding:8px 20px;font-size:12px" onclick="saveMemberEvalExec('${id}','${m.name}',true)">📤 提出（従業員・リーダーに反映）</button>
-      </div>
-      </div>
+      </div>`;
+    }else{
+      h+=`<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px 8px">担当しているチャートがありません。チャートが作成・割り当てされると、ここで評価を入力できます。</div>`;
+    }
+    h+=`</div>
     </div>`;
   });
   con.innerHTML=h;
