@@ -2655,9 +2655,11 @@ const INBOX=(()=>{ // デモ用: Supabase接続時は実データで置換
     sent_by_name:'木村 雅人（幹部）',sent_at:'2025-06-01',status:'sent',progress:0,cell_status:{},edited_by:{}}];
 })();
 let _ibCur=null,_ibSel=null;
-// リーダー受信ボックスに出す通知の種別（日報・自分が割り当てたタスクの進捗・メンバーの評価提出のみ）。
+// リーダー受信ボックスに出す通知の種別（日報・自分が割り当てたタスクの進捗・メンバーの評価提出に加え、
+// リーダー自身が幹部から受け取るタスク割当・評価も含む）。
 // task_done を含めるのは、過去にDBへ入った完了通知を引き続き閲覧できるようにするため（今後は生成されない）。
-const LDR_NOTIF_TYPES=['report_submitted','report_started','task_progress','task_done','evaluation_submitted'];
+// chart_edit は件数が非常に多くノイズになりやすいため、あえて対象外のままにしている。
+const LDR_NOTIF_TYPES=['report_submitted','report_started','task_progress','task_done','task_assigned','evaluation_submitted','evaluation_received'];
 // 連続する同一種類・同一本人・同一対象（タスク/日報/評価）の通知を1件にまとめる。
 // 例: 同じタスクの進捗が短時間に何度も更新されると同じ内容の通知が連続で積み上がるため、
 // 直前と「type + actor_id + ref_id」が一致する分は表示上スキップし、最新の1件だけ残す。
@@ -2697,7 +2699,9 @@ function _ldGotoNotif(n){
     if(mk&&m){jumpToReportFromSub(mk,m[1]);return;}
     gotoTab('report');return;
   }
-  if(n.type==='task_progress'||n.type==='task_done'){
+  if(n.type==='task_progress'||n.type==='task_done'||n.type==='task_assigned'){
+    // task_assigned はリーダー自身が幹部から割り当てられた場合、actor_id=幹部でmkが引けないことがあるが、
+    // その場合もタブ遷移（assign）だけは必ず行われる
     gotoTab('assign');
     if(mk&&n.ref_id){
       setTimeout(()=>{
@@ -2705,6 +2709,10 @@ function _ldGotoNotif(n){
         if(idx>=0&&typeof openLdrEditTask==='function')openLdrEditTask(idx,mk);
       },150);
     }
+    return;
+  }
+  if(n.type==='evaluation_received'){
+    gotoTab('dashboard');
     return;
   }
   if(n.type==='evaluation_submitted'){

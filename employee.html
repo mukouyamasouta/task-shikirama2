@@ -3290,18 +3290,25 @@ function loadMyNotifs(){
   if(!(API&&API.ready&&API.loadMyNotifications))return;
   API.loadMyNotifications().then(rows=>{MYNOTIFS=Array.isArray(rows)?rows:[];renderInbox();updateInboxBadge();}).catch(()=>{});
 }
-// 通知種別 → 表示ラベル・遷移先タブ
-const _NOTIF_META={task_assigned:['📌 タスク割当','var(--accent)','assign'],evaluation_received:['⭐ 評価が届きました','var(--amber)','reviews'],report_started:['📝 始業共有','var(--text3)',null],report_submitted:['📝 日報提出','var(--text3)',null],task_done:['✅ タスク完了','var(--green)',null],chart_edit:['🧿 チャート更新','var(--accent)',null]};
+// 通知種別 → 表示ラベル・遷移先タブ（全種別に遷移先を用意し、「クリックしても無反応」を作らない）
+const _NOTIF_META={
+  task_assigned:['📌 タスク割当','var(--accent)','assign'],
+  task_progress:['🔄 タスク進捗','var(--accent)','assign'],
+  task_done:['✅ タスク完了','var(--green)','assign'],
+  evaluation_received:['⭐ 評価が届きました','var(--amber)','reviews'],
+  evaluation_submitted:['📤 評価提出','var(--amber)','reviews'],
+  report_started:['📝 始業共有','var(--text3)','report'],
+  report_submitted:['📝 日報提出','var(--text3)','report'],
+  chart_edit:['🧿 チャート更新','var(--accent)','chartmgr']
+};
 function ntfGoto(tab,refId,type,notifId){
+  const nx=(typeof MYNOTIFS!=='undefined'?MYNOTIFS:[]).find(n=>String(n.id)===String(notifId));
   // 個別既読化
-  if(notifId){
-    const nx=(typeof MYNOTIFS!=='undefined'?MYNOTIFS:[]).find(n=>String(n.id)===String(notifId));
-    if(nx&&!nx.read){nx.read=true;const API=window.VexumAPI;if(API&&API.ready&&API.markNotificationsRead)API.markNotificationsRead([notifId]).catch(()=>{});if(typeof updateInboxBadge==='function')updateInboxBadge();}
-  }
-  if(!tab&&type!=='task_assigned'&&type!=='evaluation_received')return;
+  if(nx&&!nx.read){nx.read=true;const API=window.VexumAPI;if(API&&API.ready&&API.markNotificationsRead)API.markNotificationsRead([notifId]).catch(()=>{});if(typeof updateInboxBadge==='function')updateInboxBadge();}
   if(typeof gotoTab!=='function')return;
-  if(type==='task_assigned'){
-    gotoTab('assign');
+  // ref_idからの深掘りに失敗しても、タブ遷移だけは必ず行う（未知の種別は既定でprogressへ）
+  gotoTab(tab||'progress');
+  if(type==='task_assigned'||type==='task_progress'||type==='task_done'){
     if(refId){
       let rid=null;
       const asgArr=typeof ASSIGNMENTS!=='undefined'?ASSIGNMENTS:[];
@@ -3311,7 +3318,6 @@ function ntfGoto(tab,refId,type,notifId){
       if(rid&&typeof openTaskEdit==='function')setTimeout(()=>openTaskEdit(rid),300);
     }
   }else if(type==='evaluation_received'){
-    gotoTab('reviews');
     if(refId){
       const charts=typeof CHARTS!=='undefined'?CHARTS:{};
       const k=Object.keys(charts).find(k=>(charts[k]||{}).dbId&&String(charts[k].dbId)===String(refId));
@@ -3321,8 +3327,30 @@ function ntfGoto(tab,refId,type,notifId){
         else if(typeof evalChartKey!=='undefined'){evalChartKey=k;if(typeof renderEval==='function')setTimeout(()=>renderEval(),300);}
       }
     }
-  }else{
-    gotoTab(tab);
+  }else if(type==='evaluation_submitted'){
+    if(refId){
+      const API=window.VexumAPI;
+      if(API&&API.ready&&API.sb){
+        API.sb.from('evaluations').select('chart_id').eq('id',refId).limit(1).then(r=>{
+          const cid=r&&r.data&&r.data[0]&&r.data[0].chart_id;if(!cid)return;
+          const charts=typeof CHARTS!=='undefined'?CHARTS:{};
+          const k=Object.keys(charts).find(k=>(charts[k]||{}).dbId&&String(charts[k].dbId)===String(cid));
+          if(!k)return;
+          const sel=document.getElementById('eval-chart-sel');
+          if(sel){sel.value=k;if(typeof onEvalChartChange==='function')onEvalChartChange();}
+          else if(typeof evalChartKey!=='undefined'){evalChartKey=k;if(typeof renderEval==='function')renderEval();}
+        }).catch(()=>{});
+      }
+    }
+  }else if(type==='report_started'||type==='report_submitted'){
+    const m=((nx&&nx.body)||'').match(/^(\d{4}-\d{2}-\d{2})/);
+    if(m&&typeof showPReportDetail==='function'){
+      setTimeout(()=>{
+        if(typeof prepYear!=='undefined')prepYear=+m[1].split('-')[0];
+        if(typeof prepMonth!=='undefined')prepMonth=+m[1].split('-')[1]-1;
+        showPReportDetail(m[1]);
+      },300);
+    }
   }
 }
 function renderInbox(){
@@ -3332,7 +3360,7 @@ function renderInbox(){
   if(MYNOTIFS.length){
     h+=`<div class="card" style="margin-bottom:14px"><div class="card-hd"><div><div class="card-title">🔔 お知らせ</div><div class="card-sub">リーダー・幹部からのタスク割当・評価など（${MYNOTIFS.filter(x=>!x.read).length}件 未読）</div></div></div><div class="card-body" style="padding:0">`;
     MYNOTIFS.forEach(x=>{
-      const m=_NOTIF_META[x.type]||[x.title||'お知らせ','var(--text3)',null];
+      const m=_NOTIF_META[x.type]||[x.title||'お知らせ','var(--text3)','progress'];
       const when=(x.created_at||'').slice(0,10);
       const clickable=!!m[2];
       h+=`<div ${clickable?`onclick="ntfGoto('${m[2]}','${x.ref_id||''}','${x.type}','${x.id||''}')"`:''} style="${clickable?'cursor:pointer;':''}padding:11px 14px;border-bottom:1px solid #F3F4F6;${x.read?'':'background:#F0F9FF'}">
