@@ -2193,7 +2193,11 @@ function saveMemberEval(isSubmit){
 let _evalRecSel='';
 let _evalRecFrom='';
 let _evalRecTo='';
+let _evalRecChartId='';   // ★選択中のチャートID（空='全チャート'）。メンバー切替時にリセットして
+                           //   前のメンバーのチャートIDが引き継がれないようにする（他チャート混入防止）。
 function _evalRecMemberId(name){return EVAL_IDS.find(id=>MEMBERS[id]&&MEMBERS[id].name===name)||DASH_IDS.find(id=>MEMBERS[id]&&MEMBERS[id].name===name);}
+function onEvalRecMemberChange(v){_evalRecSel=v;_evalRecChartId='';_lfSave({evalrecSel:v});renderEvalRec();}
+function onEvalRecChartChange(v){_evalRecChartId=v;_evalRecDetail();}
 function renderEvalRec(){
   const con=document.getElementById('evalrec-container');if(!con)return;
   const names={};
@@ -2205,17 +2209,12 @@ function renderEvalRec(){
   if(!_evalRecSel&&list.length)_evalRecSel=list[0];
   con.innerHTML=`<div style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
     <label class="fl" style="margin:0">メンバーを選択</label>
-    <select class="fs" style="width:auto;min-width:200px" onchange="_evalRecSel=this.value;_lfSave({evalrecSel:this.value});renderEvalRec()">
+    <select class="fs" style="width:auto;min-width:200px" onchange="onEvalRecMemberChange(this.value)">
       ${list.map(n=>`<option value="${n}" ${n===_evalRecSel?'selected':''}>${n}</option>`).join('')}
     </select>
-    <label class="fl" style="margin:0">チャート期間（開始〜終了）</label>
-    <div style="display:flex;align-items:flex-end;gap:6px">
-      <div id="evalrec-from-ymd"></div>
-      <span style="align-self:flex-end;padding-bottom:6px;color:var(--text3);font-size:11px">〜</span>
-      <div id="evalrec-to-ymd"></div>
-      <button class="f-btn active" style="align-self:flex-end" onclick="_evalRecDetail()">絞り込む</button>
-    </div>
-    <span style="font-size:10px;color:var(--text3)">KGI・各CSF・タスクの★とコメントを網羅表示（チャートの期間で絞り込み）</span>
+    <label class="fl" style="margin:0">チャートを選択</label>
+    <div id="evalrec-chart-sel-wrap"><select class="fs" style="width:auto;min-width:220px" disabled><option>読み込み中…</option></select></div>
+    <span style="font-size:10px;color:var(--text3)">KGI・各CSF・タスクの★とコメントを網羅表示（選択したチャートのみに絞り込み。他のメンバー・他のチャートの記録は混在しません）</span>
   </div><div id="evalrec-detail" style="padding:14px 16px"><div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">読み込み中…</div></div>`;
   _evalRecDetail();
 }
@@ -2226,31 +2225,30 @@ async function _evalRecDetail(){
   const API=window.VexumAPI;
   // 接続時: evaluations から CSF 詳細を取得
   if(API&&API.ready&&m&&m.pid){
-    let data;try{data=await API.loadEvaluationsFor(m.pid);}catch(e){data=null;}
-    // 下書き（未提出）は評価記録として確定していないため除外する
-    let evs=data?[].concat(data.fromLeader||[],data.fromExec||[],data.fromSelf||[]).filter(x=>x.submitted):[];
-    // チャート作成期間（mandala_charts.start_date/period）の選択肢を生成・絞り込み
+    // このメンバーのチャート一覧を取得し、チャート選択プルダウンを構築する。
+    // ★以前はチャート「期間」の日付範囲で絞り込んでいたが、日付を入力しない限り
+    //   全チャートの評価記録が区別なく混在して表示されてしまい、「他のチャートの
+    //   評価記録まで一緒に表示される」不具合の原因になっていた。
+    //   チャートIDそのもので厳密に絞り込む方式に変更し、メンバー切替時は
+    //   必ずチャート選択をリセットする（onEvalRecMemberChangeで_evalRecChartId=''）ことで
+    //   前のメンバー・前のチャートの記録が引き継がれないようにする。
     let charts=window._chartsCache[m.pid];
     if(!charts){try{charts=await API.loadChartsFor(m.pid);window._chartsCache[m.pid]=charts;}catch(e){charts=[];}}
     charts=charts||[];
-    const chartMap={};charts.forEach(c=>chartMap[c.id]=c);
-    // チャート期間の日付範囲YMDセレクトを初回生成
-    const rfw=document.getElementById('evalrec-from-ymd');if(rfw&&!rfw.children.length)rfw.innerHTML=ymdHtml('evalrec-from','',false,'_evalRecDetail()');
-    const rtw=document.getElementById('evalrec-to-ymd');if(rtw&&!rtw.children.length)rtw.innerHTML=ymdHtml('evalrec-to','',false,'_evalRecDetail()');
-    if(!window._evalrecYmdRestored){window._evalrecYmdRestored=true;const f=_lfLoad();if(f.evalrecFrom)ymdSet('evalrec-from',f.evalrecFrom);if(f.evalrecTo)ymdSet('evalrec-to',f.evalrecTo);}
-    const _rf=ymdValue('evalrec-from')||'',_rt=ymdValue('evalrec-to')||'';
-    _lfSave({evalrecFrom:_rf,evalrecTo:_rt});
-    evs=evs.filter(ev=>{
-      const c=ev.chartId&&chartMap[ev.chartId];
-      if(_rf||_rt){
-        const sd=c&&c.start_date;const ed=(c&&(c.end_date||c.start_date))||sd;
-        if(!sd)return false;
-        if(_rf&&ed&&ed<_rf)return false;
-        if(_rt&&sd>_rt)return false;
-      }
-      return true;
-    });
-    if(!evs.length){box.innerHTML=`<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">${_evalRecSel} さんの評価記録はまだありません（絞り込み条件に一致する記録がない場合も含む）</div>`;return;}
+    if(!_evalRecChartId||!charts.some(c=>c.id===_evalRecChartId))_evalRecChartId=charts[0]?charts[0].id:'';
+    const selWrap=document.getElementById('evalrec-chart-sel-wrap');
+    if(selWrap){
+      selWrap.innerHTML=charts.length
+        ?`<select class="fs" style="width:auto;min-width:220px" onchange="onEvalRecChartChange(this.value)">${charts.map(c=>`<option value="${c.id}" ${c.id===_evalRecChartId?'selected':''}>${mdChartLabel(c)}</option>`).join('')}</select>`
+        :`<select class="fs" style="width:auto;min-width:220px" disabled><option>チャートがありません</option></select>`;
+    }
+    let data;try{data=await API.loadEvaluationsFor(m.pid,_evalRecChartId||undefined);}catch(e){data=null;}
+    // 下書き（未提出）は評価記録として確定していないため除外する
+    let evs=data?[].concat(data.fromLeader||[],data.fromExec||[],data.fromSelf||[]).filter(x=>x.submitted):[];
+    // API側はchartIdでの絞り込みに対応しているが、念のためクライアント側でも厳密一致で
+    // 二重にチェックする（chart_id未設定の古いレコードが紛れ込むのを防ぐ）
+    if(_evalRecChartId)evs=evs.filter(ev=>ev.chartId===_evalRecChartId);
+    if(!evs.length){box.innerHTML=`<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">${_evalRecSel} さんの${charts.length?'このチャートの':''}評価記録はまだありません</div>`;return;}
     evs.sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
     let h=`<div style="font-size:12px;font-weight:700;margin-bottom:10px">${_evalRecSel} さんへの評価（${evs.length}件・CSFまで網羅）</div>`;
     evs.forEach(ev=>{

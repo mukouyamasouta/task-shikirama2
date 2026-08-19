@@ -3157,13 +3157,18 @@ async function openEvalRefs(id){
 function closeEvalRefs(){document.getElementById('evalref-modal').style.display='none';}
 
 // ===== 「リーダーの評価」パネル（メンバーカード上部・常時表示・チャート非依存） =====
-// 提出済みのリーダー評価を全件（複数リーダー・複数期間ぶん）表示する。
+// 提出済みのリーダー評価を優先して全件（複数リーダー・複数期間ぶん）表示する。
+// ★提出済みが1件も無い場合は、下書き（未提出）だけでも内容を隠さず表示する
+//   （下書きしかバッジを付けて明示。以前は提出済みのみ参照していたため、リーダーが
+//   保存ボタンのみ押して提出をまだ押していないと幹部画面に一切反映されなかった）。
 // KGIコメントに加え、記入のあるCSFも折りたたみで確認できるようにする。
 function renderLeaderEvalPanel(memberId,evAll){
   const box=document.getElementById('leadereval-'+memberId);if(!box)return;
-  const list=((evAll&&evAll.fromLeader)||[]).filter(x=>x.submitted);
+  const all=((evAll&&evAll.fromLeader)||[]);
+  const submittedList=all.filter(x=>x.submitted);
+  const list=submittedList.length?submittedList:all;
   if(!list.length){
-    box.innerHTML=`<div style="background:#F9FAFB;border:1px dashed var(--border);border-radius:8px;padding:9px 12px;font-size:11px;color:var(--text3)">👔 リーダーの評価：まだ提出されていません</div>`;
+    box.innerHTML=`<div style="background:#F9FAFB;border:1px dashed var(--border);border-radius:8px;padding:9px 12px;font-size:11px;color:var(--text3)">👔 リーダーの評価：まだ入力されていません</div>`;
     return;
   }
   let h=`<div style="background:#CCEDE9;border:1px solid var(--accent);border-radius:8px;padding:10px 12px">
@@ -3172,9 +3177,10 @@ function renderLeaderEvalPanel(memberId,evAll){
     const csfFilled=(evx.csf||[]).map((c,si)=>({si,stars:(c&&c.stars)||0,comment:(c&&c.comment)||''}))
       .filter(c=>c.stars>0||c.comment);
     const detId='ldreval-det-'+memberId+'-'+i;
+    const draftBadge=evx.submitted?'':`<span style="font-size:9px;font-weight:700;color:#0F766E;background:#A7F3D0;padding:1px 6px;border-radius:8px">下書き（未提出）</span>`;
     h+=`<div style="background:#fff;border-radius:6px;padding:8px 10px;margin-bottom:${i===list.length-1?'0':'6px'}">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;font-weight:700">
-        <span>${evx.evaluatorName||'—'} <span style="font-weight:400;color:var(--text3)">／ ${evx.period||'期間未設定'}</span></span>
+        <span>${evx.evaluatorName||'—'} <span style="font-weight:400;color:var(--text3)">／ ${evx.period||'期間未設定'}</span> ${draftBadge}</span>
         <span style="color:var(--amber);letter-spacing:1px">KGI ${starStr(evx.kgi)} <span style="color:#0F766E">${evx.kgi||0}/5</span></span>
       </div>
       <div style="font-size:11px;color:var(--text2);margin-top:5px">💬 ${evx.kgiComment||'—'}</div>
@@ -3363,14 +3369,20 @@ async function injectEvalRefs(memberId,pid){
     // 下の「リーダーの評価」パネル＝チャート非依存の一覧の両方で使う）
     const evAll=await API.loadEvaluationsFor(pid);
     const ev=chartId?await API.loadEvaluationsFor(pid,chartId):evAll;
-    // 下書き（未提出）は参照しない（提出済みのみを「本人/リーダーの評価」として表示する）
-    let self=(ev.fromSelf||[]).find(x=>x.submitted)||null;
-    let leader=(ev.fromLeader||[]).find(x=>x.submitted)||null;
+    // 提出済みを優先して参照するが、まだ提出されていない下書きしか無い場合は
+    // 下書きの内容を「未反映」のまま隠さず、下書きである旨を明示した上で表示する。
+    // ★以前は submitted===true のみを参照していたため、リーダー・従業員が
+    //   保存ボタン（下書き保存）だけ押して「提出」をまだ押していないケースで、
+    //   幹部画面に内容が一切反映されない（ref-*が空のまま／リーダーの評価パネルが
+    //   「まだ提出されていません」表示のまま）不具合になっていた。
+    let self=(ev.fromSelf||[]).find(x=>x.submitted)||(ev.fromSelf||[])[0]||null;
+    let leader=(ev.fromLeader||[]).find(x=>x.submitted)||(ev.fromLeader||[])[0]||null;
     // chart_id 指定で取れなかった項目は chartId なし（全期間最新）でフォールバック
-    if(!self)self=(evAll.fromSelf||[]).find(x=>x.submitted)||null;
-    if(!leader)leader=(evAll.fromLeader||[]).find(x=>x.submitted)||null;
+    if(!self)self=(evAll.fromSelf||[]).find(x=>x.submitted)||(evAll.fromSelf||[])[0]||null;
+    if(!leader)leader=(evAll.fromLeader||[]).find(x=>x.submitted)||(evAll.fromLeader||[])[0]||null;
     // 「リーダーの評価」パネル: 各KGI/CSFブロック内の参照だけだと CSF が折りたたみで
-    // 気づけないため、カード上部に提出済みリーダー評価を全件まとめて常時表示する
+    // 気づけないため、カード上部にリーダー評価（提出済み優先・無ければ下書き）を
+    // 全件まとめて常時表示する
     renderLeaderEvalPanel(memberId,evAll);
     // 達成率（曼荼羅と同じく member_kpi_edits の進捗から算出）。
     // ★ 未記入のKPI/CSFスロットを0%として平均に含めると、他画面（リーダー/従業員の
@@ -3393,24 +3405,30 @@ async function injectEvalRefs(memberId,pid){
       const s=sis.reduce((a,si)=>a+csfRate(si),0);
       return Math.round(s/sis.length);
     };
-    const renderRef=(targetId,sLabel,sStars,sComment,lLabel,lStars,lComment,hasSelf,hasLeader,sRate)=>{
+    const renderRef=(targetId,sLabel,sStars,sComment,lLabel,lStars,lComment,hasSelf,hasLeader,sRate,selfDraft,leaderDraft)=>{
       const el=document.getElementById(targetId);if(!el)return;
       let h='';
       if(hasSelf){
         const txt=(sStars||sComment)?`<span style="color:#F59E0B;letter-spacing:1px">${starStr(sStars||0)}</span> <span style="font-weight:700;color:#92400E">${sStars||0}/5</span> <span style="color:var(--text2)">「${sComment||'—'}」</span>`:`<span style="color:var(--text3)">本人未入力</span>`;
         const rate=(sRate!=null)?`<span style="margin-left:6px;font-weight:700;color:#B45309">達成率 ${sRate}%</span>`:'';
-        h+=`<div style="padding:5px 9px;background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:4px;font-size:10.5px;color:#92400E;line-height:1.5;margin-bottom:4px"><span style="font-weight:700">👤 ${sLabel}: </span>${txt}${rate}</div>`;
+        const draftBadge=selfDraft?`<span style="margin-left:6px;font-size:9px;font-weight:700;color:#92400E;background:#FDE68A;padding:1px 6px;border-radius:8px">下書き（未提出）</span>`:'';
+        h+=`<div style="padding:5px 9px;background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:4px;font-size:10.5px;color:#92400E;line-height:1.5;margin-bottom:4px"><span style="font-weight:700">👤 ${sLabel}: </span>${txt}${rate}${draftBadge}</div>`;
+      }else{
+        h+=`<div style="padding:5px 9px;background:#F9FAFB;border-left:3px solid #D1D5DB;border-radius:4px;font-size:10.5px;color:var(--text3);line-height:1.5;margin-bottom:4px"><span style="font-weight:700">👤 ${sLabel}: </span>まだ入力されていません</div>`;
       }
       if(hasLeader){
         const txt=(lStars||lComment)?`<span style="color:#F59E0B;letter-spacing:1px">${starStr(lStars||0)}</span> <span style="font-weight:700;color:#0F766E">${lStars||0}/5</span> <span style="color:var(--text2)">「${lComment||'—'}」</span>`:`<span style="color:var(--text3)">リーダー未入力</span>`;
-        h+=`<div style="padding:5px 9px;background:#CCEDE9;border-left:3px solid var(--accent);border-radius:4px;font-size:10.5px;color:#0F766E;line-height:1.5"><span style="font-weight:700">👔 ${lLabel}: </span>${txt}</div>`;
+        const draftBadge=leaderDraft?`<span style="margin-left:6px;font-size:9px;font-weight:700;color:#0F766E;background:#A7F3D0;padding:1px 6px;border-radius:8px">下書き（未提出）</span>`:'';
+        h+=`<div style="padding:5px 9px;background:#CCEDE9;border-left:3px solid var(--accent);border-radius:4px;font-size:10.5px;color:#0F766E;line-height:1.5"><span style="font-weight:700">👔 ${lLabel}: </span>${txt}${draftBadge}</div>`;
+      }else{
+        h+=`<div style="padding:5px 9px;background:#F9FAFB;border-left:3px solid #D1D5DB;border-radius:4px;font-size:10.5px;color:var(--text3);line-height:1.5"><span style="font-weight:700">👔 ${lLabel}: </span>まだ入力されていません</div>`;
       }
       el.innerHTML=h;
     };
-    renderRef('ref-'+memberId+'-kgi--1', '従業員の自己評価', self&&self.kgi, self&&self.kgiComment, 'リーダーの評価', leader&&leader.kgi, leader&&leader.kgiComment, !!self, !!leader, kgiRate());
+    renderRef('ref-'+memberId+'-kgi--1', '従業員の自己評価', self&&self.kgi, self&&self.kgiComment, 'リーダーの評価', leader&&leader.kgi, leader&&leader.kgiComment, !!self, !!leader, kgiRate(), !!(self&&!self.submitted), !!(leader&&!leader.submitted));
     for(let si=0;si<8;si++){
       const sc=self&&self.csf&&self.csf[si]; const lc=leader&&leader.csf&&leader.csf[si];
-      renderRef('ref-'+memberId+'-csf-'+si, '従業員の自己評価', sc&&sc.stars, sc&&sc.comment, 'リーダーの評価', lc&&lc.stars, lc&&lc.comment, !!self, !!leader, csfRate(si));
+      renderRef('ref-'+memberId+'-csf-'+si, '従業員の自己評価', sc&&sc.stars, sc&&sc.comment, 'リーダーの評価', lc&&lc.stars, lc&&lc.comment, !!self, !!leader, csfRate(si), !!(self&&!self.submitted), !!(leader&&!leader.submitted));
     }
     window._execCommentEvalId[memberId]=leader&&leader.id||null;
     const ecInput=document.getElementById('execcomment-input-'+memberId);
