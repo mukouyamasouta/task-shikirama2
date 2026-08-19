@@ -62,15 +62,15 @@ button:disabled{opacity:.6}
     var roles=[];
     try{ roles=await API.myRoles(); }catch(e){ roles=[]; }
     if(!roles.length){ if(msgEl){msgEl.className='msg err';msgEl.textContent='このアカウントには有効な権限（ロール）がありません。管理者にお問い合わせください。';} return false; }
-    if(roles.length===1){ try{localStorage.setItem('vexum_last_role',roles[0]);}catch(e){} location.href=DEST[roles[0]]||DEST.member; return true; }
-    var last=null; try{last=localStorage.getItem('vexum_last_role');}catch(e){}
+    if(roles.length===1){ try{sessionStorage.setItem('vexum_last_role',roles[0]);}catch(e){} location.href=DEST[roles[0]]||DEST.member; return true; }
+    var last=null; try{last=sessionStorage.getItem('vexum_last_role');}catch(e){}
     if(last&&roles.indexOf(last)>=0){ location.href=DEST[last]; return true; }
     // 複数ロール・初回 → どの画面で開くか選択
     if(msgEl){
       msgEl.className='msg ok';
       msgEl.innerHTML='ログインしました。<div style="margin-top:8px;font-size:12px;color:#374151">複数の権限があります。開く画面を選んでください：</div><div id="role-choose-btns" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>';
       var box=document.getElementById('role-choose-btns');
-      roles.forEach(function(r){ var b=document.createElement('button'); b.type='button'; b.textContent=(ROLE_JP0[r]||r)+'画面'; b.style.cssText='flex:1;min-width:88px;padding:9px;background:#0D9488;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer'; b.addEventListener('click',function(){ try{localStorage.setItem('vexum_last_role',r);}catch(e){} location.href=DEST[r]; }); box.appendChild(b); });
+      roles.forEach(function(r){ var b=document.createElement('button'); b.type='button'; b.textContent=(ROLE_JP0[r]||r)+'画面'; b.style.cssText='flex:1;min-width:88px;padding:9px;background:#0D9488;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer'; b.addEventListener('click',function(){ try{sessionStorage.setItem('vexum_last_role',r);}catch(e){} location.href=DEST[r]; }); box.appendChild(b); });
     }
     return true;
   }

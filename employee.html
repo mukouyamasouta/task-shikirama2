@@ -787,7 +787,7 @@ function _lsSet(key,val){try{localStorage.setItem(key,JSON.stringify(val));}catc
    チャート/タスク作成モーダル・CSF編集モーダルで、期間欄が未入力の時のデフォルト値として使う。
    特定アカウント（中村等のデモシード）へのハードコードは行わず、profile_idをキーに含めた
    localStorageで誰のアカウントでも同一に動作する。 */
-function _curPid(){try{return localStorage.getItem('vexum_last_profile_id')||'anon';}catch(e){return 'anon';}}
+function _curPid(){try{return (window._meProfile&&window._meProfile.id)||sessionStorage.getItem('vexum_last_profile_id')||'anon';}catch(e){return 'anon';}}
 function _periodMemKey(){return 'vexum_last_period_'+_curPid();}
 function _saveLastPeriod(start,end){if(!start&&!end)return;_lsSet(_periodMemKey(),{start:start||'',end:end||''});}
 function _loadLastPeriod(){return _lsGet(_periodMemKey())||null;}
@@ -4823,8 +4823,8 @@ function vexumLogout(){
   //   判定基準をemail（大文字小文字無視）に変更し、本当に別人がログインした時だけクリアする。
   function clearOtherUserData(currentProfileId,currentEmail){
     try{
-      var prevEmail=localStorage.getItem('vexum_last_profile_email');
-      var prevId=localStorage.getItem('vexum_last_profile_id');
+      var prevEmail=sessionStorage.getItem('vexum_last_profile_email');
+      var prevId=sessionStorage.getItem('vexum_last_profile_id');
       var isDifferentUser;
       if(prevEmail&&currentEmail){
         // 通常運用: emailの一致で判定する（同一人物のロール切替では誤ってクリアしない）
@@ -4842,9 +4842,7 @@ function vexumLogout(){
         isDifferentUser=!!(prevId&&currentProfileId&&prevId!==currentProfileId);
       }
       if(isDifferentUser){
-        Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id'&&k!=='vexum_last_profile_email';}).forEach(function(k){localStorage.removeItem(k);});
-        // 別ユーザーに切替: スクリプトロード時に復元済みの旧ユーザーの絞り込みがメモリに残るため、
-        // デフォルトへ戻してから（空になった）localStorageで再復元する
+        // このタブ内の表示状態だけ初期化し、別タブの共有localStorageは削除しない。
         try{
           if(typeof _tmFilter!=='undefined')_tmFilter='all';
           if(typeof _tmChartFilter!=='undefined')_tmChartFilter='all';
@@ -4859,13 +4857,13 @@ function vexumLogout(){
           if(typeof restoreSavedFilters==='function')restoreSavedFilters();
         }catch(e){}
       }
-      if(currentProfileId)localStorage.setItem('vexum_last_profile_id',currentProfileId);
-      if(currentEmail)localStorage.setItem('vexum_last_profile_email',currentEmail);
+      if(currentProfileId)sessionStorage.setItem('vexum_last_profile_id',currentProfileId);
+      if(currentEmail)sessionStorage.setItem('vexum_last_profile_email',currentEmail);
     }catch(e){}
   }
   // リーダーから「従業員画面に切り替え」した場合の代理表示用
   var _linkedEmp=null,_curRole=null;
-  try{_linkedEmp=localStorage.getItem('vexum_linked_employee_id');_curRole=localStorage.getItem('vexum_current_role');}catch(e){}
+  try{_linkedEmp=sessionStorage.getItem('vexum_linked_employee_id');_curRole=sessionStorage.getItem('vexum_current_role');}catch(e){}
   function _applyPersonal(d){
     if(!d) return;
     repl(CHARTS,d.CHARTS); repl(FEEDBACK,d.FEEDBACK);
@@ -4905,14 +4903,14 @@ function vexumLogout(){
   API.currentProfile().then(function(p){
     if(!p){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); return; }
     clearOtherUserData(p.id,p.email);  // 別ユーザー(email基準)なら前ユーザーのLSを一掃
-    try{_linkedEmp=localStorage.getItem('vexum_linked_employee_id');_curRole=localStorage.getItem('vexum_current_role');}catch(e){}
+    try{_linkedEmp=sessionStorage.getItem('vexum_linked_employee_id');_curRole=sessionStorage.getItem('vexum_current_role');}catch(e){}
     window._meAuthProfile=p;
     // アクセス再検証: DB上で 'member' ロールを実際に保有しているか毎回確認（権限削除を即反映）
     API.checkRoleAccess('member').then(function(a){
       var hasMember=!!(a&&a.ok);
       // 紐付けリーダーが「従業員画面に切り替え」した代理表示（member権限が無くても許可）
       var acting=!hasMember&&!!_linkedEmp&&_curRole==='employee';
-      if(hasMember){ try{localStorage.setItem('vexum_last_role','member');}catch(e){} }
+      if(hasMember){ try{sessionStorage.setItem('vexum_last_role','member');}catch(e){} }
       if(!hasMember&&!acting){
         if(!a||!a.roles||!a.roles.length){ try{API.sb.auth.signOut();}catch(e){} }
         location.replace((a&&a.dest)||'./index.html'); return;
@@ -4995,9 +4993,9 @@ function vexumLogout(){
 </div>
 <script>
 /* ===== 従業員⇄幹部 紐付け・切り替え（検索のみ。幹部アカウントの新規作成はできない） ===== */
-function _isLinkedExec(){return !!localStorage.getItem('vexum_linked_executive_id');}
-function _saveLinkExec(pid){localStorage.setItem('vexum_linked_executive_id',pid||'');}
-function switchToExecutive(){localStorage.setItem('vexum_current_role','executive');window.location.href='executive.html';}
+function _isLinkedExec(){return !!sessionStorage.getItem('vexum_linked_executive_id');}
+function _saveLinkExec(pid){sessionStorage.setItem('vexum_linked_executive_id',pid||'');}
+function switchToExecutive(){sessionStorage.setItem('vexum_current_role','executive');window.location.href='executive.html';}
 function _updateSwitchExecBtn(roles){
   var b=document.getElementById('sb-switch-exec-btn');if(!b)return;
   var hasExecRole=Array.isArray(roles)&&roles.indexOf('executive')>=0;
@@ -5026,8 +5024,8 @@ async function _refreshExecLinkSection(){
 }
 function peLinkExec(pid){_saveLinkExec(pid);_profileToast('幹部アカウントと紐付けました');_updateSwitchExecBtn();_refreshExecLinkSection();}
 /* ===== リーダー⇄従業員 紐付け・切り替え ===== */
-function _isLinked(){return !!localStorage.getItem('vexum_linked_employee_id');}
-function switchToLeader(){localStorage.setItem('vexum_current_role','leader');window.location.href='leader.html';}
+function _isLinked(){return !!sessionStorage.getItem('vexum_linked_employee_id');}
+function switchToLeader(){sessionStorage.setItem('vexum_current_role','leader');window.location.href='leader.html';}
 function _updateSwitchBtn(roles){var b=document.getElementById('sb-switch-btn');if(!b)return;var hasLeaderRole=Array.isArray(roles)&&roles.indexOf('leader')>=0;b.style.display=(_isLinked()||hasLeaderRole)?'':'none';}
 /* ===== プロフィール編集（サイドバー氏名クリック・3画面共通） ===== */
 function openProfileEdit(){

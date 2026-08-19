@@ -3012,7 +3012,7 @@ function vexumLogout(){
       if(!a.roles||!a.roles.length){ try{API.sb.auth.signOut();}catch(e){} }
       location.replace(a.dest||'./index.html'); return;
     }
-    try{ localStorage.setItem('vexum_last_role','leader'); }catch(e){}
+    try{ sessionStorage.setItem('vexum_last_role','leader'); }catch(e){}
     if(typeof _updateSwitchBtn==='function')_updateSwitchBtn(a.roles);
     if(typeof _updateSwitchExecBtn==='function')_updateSwitchExecBtn(a.roles);
   });
@@ -3026,8 +3026,8 @@ function vexumLogout(){
   //   判定基準をemail（大文字小文字無視）に変更し、本当に別人がログインした時だけクリアする。
   function clearOtherUserData(currentProfileId,currentEmail){
     try{
-      var prevEmail=localStorage.getItem('vexum_last_profile_email');
-      var prevId=localStorage.getItem('vexum_last_profile_id');
+      var prevEmail=sessionStorage.getItem('vexum_last_profile_email');
+      var prevId=sessionStorage.getItem('vexum_last_profile_id');
       var isDifferentUser;
       if(prevEmail&&currentEmail){
         // 通常運用: emailの一致で判定する（同一人物のロール切替では誤ってクリアしない）
@@ -3044,13 +3044,10 @@ function vexumLogout(){
         //   前ユーザーのvexum_linked_employee_id等が残ってしまう（セキュリティ上の後退）。
         isDifferentUser=!!(prevId&&currentProfileId&&prevId!==currentProfileId);
       }
-      if(isDifferentUser){
-        Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id'&&k!=='vexum_last_profile_email';}).forEach(function(k){localStorage.removeItem(k);});
-        // 別ユーザーに切替: スクリプトロード時に復元済みの旧ユーザーの絞り込みがメモリに残るためデフォルトへ戻す
-        window._dashMemberFilter='';window._dashFromFilter='';window._dashToFilter='';
-      }
-      if(currentProfileId)localStorage.setItem('vexum_last_profile_id',currentProfileId);
-      if(currentEmail)localStorage.setItem('vexum_last_profile_email',currentEmail);
+      // 別タブで別アカウントが利用中でも共有localStorageを削除しない。
+      if(isDifferentUser){window._dashMemberFilter='';window._dashFromFilter='';window._dashToFilter='';}
+      if(currentProfileId)sessionStorage.setItem('vexum_last_profile_id',currentProfileId);
+      if(currentEmail)sessionStorage.setItem('vexum_last_profile_email',currentEmail);
     }catch(e){}
   }
   // ★_updateSwitchBtn()をここで引数なしで呼ばないこと。checkRoleAccess('leader').then(...)側で
@@ -3181,9 +3178,9 @@ function vexumLogout(){
 </div>
 <script>
 /* ===== リーダー⇄幹部 紐付け・切り替え（検索のみ。幹部アカウントの新規作成はできない） ===== */
-function _isLinkedExec(){return !!localStorage.getItem('vexum_linked_executive_id');}
-function _saveLinkExec(pid){localStorage.setItem('vexum_linked_executive_id',pid||'');}
-function switchToExecutive(){localStorage.setItem('vexum_current_role','executive');window.location.href='executive.html';}
+function _isLinkedExec(){return !!sessionStorage.getItem('vexum_linked_executive_id');}
+function _saveLinkExec(pid){sessionStorage.setItem('vexum_linked_executive_id',pid||'');}
+function switchToExecutive(){sessionStorage.setItem('vexum_current_role','executive');window.location.href='executive.html';}
 function _updateSwitchExecBtn(roles){
   var b=document.getElementById('sb-switch-exec-btn');if(!b)return;
   var hasExecRole=Array.isArray(roles)&&roles.indexOf('executive')>=0;
@@ -3225,9 +3222,9 @@ function openProfileEdit(){
   if(typeof _refreshExecLinkSection==='function')_refreshExecLinkSection();
 }
 /* ===== リーダー⇄従業員 紐付け・切り替え ===== */
-function _isLinked(){return !!localStorage.getItem('vexum_linked_employee_id');}
-function _saveLink(empId){localStorage.setItem('vexum_linked_employee_id',empId||'');}
-function switchToEmployee(){localStorage.setItem('vexum_current_role','employee');window.location.href='employee.html';}
+function _isLinked(){return !!sessionStorage.getItem('vexum_linked_employee_id');}
+function _saveLink(empId){sessionStorage.setItem('vexum_linked_employee_id',empId||'');}
+function switchToEmployee(){sessionStorage.setItem('vexum_current_role','employee');window.location.href='employee.html';}
 // ★以前はlocalStorageの紐付けフラグのみで表示判定していたため、紐付け後にclearOtherUserData等で
 //   このフラグが消える（あるいは別ブラウザ/別端末で開く）と、DB上は既に従業員アカウントが
 //   実在するにもかかわらずボタンが消え、毎回プロフィール編集を開いて「紐付ける」を

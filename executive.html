@@ -112,6 +112,17 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 /* star */
 .star{font-size:22px;cursor:pointer;color:#D1D5DB;line-height:1;transition:color .1s;user-select:none}
 .star.on{color:var(--amber)}
+.stars{display:inline-flex;gap:1px}
+.eval-rate-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 8px}
+.eval-rate-lbl{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em}
+.eval-cmt{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;outline:none;color:var(--text);background:var(--card)}
+.eval-cmt:focus{border-color:var(--accent)}
+.eval-block{padding:12px 0;border-bottom:1px solid var(--border)}
+.eval-block:last-child{border-bottom:none}
+.eval-block-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.eval-tag{font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;letter-spacing:.05em}
+.tag-kgi{background:var(--accent);color:#fff}.tag-csf{background:var(--accent-l);color:var(--accent)}
+.eval-goal{font-size:12.5px;font-weight:700;color:var(--text)}
 /* eval card */
 .eval-card{background:var(--card);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--shadow);padding:18px;margin-bottom:14px}
 .eval-card-top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
@@ -167,7 +178,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="sb-item" onclick="swTab('send',this);initSendForm();renderSendHistory()"><span class="sb-icon">◎</span>チャート送信</button>
     <button class="sb-item" onclick="swTab('assign',this);initExecAssign()"><span class="sb-icon">📋</span>タスク割当</button>
     <button class="sb-item" onclick="swTab('inbox',this);initExecInbox()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="exec-inbox-badge" style="display:none">0</span></button>
-    <button class="sb-item" onclick="swTab('eval',this);renderTeamEval();renderMemberEval()"><span class="sb-icon">★</span>一覧・評価</button>
+    <button class="sb-item" onclick="swTab('eval',this);initExecEvalInput()"><span class="sb-icon">📝</span>評価入力</button>
+    <button class="sb-item" onclick="swTab('evalrec',this);initExecEvalRecord()"><span class="sb-icon">📊</span>評価記録</button>
     <button class="sb-item" onclick="swTab('report',this);initExecReports()"><span class="sb-icon">📅</span>日報</button>
   </div>
   <div class="sb-footer">v2.4.1 © 2025 VEXUM Inc.</div>
@@ -437,53 +449,29 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
 </div>
 
-<!-- 一覧・評価 -->
+<!-- 評価入力（リーダー画面と同UI・全チーム権限） -->
 <div id="tc-eval" class="tab-content">
-  <div class="sec-title">一覧・評価
-    <button class="card-btn" style="padding:6px 14px;font-size:11px" onclick="downloadAllCSV()">⬇ 全件CSV</button>
-  </div>
-  <div class="eval-switch">
-    <button class="esw active" onclick="swEval('team',this)">🏢 チーム評価</button>
-    <button class="esw" onclick="swEval('member',this)">👤 個人評価</button>
-    <button class="esw" onclick="swEval('history',this);renderEvalHistory()">📊 評価履歴</button>
-  </div>
-  <div id="ep-team" class="epane active">
-    <div id="team-eval-container"></div>
-  </div>
-  <div id="ep-member" class="epane">
-    <div class="search-row">
-      <input class="search-in" id="member-search" placeholder="🔍 メンバー名で検索…" oninput="renderMemberEval()">
-      <select class="fs" id="member-self-filter" style="width:auto;min-width:170px" onchange="renderMemberEval()">
-        <option value="">全メンバー</option>
-        <option value="hasSelf">📝 自己評価あり のみ</option>
-      </select>
-      <select class="fs" id="member-team-filter" style="width:auto;min-width:150px" onchange="renderMemberEval()">
-        <option value="">全チーム</option>
-        <option value="A">営業チームA</option>
-        <option value="B">開発チームB</option>
-        <option value="C">マーケチームC</option>
-      </select>
-    </div>
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-body" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px">
-        <div style="flex:1;min-width:200px">
-          <div style="font-size:12px;font-weight:700">一括操作</div>
-          <div style="font-size:10.5px;color:var(--text3)">いま表示中のメンバーのうち、評価を入力済みの人がまとめて対象になります</div>
-          <div id="bulk-eval-count" style="font-size:10.5px;color:var(--accent);font-weight:700;margin-top:2px"></div>
-          <div id="bulk-eval-status" style="font-size:10.5px;color:var(--text3);margin-top:2px"></div>
-        </div>
-        <button class="f-submit" id="bulk-eval-save" style="padding:8px 18px;font-size:12px;background:#6B7280" onclick="bulkSaveMemberEval(false)">💾 一括保存</button>
-        <button class="f-submit" id="bulk-eval-submit" style="padding:8px 18px;font-size:12px" onclick="bulkSaveMemberEval(true)">📤 一括提出（従業員・リーダーに反映）</button>
+  <div class="sec-title">評価入力 <span style="font-size:11px;font-weight:400;color:var(--text3)">全社員のKGI・CSFを★5段階＋コメントで評価</span></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-body" style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">
+      <div style="min-width:150px"><label class="fl">評価対象</label><select class="fs" id="exec-eval-mode" onchange="onExecEvalModeChange()"><option value="member">個人評価</option><option value="team">チーム評価</option></select></div>
+      <div style="min-width:170px"><label class="fl" id="exec-eval-team-label">チームで絞り込み</label><select class="fs" id="exec-eval-team" onchange="onExecEvalTeamChange()"><option value="">全チーム</option></select></div>
+      <div style="flex:1;min-width:200px" id="exec-eval-member-wrap"><label class="fl">評価するメンバー</label><select class="fs" id="exec-eval-member" onchange="onExecEvalMemberChange()"></select></div>
+      <div><label class="fl">評価期間（開始〜期限）</label><div style="display:flex;align-items:flex-end;gap:6px"><div id="exec-eval-from-ymd"></div><span style="padding-bottom:6px;color:var(--text3)">〜</span><div id="exec-eval-to-ymd"></div></div></div>
+      <div style="display:flex;gap:10px;width:100%">
+        <button class="f-submit" id="exec-eval-save" style="flex:1;background:#6B7280" onclick="saveExecEvalInput(false)">💾 保存</button>
+        <button class="f-submit" id="exec-eval-submit" style="flex:1" onclick="saveExecEvalInput(true)">📤 提出（従業員・リーダーに反映）</button>
       </div>
     </div>
-    <div id="member-eval-container"></div>
   </div>
-  <div id="ep-history" class="epane">
-    <div class="search-row">
-      <input class="search-in" id="evalhist-search" placeholder="🔍 氏名で検索…" oninput="renderEvalHistory()">
-    </div>
-    <div id="evalhist-container"></div>
-  </div>
+  <div style="background:#F0FDF4;border:1px solid #10B981;border-radius:8px;padding:9px 14px;margin-bottom:14px;font-size:11px;color:#065F46;display:flex;gap:14px;flex-wrap:wrap"><span style="font-weight:700">⭐ 星をクリックで5段階評価</span><span>本人・リーダーの評価を参照しながら、幹部評価を入力できます</span></div>
+  <div id="exec-evalin-container"></div>
+</div>
+
+<!-- 評価記録（リーダー画面と同UI・全チーム権限） -->
+<div id="tc-evalrec" class="tab-content">
+  <div class="sec-title">評価記録 <span style="font-size:11px;font-weight:400;color:var(--text3)">全社員の提出済み評価をKGI・CSFまで確認</span></div>
+  <div class="card" style="overflow:auto"><div id="exec-evalrec-container"></div></div>
 </div>
 
 <!-- 日報（全社員） -->
@@ -942,7 +930,7 @@ function inDateRange(targetIso, fromIso, toIso){
   return true;
 }
 /* ========== UI ========== */
-const TITLES={users:['アカウント管理','幹部コンソール / アカウント管理'],send:['チャート送信','幹部コンソール / チャート送信'],assign:['タスク割当','幹部コンソール / タスク割当'],inbox:['受信ボックス','幹部コンソール / 受信ボックス'],eval:['一覧・評価','幹部コンソール / 一覧・評価'],report:['日報','幹部コンソール / 日報'],dashboard:['ダッシュボード','幹部コンソール / ダッシュボード']};
+const TITLES={users:['アカウント管理','幹部コンソール / アカウント管理'],send:['チャート送信','幹部コンソール / チャート送信'],assign:['タスク割当','幹部コンソール / タスク割当'],inbox:['受信ボックス','幹部コンソール / 受信ボックス'],eval:['評価入力','幹部コンソール / 評価入力'],evalrec:['評価記録','幹部コンソール / 評価記録'],report:['日報','幹部コンソール / 日報'],dashboard:['ダッシュボード','幹部コンソール / ダッシュボード']};
 function swTab(id,btn){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.getElementById('tc-'+id).classList.add('active');
@@ -2430,9 +2418,8 @@ async function _execGotoNotif(n){
   }
   if(n.type==='evaluation_received'||n.type==='evaluation_submitted'){
     swTab('eval',null);
-    const evalBtns=document.querySelectorAll('.esw');
-    swEval('member',evalBtns[1]||null);
-    if(typeof renderMemberEval==='function')renderMemberEval();
+    if(mk&&MEMBERS[mk])_execEvalMember=mk;
+    if(typeof initExecEvalInput==='function')initExecEvalInput();
     return;
   }
   swTab('dashboard',null);
@@ -3179,6 +3166,157 @@ function toggleCsf(id){
   if(!el)return;const open=el.style.display!=='none';
   el.style.display=open?'none':'block';if(ar)ar.textContent=open?'▸':'▾';
 }
+
+/* ===== 幹部 評価入力（リーダー画面と同UI・全社員対応） ===== */
+let _execEvalMember='',_execEvalRecordMember='',_execEvalRecordChart='';
+let _execEvalRenderSeq=0,_execEvalRecordSeq=0;
+const _execEvalRestored={};
+let _execEvalDataReady=false;
+function execEvalMode(){return (document.getElementById('exec-eval-mode')||{}).value||'member';}
+function execEvalMembersForTeam(teamValue){
+  const tk=execEvalTeamKey(teamValue||'');
+  return Object.entries(MEMBERS).filter(([,m])=>m.roleEnum!=='admin'&&m.roleEnum!=='executive'&&(!tk||execEvalTeamKey(m.team)===tk));
+}
+function execEvalTeamOptions(selected){
+  const cur=execEvalTeamKey(selected||'');
+  return '<option value="">全チーム</option>'+Object.entries(TEAMS).map(([key,t])=>`<option value="${key}"${key===cur?' selected':''}>${t.name}</option>`).join('');
+}
+function ensureExecEvalPeriodOptions(){
+  const f=document.getElementById('exec-eval-from-ymd'),t=document.getElementById('exec-eval-to-ymd');
+  if(f&&!f.children.length)f.innerHTML=ymdHtml('exec-eval-from','');
+  if(t&&!t.children.length)t.innerHTML=ymdHtml('exec-eval-to','');
+}
+function populateExecEvalSelectors(){
+  const team=document.getElementById('exec-eval-team'),member=document.getElementById('exec-eval-member');if(!team||!member)return [];
+  const mode=execEvalMode(),teamCur=team.value||'';team.innerHTML=execEvalTeamOptions(teamCur);
+  const memberWrap=document.getElementById('exec-eval-member-wrap'),teamLabel=document.getElementById('exec-eval-team-label'),submit=document.getElementById('exec-eval-submit');
+  if(memberWrap)memberWrap.style.display=mode==='team'?'none':'';
+  if(teamLabel)teamLabel.textContent=mode==='team'?'評価するチーム':'チームで絞り込み';
+  if(submit)submit.style.display=mode==='team'?'none':'';
+  if(mode==='team'){
+    if(!team.value&&Object.keys(TEAMS).length)team.value=Object.keys(TEAMS)[0];
+    return Object.entries(TEAMS);
+  }
+  const list=execEvalMembersForTeam(team.value);
+  if(!_execEvalMember||!list.some(([id])=>id===_execEvalMember))_execEvalMember=list[0]?list[0][0]:'';
+  member.innerHTML=list.length?list.map(([id,m])=>`<option value="${id}"${id===_execEvalMember?' selected':''}>${m.name}（${(TEAMS[m.team]||{}).name||m.team||'未所属'}）</option>`).join(''):'<option value="">対象者がいません</option>';
+  member.value=_execEvalMember;return list;
+}
+async function ensureExecEvalData(){
+  if(_execEvalDataReady&&Object.keys(MEMBERS).length)return;
+  const API=window.VexumAPI;
+  if(API&&API.ready&&API.loadAdminData){
+    try{
+      const d=await API.loadAdminData();
+      if(d){
+        const replace=(target,src)=>{Object.keys(target).forEach(k=>delete target[k]);Object.assign(target,src||{});};
+        replace(TEAMS,d.TEAMS);replace(MEMBERS,d.MEMBERS);replace(MND,d.MND);replace(EMP,d.EMP);
+      }
+    }catch(e){}
+  }
+  _execEvalDataReady=true;
+}
+async function initExecEvalInput(){ensureExecEvalPeriodOptions();await ensureExecEvalData();populateExecEvalSelectors();await renderExecEvalInput();}
+function onExecEvalModeChange(){_execEvalMember='';populateExecEvalSelectors();renderExecEvalInput();}
+function onExecEvalTeamChange(){_execEvalMember='';populateExecEvalSelectors();renderExecEvalInput();}
+function onExecEvalMemberChange(){_execEvalMember=(document.getElementById('exec-eval-member')||{}).value||'';renderExecEvalInput();}
+function onExecEvalChartChange(id,chartId){
+  window._execChartChoice[id]=chartId;delete memberEval[id];delete _execEvalRestored[id+'|'+chartId];renderExecEvalInput();
+}
+function openExecEvalChart(id){
+  const charts=(window._execChartsCache&&window._execChartsCache[id])||[],chartId=window._execChartChoice[id];
+  const c=charts.find(x=>x.id===chartId)||charts[0]||EMP[id];if(!c)return;
+  EXTRA.__execevalview__={name:c.name||c.center||'評価対象チャート',team:(MEMBERS[id]||{}).name||'',color:c.color||'#0D9488',bg:c.bg||'#CCEDE9',center:c.center||'',subs:c.subs||[],acts:c.acts||[]};
+  openMandala('__execevalview__');
+}
+function execEvalRefBox(label,ev,type,si,color){
+  const c=color||{bg:'#FFFBEB',bd:'#F59E0B',fg:'#92400E',icon:'📝'};
+  const item=type==='kgi'?(ev&&{stars:ev.kgi,comment:ev.kgiComment}):(ev&&ev.csf&&ev.csf[si]);
+  if(!item)return `<div style="margin-top:6px;padding:6px 10px;background:#F9FAFB;border-left:3px solid #D1D5DB;border-radius:4px;font-size:10.5px;color:var(--text3)">${c.icon} ${label}: まだ評価がありません</div>`;
+  return `<div style="margin-top:6px;padding:6px 10px;background:${c.bg};border-left:3px solid ${c.bd};border-radius:4px;font-size:10.5px;color:${c.fg}"><b>${c.icon} ${label}: </b><span style="color:var(--amber);letter-spacing:1px">${starStr(item.stars||0)}</span> <span style="color:var(--text2)">「${item.comment||'—'}」</span>${ev.submitted?'':' <span style="font-size:9px;font-weight:700">下書き</span>'}</div>`;
+}
+async function renderExecEvalInput(){
+  const con=document.getElementById('exec-evalin-container');if(!con)return;
+  populateExecEvalSelectors();
+  if(execEvalMode()==='team'){
+    const teamKey=(document.getElementById('exec-eval-team')||{}).value||'',team=TEAMS[teamKey],chart=MND[teamKey],id='team-'+teamKey;
+    if(!team){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);padding:28px">評価対象チームがありません</div></div>';return;}
+    if(!chart){con.innerHTML=`<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);padding:28px">${team.name} のチームチャートがありません</div></div>`;return;}
+    const e=_mev(id);let h=`<div class="card"><div class="card-hd"><div><div class="card-title">チーム曼荼羅チャート評価（KGI・CSF）</div><div class="card-sub">${team.name}</div></div><button class="card-btn" onclick="openMandala('${teamKey}')">🧿 チャートを見る</button></div><div class="card-body">`;
+    h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-kgi">KGI</span><span class="eval-goal">${(chart.center||'').replace(/\n/g,' ')}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">🏢 幹部評価（5段階）</span><span class="stars" id="mevstars-${id}-kgi--1">${mevStarHTML(id,'kgi',-1)}</span></div><textarea class="eval-cmt" rows="2" placeholder="KGIへの評価コメント…" oninput="saveMevCmt('${id}','kgi',-1,this.value)">${e.kgi.comment}</textarea></div>`;
+    for(let si=0;si<8;si++)h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-csf">CSF-${si+1}</span><span class="eval-goal">${(chart.subs||[])[si]||'—'}</span></div><div class="eval-rate-row"><span class="eval-rate-lbl">🏢 幹部評価（5段階）</span><span class="stars" id="mevstars-${id}-csf-${si}">${mevStarHTML(id,'csf',si)}</span></div><textarea class="eval-cmt" rows="2" placeholder="CSF-${si+1}への評価コメント…" oninput="saveMevCmt('${id}','csf',${si},this.value)">${e.csf[si].comment}</textarea></div>`;
+    con.innerHTML=h+'</div></div>';return;
+  }
+  const id=_execEvalMember||((document.getElementById('exec-eval-member')||{}).value||'');const m=MEMBERS[id];
+  if(!m){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);padding:28px">評価対象者がいません</div></div>';return;}
+  const seq=++_execEvalRenderSeq,API=window.VexumAPI;
+  con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);padding:28px">読み込み中…</div></div>';
+  let charts=(window._execChartsCache&&window._execChartsCache[id])||[];
+  if(API&&API.ready&&m.pid){try{charts=await API.loadChartsFor(m.pid)||[];window._execChartsCache[id]=charts;}catch(e){charts=[];}}
+  if(seq!==_execEvalRenderSeq)return;
+  if(API&&API.ready&&!charts.length){window._execChartChoice[id]='';con.innerHTML=`<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);padding:28px">${m.name} さんの担当チャートがありません。<br>チャートが作成・割り当てされると評価できます。</div></div>`;return;}
+  let chartId=window._execChartChoice[id];if(!chartId||!charts.some(c=>c.id===chartId))chartId=charts[0]?charts[0].id:'';window._execChartChoice[id]=chartId;
+  const chart=charts.find(c=>c.id===chartId)||EMP[id];if(!chart){con.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text3);padding:28px">評価対象チャートがありません</div></div>';return;}
+  let ev={fromSelf:[],fromLeader:[],fromExec:[]};
+  if(API&&API.ready&&m.pid){try{ev=await API.loadEvaluationsFor(m.pid,chartId)||ev;}catch(e){}}
+  if(seq!==_execEvalRenderSeq)return;
+  const self=(ev.fromSelf||[]).find(x=>x.submitted)||(ev.fromSelf||[])[0]||null;
+  const leader=(ev.fromLeader||[]).find(x=>x.submitted)||(ev.fromLeader||[])[0]||null;
+  const meId=(window._meProfile||{}).id;
+  const mine=(ev.fromExec||[]).find(x=>meId&&x.evaluatorId===meId)||null;
+  const restoreKey=id+'|'+chartId;
+  if(!_execEvalRestored[restoreKey]&&mine){const e=_mev(id);e.kgi={stars:mine.kgi||0,comment:mine.kgiComment||''};e.csf=Array.from({length:8},(_,i)=>({stars:((mine.csf||[])[i]||{}).stars||0,comment:((mine.csf||[])[i]||{}).comment||''}));_execEvalRestored[restoreKey]=1;}
+  const e=_mev(id),leaderColor={bg:'#CCEDE9',bd:'#0D9488',fg:'#0F766E',icon:'👔'};
+  const chartSel=charts.length?`<div style="background:#FAFCFC;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap"><label class="fl" style="margin:0">評価対象の期間（チャート）</label><select class="fs" style="width:auto;min-width:280px" onchange="onExecEvalChartChange('${id}',this.value)">${charts.map(c=>`<option value="${c.id}"${c.id===chartId?' selected':''}>${execChartLabel(c)}</option>`).join('')}</select>${self?'<span style="font-size:11px;color:var(--amber);font-weight:700">📝 本人自己評価あり</span>':''}</div>`:'';
+  let h=`<div class="card"><div class="card-hd"><div><div class="card-title">曼荼羅チャート評価（KGI・CSF）</div><div class="card-sub">${m.name} ／ ${(TEAMS[m.team]||{}).name||m.team||'未所属'}</div></div><button class="card-btn" onclick="openExecEvalChart('${id}')">🧿 チャートを見る</button></div>${chartSel}<div class="card-body">`;
+  h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-kgi">KGI</span><span class="eval-goal">${(chart.center||'').replace(/\n/g,' ')}</span></div>${execEvalRefBox('従業員評価(KGI)',self,'kgi',-1)}${execEvalRefBox('リーダー評価(KGI)',leader,'kgi',-1,leaderColor)}<div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border)"><div class="eval-rate-row"><span class="eval-rate-lbl">🏢 幹部評価（5段階）</span><span class="stars" id="mevstars-${id}-kgi--1">${mevStarHTML(id,'kgi',-1)}</span></div><textarea class="eval-cmt" rows="2" placeholder="KGIへの幹部評価コメント…" oninput="saveMevCmt('${id}','kgi',-1,this.value)">${e.kgi.comment}</textarea></div></div>`;
+  for(let si=0;si<8;si++)h+=`<div class="eval-block"><div class="eval-block-hd"><span class="eval-tag tag-csf">CSF-${si+1}</span><span class="eval-goal">${(chart.subs||[])[si]||'—'}</span></div>${execEvalRefBox('従業員評価(CSF-'+(si+1)+')',self,'csf',si)}${execEvalRefBox('リーダー評価(CSF-'+(si+1)+')',leader,'csf',si,leaderColor)}<div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border)"><div class="eval-rate-row"><span class="eval-rate-lbl">🏢 幹部評価（5段階）</span><span class="stars" id="mevstars-${id}-csf-${si}">${mevStarHTML(id,'csf',si)}</span></div><textarea class="eval-cmt" rows="2" placeholder="CSF-${si+1}への幹部評価コメント…" oninput="saveMevCmt('${id}','csf',${si},this.value)">${e.csf[si].comment}</textarea></div></div>`;
+  con.innerHTML=h+'</div></div>';
+}
+function execEvalInputPeriod(){
+  const from=ymdValue('exec-eval-from')||'',to=ymdValue('exec-eval-to')||'';return (from||to)?from+'〜'+to:execEvalPeriod();
+}
+async function saveExecEvalInput(isSubmit){
+  if(execEvalMode()==='team'){
+    const teamKey=(document.getElementById('exec-eval-team')||{}).value||'',team=TEAMS[teamKey];if(team)await saveTeamEvalExec(teamKey,team.name);return;
+  }
+  const id=_execEvalMember,m=MEMBERS[id];if(!m)return;
+  const charts=(window._execChartsCache&&window._execChartsCache[id])||[];
+  if(window.VexumAPI&&window.VexumAPI.ready&&!charts.length){showToast('担当チャートがないため評価を保存できません');return;}
+  if(isSubmit&&!confirm(`${m.name} さんの評価を提出します。\n提出後は従業員本人とリーダーが確認できます。\n\n実行しますか？`))return;
+  const r=await saveMemberEvalExec(id,m.name,isSubmit);
+  if(r&&r.ok){delete _execEvalRestored[id+'|'+(window._execChartChoice[id]||'')];await renderExecEvalInput();}
+}
+
+/* ===== 幹部 評価記録（リーダー画面と同UI・全社員対応） ===== */
+function initExecEvalRecord(){renderExecEvalRecord();}
+function onExecEvalRecordTeam(){_execEvalRecordMember='';_execEvalRecordChart='';renderExecEvalRecord();}
+function onExecEvalRecordMember(){_execEvalRecordMember=(document.getElementById('exec-evalrec-member')||{}).value||'';_execEvalRecordChart='';renderExecEvalRecord();}
+function onExecEvalRecordChart(){_execEvalRecordChart=(document.getElementById('exec-evalrec-chart')||{}).value||'';renderExecEvalRecordDetail();}
+function renderExecEvalRecord(){
+  const con=document.getElementById('exec-evalrec-container');if(!con)return;
+  const oldTeam=(document.getElementById('exec-evalrec-team')||{}).value||'';
+  const list=execEvalMembersForTeam(oldTeam);if(!_execEvalRecordMember||!list.some(([id])=>id===_execEvalRecordMember))_execEvalRecordMember=list[0]?list[0][0]:'';
+  con.innerHTML=`<div style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border)"><label class="fl" style="margin:0">チーム</label><select id="exec-evalrec-team" class="fs" style="width:auto;min-width:160px" onchange="onExecEvalRecordTeam()">${execEvalTeamOptions(oldTeam)}</select><label class="fl" style="margin:0">メンバー</label><select id="exec-evalrec-member" class="fs" style="width:auto;min-width:220px" onchange="onExecEvalRecordMember()">${list.map(([id,m])=>`<option value="${id}"${id===_execEvalRecordMember?' selected':''}>${m.name}</option>`).join('')}</select><label class="fl" style="margin:0">チャート</label><span id="exec-evalrec-chart-wrap"><select class="fs" disabled><option>読み込み中…</option></select></span></div><div id="exec-evalrec-detail" style="padding:14px 16px">読み込み中…</div>`;
+  renderExecEvalRecordDetail();
+}
+async function renderExecEvalRecordDetail(){
+  const box=document.getElementById('exec-evalrec-detail');if(!box)return;const id=_execEvalRecordMember,m=MEMBERS[id],API=window.VexumAPI,seq=++_execEvalRecordSeq;
+  if(!m){box.innerHTML='<div style="text-align:center;color:var(--text3);padding:20px">対象者がいません</div>';return;}
+  let charts=(window._execChartsCache&&window._execChartsCache[id])||[];if(API&&API.ready&&m.pid){try{charts=await API.loadChartsFor(m.pid)||[];window._execChartsCache[id]=charts;}catch(e){charts=[];}}
+  if(seq!==_execEvalRecordSeq)return;if(!_execEvalRecordChart||!charts.some(c=>c.id===_execEvalRecordChart))_execEvalRecordChart=charts[0]?charts[0].id:'';
+  const wrap=document.getElementById('exec-evalrec-chart-wrap');if(wrap)wrap.innerHTML=charts.length?`<select id="exec-evalrec-chart" class="fs" style="width:auto;min-width:240px" onchange="onExecEvalRecordChart()">${charts.map(c=>`<option value="${c.id}"${c.id===_execEvalRecordChart?' selected':''}>${execChartLabel(c)}</option>`).join('')}</select>`:'<select class="fs" disabled><option>チャートなし</option></select>';
+  if(!(API&&API.ready&&m.pid&&_execEvalRecordChart)){box.innerHTML='<div style="text-align:center;color:var(--text3);padding:20px">評価記録はまだありません</div>';return;}
+  let data;try{data=await API.loadEvaluationsFor(m.pid,_execEvalRecordChart);}catch(e){data=null;}if(seq!==_execEvalRecordSeq)return;
+  let evs=data?[].concat(data.fromLeader||[],data.fromExec||[],data.fromSelf||[]).filter(x=>x.submitted&&x.chartId===_execEvalRecordChart):[];
+  evs.sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));if(!evs.length){box.innerHTML=`<div style="text-align:center;color:var(--text3);padding:20px">${m.name} さんのこのチャートの評価記録はまだありません</div>`;return;}
+  const chart=charts.find(c=>c.id===_execEvalRecordChart)||{},subs=chart.subs||[];
+  box.innerHTML=`<div style="font-size:12px;font-weight:700;margin-bottom:10px">${m.name} さんへの評価（${evs.length}件）</div>`+evs.map(ev=>{
+    const role=([m.pid].concat(m.pids||[]).includes(ev.evaluatorId))?'本人':ev.evaluatorRole==='executive'?'幹部':'リーダー',csf=Array.isArray(ev.csf)?ev.csf:[],avg=csf.length?csf.reduce((s,c)=>s+(+c.stars||0),0)/csf.length:0;
+    return `<div class="card" style="margin-bottom:12px"><div class="card-hd"><div><div class="card-title">${ev.period||'—'}</div><div class="card-sub">評価者: ${ev.evaluatorName||'—'}（${role}）</div></div><span class="chip s-done">CSF平均 ${avg.toFixed(1)}</span></div><div class="card-body"><div style="margin-bottom:10px;padding:8px 10px;background:#FFFBEB;border:1px solid #FCD34D;border-radius:6px"><b style="font-size:11px;color:#92400E">🎯 KGI <span style="color:var(--amber);letter-spacing:1px">${starStr(ev.kgi)}</span></b>${ev.kgiComment?`<div style="font-size:11px;margin-top:3px">💬 ${ev.kgiComment}</div>`:''}</div>${ev.execComment?`<div style="margin-bottom:10px;padding:8px 10px;background:#F3E8FF;border:1px solid #9333EA;border-radius:6px"><b style="font-size:11px;color:#7C3AED">◆ 幹部コメント</b><div style="font-size:11px">💬 ${ev.execComment}</div></div>`:''}<div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:4px">CSF評価</div>${csf.map((c,i)=>`<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-size:11px"><b>CSF-${i+1}${subs[i]?'：'+subs[i]:''}</b>${c.comment?`<div style="font-size:10px;color:var(--text3)">💬 ${c.comment}</div>`:''}</div><div style="color:var(--amber);letter-spacing:1px">${starStr(+c.stars||0)}</div></div>`).join('')}</div></div>`;
+  }).join('');
+}
+
 async function openEvalRefs(id){
   const m=MEMBERS[id];if(!m)return;
   document.getElementById('evalref-title').textContent=m.name+' への評価を参照';
@@ -3299,7 +3437,7 @@ async function saveMemberEvalExec(id,name,isSubmit,opts){
   let chartId=(window._execChartChoice&&window._execChartChoice[id])||null;
   if(!chartId){const cc=(window._execChartsCache&&window._execChartsCache[id])||[];if(cc.length)chartId=cc[0].id;}
   // 評価期間は保存日から自動算出（旧: '2025 Q2' 固定のデモ実装の名残を是正）
-  const period=execEvalPeriod();
+  const period=document.getElementById('exec-eval-from-y')?execEvalInputPeriod():execEvalPeriod();
   if(!(API&&API.ready&&m&&m.pid)){
     if(!opts.silent)showToast('Supabase未接続のため保存できません');
     return {error:'未接続'};
@@ -3669,7 +3807,8 @@ try{
     if(_lt==='send'){if(typeof initSendForm==='function')initSendForm();if(typeof renderSendHistory==='function')renderSendHistory();}
     else if(_lt==='assign'&&typeof initExecAssign==='function')initExecAssign();
     else if(_lt==='inbox'&&typeof initExecInbox==='function')initExecInbox();
-    else if(_lt==='eval'){if(typeof renderTeamEval==='function')renderTeamEval();if(typeof renderMemberEval==='function')renderMemberEval();}
+    else if(_lt==='eval'&&typeof initExecEvalInput==='function')initExecEvalInput();
+    else if(_lt==='evalrec'&&typeof initExecEvalRecord==='function')initExecEvalRecord();
     else if(_lt==='report'&&typeof initExecReports==='function')initExecReports();
   }
 }catch(e){}
@@ -3719,7 +3858,7 @@ function vexumLogout(){
       if(!a.roles||!a.roles.length){ try{API.sb.auth.signOut();}catch(e){} }
       location.replace(a.dest||'./index.html'); return;
     }
-    try{ localStorage.setItem('vexum_last_role','executive'); }catch(e){}
+    try{ sessionStorage.setItem('vexum_last_role','executive'); }catch(e){}
     if(typeof _updateSwitchBtns==='function')_updateSwitchBtns(a.roles);
   });
   function repl(target, src){ Object.keys(target).forEach(function(k){ delete target[k]; }); Object.assign(target, src); }
@@ -3727,8 +3866,8 @@ function vexumLogout(){
     if(!d) return;
     repl(TEAMS, d.TEAMS); repl(MEMBERS, d.MEMBERS); repl(MND, d.MND); repl(EMP, d.EMP);
     if(typeof renderAccount==='function') renderAccount();
-    if(typeof renderTeamEval==='function') renderTeamEval();
-    if(typeof renderMemberEval==='function') renderMemberEval();
+    if(typeof initExecEvalInput==='function') initExecEvalInput();
+    if(typeof initExecEvalRecord==='function'&&document.getElementById('tc-evalrec').classList.contains('active')) initExecEvalRecord();
     if(typeof initExecDashboard==='function') initExecDashboard();
     if(typeof populateSendTeamSelect==='function') populateSendTeamSelect();
     console.log('[VEXUM] Supabaseデータを反映しました');
@@ -3740,8 +3879,8 @@ function vexumLogout(){
   //   見つかったのと同じバグ構造）。判定基準をemail（大文字小文字無視）に変更する。
   function clearOtherUserData(currentProfileId,currentEmail){
     try{
-      var prevEmail=localStorage.getItem('vexum_last_profile_email');
-      var prevId=localStorage.getItem('vexum_last_profile_id');
+      var prevEmail=sessionStorage.getItem('vexum_last_profile_email');
+      var prevId=sessionStorage.getItem('vexum_last_profile_id');
       var isDifferentUser;
       if(prevEmail&&currentEmail){
         isDifferentUser=prevEmail.toLowerCase()!==currentEmail.toLowerCase();
@@ -3751,11 +3890,9 @@ function vexumLogout(){
         // email記録がまだ無い場合（本修正の適用直後等）の安全側フォールバック
         isDifferentUser=!!(prevId&&currentProfileId&&prevId!==currentProfileId);
       }
-      if(isDifferentUser){
-        Object.keys(localStorage).filter(function(k){return k.indexOf('vexum_')===0&&k!=='vexum_last_profile_id'&&k!=='vexum_last_profile_email';}).forEach(function(k){localStorage.removeItem(k);});
-      }
-      if(currentProfileId)localStorage.setItem('vexum_last_profile_id',currentProfileId);
-      if(currentEmail)localStorage.setItem('vexum_last_profile_email',currentEmail);
+      // 別タブで別アカウントが利用中でも共有localStorageを削除しない。
+      if(currentProfileId)sessionStorage.setItem('vexum_last_profile_id',currentProfileId);
+      if(currentEmail)sessionStorage.setItem('vexum_last_profile_email',currentEmail);
     }catch(e){}
   }
   // 自分のプロフィールをサイドバーに反映
@@ -3877,10 +4014,10 @@ var PE_LINK_TARGETS={
   leader:{suffix:'ldr',roleJP:'リーダー',storageKey:'vexum_linked_leader_id'},
   member:{suffix:'emp',roleJP:'メンバー',storageKey:'vexum_linked_employee_id'}
 };
-function _isLinkedTo(target){return !!localStorage.getItem(PE_LINK_TARGETS[target].storageKey);}
-function _saveLinkTo(target,pid){localStorage.setItem(PE_LINK_TARGETS[target].storageKey,pid||'');}
-function switchToLeader(){localStorage.setItem('vexum_current_role','leader');window.location.href='leader.html';}
-function switchToEmployee(){localStorage.setItem('vexum_current_role','employee');window.location.href='employee.html';}
+function _isLinkedTo(target){return !!sessionStorage.getItem(PE_LINK_TARGETS[target].storageKey);}
+function _saveLinkTo(target,pid){sessionStorage.setItem(PE_LINK_TARGETS[target].storageKey,pid||'');}
+function switchToLeader(){sessionStorage.setItem('vexum_current_role','leader');window.location.href='leader.html';}
+function switchToEmployee(){sessionStorage.setItem('vexum_current_role','employee');window.location.href='employee.html';}
 // ★localStorageの紐付けフラグだけで判定すると、clearOtherUserData等でフラグが消えたり
 //   別ブラウザ/別端末で開いた場合に、DB上は既にリーダー・従業員アカウントが実在するのに
 //   ボタンが消え、毎回プロフィール編集を開いて紐付け直す必要があった。DB上のロール保有

@@ -6,7 +6,32 @@
 (function () {
   var cfg = window.SUPABASE_CONFIG || {};
   var ready = !!(cfg.url && cfg.anonKey && !/YOUR-/.test(cfg.url) && window.supabase);
-  var sb = ready ? window.supabase.createClient(cfg.url, cfg.anonKey) : null;
+  // 認証をタブ単位に分離する。Supabase既定のlocalStorageでは、同じブラウザの
+  // 別タブで別アカウントへログインすると先に開いたタブのセッションまで上書きされる。
+  var authStorage = null;
+  var authStorageKey = 'vexum-auth-session-v1';
+  if (ready && typeof window !== 'undefined') {
+    try {
+      authStorage = window.sessionStorage;
+      // 旧版の共有セッションを現在のタブへ一度だけ移行し、共有側は削除する。
+      var projectRef = String(cfg.url || '').replace(/^https?:\/\//, '').split('.')[0];
+      var legacyKey = projectRef ? 'sb-' + projectRef + '-auth-token' : '';
+      if (legacyKey && !authStorage.getItem(authStorageKey)) {
+        var legacySession = window.localStorage.getItem(legacyKey);
+        if (legacySession) authStorage.setItem(authStorageKey, legacySession);
+      }
+      if (legacyKey) window.localStorage.removeItem(legacyKey);
+    } catch (e) { authStorage = null; }
+  }
+  var sb = ready ? window.supabase.createClient(cfg.url, cfg.anonKey, {
+    auth: {
+      storage: authStorage || undefined,
+      storageKey: authStorageKey,
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    }
+  }) : null;
 
   // 固定UUID → 画面側の短縮キー（supabase/REBUILD.sql のシードデータと一致）
   var TEAM_KEY = {
