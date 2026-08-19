@@ -149,9 +149,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="sb-item" onclick="swTab('inbox',this);renderInbox()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="inbox-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('teamedit',this);renderTeamEdit()"><span class="sb-icon">⚙</span>チーム編集</button>
     <button class="sb-item" onclick="swTab('evalin',this);renderMemberEval()"><span class="sb-icon">📝</span>メンバー評価入力</button>
-    <button class="sb-item" onclick="swTab('evalrec',this);renderEvalRec()"><span class="sb-icon">📊</span>評価記録</button>
     <button class="sb-item" onclick="swTab('report',this);renderReports()"><span class="sb-icon">📒</span>日報<span class="sb-badge">6</span></button>
-    <button class="sb-item" onclick="swTab('submissions',this);renderSubmissions()"><span class="sb-icon">📥</span>提出物（工数）</button>
+    <button class="sb-item" onclick="swTab('evalrec',this);renderEvalRec()"><span class="sb-icon">📊</span>評価記録</button>
   </div>
   <div class="sb-footer">v2.4.1 © 2025 VEXUM Inc.</div>
 </aside>
@@ -376,23 +375,6 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <div id="tc-teamedit" class="tab-content">
   <div class="sec-title">チーム編集 <span style="font-size:11px;font-weight:400;color:var(--text3)">チーム情報の編集・メンバーの追加／削除</span></div>
   <div id="teamedit-container"></div>
-</div>
-
-<!-- 提出物（日報・工数履歴） -->
-<div id="tc-submissions" class="tab-content">
-  <div class="sec-title">提出物（工数） <span style="font-size:11px;font-weight:400;color:var(--text3)">自チームのメンバーが更新したタスクの作業時間を確認</span></div>
-  <div class="card" style="margin-bottom:14px">
-    <div class="card-body" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-      <div><div class="fl" style="margin-bottom:4px">メンバー</div><select class="fs" id="sub-member" style="min-width:160px" onchange="renderSubmissions()"></select></div>
-      <div><div class="fl" style="margin-bottom:4px">提出日（開始）</div><div id="sub-from-ymd"></div></div>
-      <div style="align-self:flex-end;padding-bottom:6px;color:var(--text3)">〜</div>
-      <div><div class="fl" style="margin-bottom:4px">提出日（期限）</div><div id="sub-to-ymd"></div></div>
-      <button class="f-btn active" style="align-self:flex-end" onclick="renderSubmissions()">絞り込む</button>
-      <button class="card-btn" style="align-self:flex-end" onclick="clearSubDateFilter()">クリア</button>
-      <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="sub-summary"></div>
-    </div>
-  </div>
-  <div class="card"><div class="card-hd"><div><div class="card-title">🕐 従業員が更新したタスク</div><div class="card-sub">作業時間の記録・到達進捗をタスクごとに表示します</div></div><span id="sub-hours-total" style="font-size:11px;font-weight:700;color:var(--accent)"></span></div><div class="card-body" id="sub-hours" style="padding:0"><div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">—</div></div></div>
 </div>
 
   </div><!-- /content -->
@@ -675,7 +657,7 @@ function inDateRange(targetIso, fromIso, toIso){
   return true;
 }
 /* ===== タブ切替・共通 ===== */
-const TITLES={dashboard:['チームダッシュボード','チームリーダーメニュー / チームDB'],assign:['タスク割当','チームリーダーメニュー / タスク割当'],inbox:['受信ボックス','チームリーダーメニュー / 受信ボックス'],evalin:['メンバー評価入力','チームリーダーメニュー / 評価入力'],evalrec:['評価記録','チームリーダーメニュー / 評価記録'],report:['日報','チームリーダーメニュー / 日報'],teamedit:['チーム編集','チームリーダーメニュー / チーム編集'],submissions:['提出物（工数）','チームリーダーメニュー / 提出物']};
+const TITLES={dashboard:['チームダッシュボード','チームリーダーメニュー / チームDB'],assign:['タスク割当','チームリーダーメニュー / タスク割当'],inbox:['受信ボックス','チームリーダーメニュー / 受信ボックス'],evalin:['メンバー評価入力','チームリーダーメニュー / 評価入力'],evalrec:['評価記録','チームリーダーメニュー / 評価記録'],report:['日報','チームリーダーメニュー / 日報'],teamedit:['チーム編集','チームリーダーメニュー / チーム編集']};
 function swTab(id,btn){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.getElementById('tc-'+id).classList.add('active');
@@ -2324,69 +2306,6 @@ function renderReportMembers(){
 }
 function selectReportMember(id){_repMember=id;_lfSave({repMember:id});_repSelDate='';renderReportMembers();renderReportCalendar();document.getElementById('report-detail').innerHTML='';}
 
-/* ===== 提出物（日報・工数履歴）— 自チームのメンバー別/期間で確認 ===== */
-let _subLogsCache={};
-async function renderSubmissions(){
-  const ids=(EVAL_IDS.length?EVAL_IDS:DASH_IDS).filter(id=>MEMBERS[id]);
-  const sel=document.getElementById('sub-member');if(!sel)return;
-  // メンバー選択肢（自チームのみ）
-  if(!sel.options.length||sel.dataset.n!=String(ids.length)){
-    sel.innerHTML=ids.map(id=>`<option value="${id}">${MEMBERS[id].name}（${MEMBERS[id].role}）</option>`).join('');
-    sel.dataset.n=String(ids.length);
-  }
-  // 表示切替（subView）は廃止したが、既存の保存データとの読み取り互換は残す（保存はしない）
-  if(!window._subRestored){const f=_lfLoad();
-    if(!f.subMember||ids.indexOf(f.subMember)>=0){window._subRestored=true;if(f.subMember)sel.value=f.subMember;if(f.subFrom)ymdSet('sub-from',f.subFrom);if(f.subTo)ymdSet('sub-to',f.subTo);}}
-  const mid=sel.value||ids[0];if(sel&&!sel.value&&ids[0])sel.value=ids[0];
-  const m=MEMBERS[mid]; if(!m)return;
-  _lfSave({subMember:mid,subFrom:ymdValue('sub-from')||'',subTo:ymdValue('sub-to')||''});
-  const API=window.VexumAPI;
-  // 工数ログ取得（接続時のみ）
-  let logs=[];
-  if(API&&API.ready&&m.pid){
-    if(_subLogsCache[mid]) logs=_subLogsCache[mid];
-    else { logs=await API.loadMemberTimeLogs(m.pid); _subLogsCache[mid]=logs; }
-  }
-  // 提出日（開始〜期限）YMDセレクトを初回生成
-  const sfw=document.getElementById('sub-from-ymd');if(sfw&&!sfw.children.length)sfw.innerHTML=ymdHtml('sub-from','',false,'renderSubmissions()');
-  const stw=document.getElementById('sub-to-ymd');if(stw&&!stw.children.length)stw.innerHTML=ymdHtml('sub-to','',false,'renderSubmissions()');
-  // 提出日（YYYY-MM-DD）でのフロントエンド絞り込み
-  const fromD=ymdValue('sub-from')||'';
-  const toD=ymdValue('sub-to')||'';
-  // 工数履歴（従業員が更新したタスクの記録。task_time_logs 由来）
-  const hrsEl=document.getElementById('sub-hours');
-  const flogs=logs.filter(l=>inDateRange(l.date,fromD,toD));
-  const totalEl=document.getElementById('sub-hours-total');
-  if(!(API&&API.ready)){hrsEl.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">工数履歴はSupabase接続時に表示されます</div>';if(totalEl)totalEl.textContent='';}
-  else if(!flogs.length){hrsEl.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">工数の記録はまだありません</div>';if(totalEl)totalEl.textContent='';}
-  else{
-    const total=flogs.reduce((a,l)=>a+(l.hours||0),0);
-    if(totalEl)totalEl.textContent='合計 '+Math.round(total*10)/10+'h';
-    hrsEl.innerHTML=flogs.map(l=>`<div onclick="jumpToTaskFromSub('${l.taskId||''}')" onmouseover="this.style.background='#FAFCFC'" onmouseout="this.style.background=''" style="cursor:pointer;padding:9px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${l.taskTitle}</div><div style="font-size:10px;color:var(--text3)">${l.date}${l.period?' ／ '+l.period:''}${l.progress!=null?' ／ 到達 '+l.progress+'%':''}</div></div><div style="font-size:13px;font-weight:800;color:var(--accent);flex-shrink:0">${l.hours}h</div></div>`).join('');
-  }
-  const sm=document.getElementById('sub-summary');if(sm)sm.textContent=m.name+(fromD||toD?'（'+(fromD||'…')+' 〜 '+(toD||'…')+'）':'')+' ／ 工数記録 '+flogs.length+'件';
-}
-function clearSubDateFilter(){
-  ymdClear('sub-from');ymdClear('sub-to');
-  renderSubmissions();
-}
-function jumpToReportFromSub(mid,date){
-  _repMember=mid;_repSelDate='';
-  const p=date.split('-');_repYear=+p[0];_repMonth=+p[1]-1;
-  // gotoTab('report')経由でrenderReports()が同期的に呼ばれ、直前にセットした年月を
-  // 当月へ戻してしまうのを1回だけ抑止する（gotoTabは同期関数なのでここで解除してよい）。
-  // gotoTab内で例外が起きてもフラグが true のまま残らないよう finally で必ず解除する。
-  window._repJumping=true;
-  try{ gotoTab('report'); } finally { window._repJumping=false; }
-  setTimeout(()=>showReportDetail(date),60);
-}
-function jumpToTaskFromSub(taskId){
-  gotoTab('assign');
-  setTimeout(()=>{
-    const card=taskId&&document.getElementById('asgtask-'+taskId);
-    if(card){card.scrollIntoView({behavior:'smooth',block:'center'});card.style.outline='2px solid var(--accent)';setTimeout(()=>{card.style.outline='';},1800);}
-  },60);
-}
 function changeReportMonth(d){_repMonth+=d;if(_repMonth<0){_repMonth=11;_repYear--;}else if(_repMonth>11){_repMonth=0;_repYear++;}_repSelDate='';document.getElementById('report-detail').innerHTML='';renderReportCalendar();}
 function renderReportCalendar(){
   const m=MEMBERS[_repMember];if(!m)return;
