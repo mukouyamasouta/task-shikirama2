@@ -903,7 +903,8 @@ function renderDashboard(){
   })();
   let h='';
   const _mcToday=new Date().toISOString().slice(0,10);
-  ids.forEach(id=>{
+  // デフォルトの並び順は達成率が高い順（幹部画面の全社ダッシュボードと同じ並び順に統一）
+  ids.slice().sort((a,b)=>((MEMBERS[b]&&MEMBERS[b].rate)||0)-((MEMBERS[a]&&MEMBERS[a].rate)||0)).forEach(id=>{
     const m=MEMBERS[id];const col=rateColor(m.rate);
     // 複数ロールはバッジを並べて表示（同一人物の二重カウント防止の集約結果）
     const rolesArr=(m.roles&&m.roles.length)?m.roles:[m.role];
