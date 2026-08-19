@@ -34,6 +34,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 .sb-item.active{background:var(--sb-active-bg);color:var(--sb-active)}
 .sb-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);border-radius:0 2px 2px 0}
 .sb-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.sb-badge{margin-left:auto;background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px}
 .sb-footer{padding:10px 14px;border-top:1px solid var(--sb-border);font-size:10px;color:var(--text3)}
 .main{margin-left:var(--sb-w);flex:1;display:flex;flex-direction:column;background:var(--content)}
 .topbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
@@ -164,7 +165,8 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
     <button class="sb-item active" onclick="swTab('dashboard',this);initExecDashboard()"><span class="sb-icon">📈</span>ダッシュボード</button>
     <button class="sb-item" onclick="swTab('users',this)"><span class="sb-icon">👤</span>アカウント管理</button>
     <button class="sb-item" onclick="swTab('send',this);initSendForm();renderSendHistory()"><span class="sb-icon">◎</span>チャート送信</button>
-    <button class="sb-item" onclick="swTab('tasks',this);initExecTasks()"><span class="sb-icon">📋</span>タスク管理</button>
+    <button class="sb-item" onclick="swTab('assign',this);initExecAssign()"><span class="sb-icon">📋</span>タスク割当</button>
+    <button class="sb-item" onclick="swTab('inbox',this);initExecInbox()"><span class="sb-icon">📥</span>受信ボックス<span class="sb-badge" id="exec-inbox-badge" style="display:none">0</span></button>
     <button class="sb-item" onclick="swTab('eval',this);renderTeamEval();renderMemberEval()"><span class="sb-icon">★</span>一覧・評価</button>
     <button class="sb-item" onclick="swTab('report',this);initExecReports()"><span class="sb-icon">📅</span>日報</button>
   </div>
@@ -194,7 +196,10 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <!-- チャート送信 -->
 <div id="tc-send" class="tab-content">
   <div class="sec-title">チャート送信 <span style="font-size:12px;font-weight:400;color:var(--text3)">送信先を選び、個人チャートとして自動追加</span>
-    <button class="f-submit" style="padding:8px 16px;font-size:12px;background:var(--cyan)" onclick="openTplManager()">🗂 テンプレート管理</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="f-submit" style="padding:8px 16px;font-size:12px;background:var(--cyan)" onclick="openTplManager()">🗂 テンプレート管理</button>
+      <button class="f-submit" style="padding:8px 16px;font-size:12px;background:#6B7280" onclick="openSendHistoryModal()">🕘 履歴</button>
+    </div>
   </div>
   <div id="send-success" style="display:none;align-items:center;gap:10px;background:#D1FAE5;border:1px solid #10B981;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#065F46;font-size:13px;font-weight:600">
     <span style="font-size:18px">✅</span><span id="send-success-msg">チャートを送信しました</span>
@@ -306,47 +311,129 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div id="sendhist-container"></div>
 </div>
 
-<!-- タスク管理（全チーム横断のタスク割当・一覧） -->
-<div id="tc-tasks" class="tab-content">
-  <div class="sec-title">タスク管理 <span style="font-size:12px;font-weight:400;color:var(--text3)">全チームのタスクを作成・割当・一覧で確認</span></div>
+<!-- タスク割当（全チーム・全従業員） -->
+<div id="tc-assign" class="tab-content">
+  <div class="sec-title">タスク割当
+    <span style="font-size:11px;font-weight:400;color:var(--text3)">全チーム・全従業員を対象にタスクを作成し割り当てる</span>
+    <button class="f-submit" onclick="openExecTaskModal()" style="font-size:12px;padding:7px 16px;margin-left:10px">＋ 新規タスクを作成・割当</button>
+  </div>
   <div class="card" style="margin-bottom:16px">
-    <div class="card-body" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
-      <div style="min-width:180px"><label class="fl">チーム</label><select class="fs" id="task-team-sel" onchange="onTaskTeamChange()"><option value="">全社員</option></select></div>
+    <div class="card-hd"><div><div class="card-title">割り当て済みタスク</div>
+      <div class="card-sub">チーム・メンバー・ステータス・作成者・期間で絞り込み</div></div></div>
+    <div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--border)">
+      <div><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">チーム</div>
+        <select class="fs" id="easg-team" style="min-width:130px" onchange="onEasgTeamChange()"><option value="">全チーム</option></select></div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">メンバー</div>
+        <select class="fs" id="easg-member" style="min-width:130px" onchange="renderExecAssignedTasks()"><option value="">全メンバー</option></select></div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">ステータス</div>
+        <select class="fs" id="easg-status" onchange="renderExecAssignedTasks()"><option value="">全ステータス</option><option value="todo">未着手</option><option value="wip">進行中</option><option value="done">完了</option><option value="late">遅延</option></select></div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">作成者</div>
+        <select class="fs" id="easg-source" onchange="renderExecAssignedTasks()"><option value="assigned">リーダー・幹部からの割当</option><option value="" selected>全て</option><option value="self">本人作成</option></select></div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">開始日</div>
+        <div id="easg-from-ymd"></div></div>
+      <div style="align-self:flex-end;padding-bottom:6px;color:var(--text3);font-size:12px">〜</div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">期限</div>
+        <div id="easg-to-ymd"></div></div>
+      <div style="align-self:flex-end">
+        <button class="f-btn active" onclick="applyEasgFilter()">絞り込む</button>
+        <button class="f-btn" onclick="resetEasgFilter()" style="margin-left:4px">リセット</button>
+      </div>
+    </div>
+    <div class="card-body" id="easg-list" style="padding:0"></div>
+  </div>
+  <span class="toast" id="easg-saved">✅ 保存しました</span>
+</div>
+
+<!-- 幹部 新規タスク作成モーダル -->
+<div id="exec-task-modal" onclick="if(event.target===this)closeExecTaskModal()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:460px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+      <div>
+        <div style="font-size:16px;font-weight:800;color:var(--accent)">新規タスク作成</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">
+          <span id="exec-tm-sub-text">KGI紐付けでタスクを作成します　</span>
+          <span id="exec-tm-link-toggle" onclick="toggleExecChartLink()"
+                style="color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline">チャート以外のタスクはこちら →</span>
+        </div>
+      </div>
+      <button onclick="closeExecTaskModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div class="fg"><label class="fl">チーム</label>
+      <select class="fs" id="exec-tm-team" onchange="onExecTmTeamSel()"><option value="">全チーム</option></select></div>
+    <div class="fg"><label class="fl">割り当てるメンバー *</label>
+      <select class="fs" id="exec-tm-member" onchange="onExecTmMemberSel()"><option value="">メンバーを選択</option></select></div>
+
+    <div id="exec-tm-chart-link" style="background:var(--accent-l);border-radius:8px;padding:10px 12px;margin-bottom:14px">
+      <div class="fg" style="margin-bottom:8px"><label class="fl">① チャート（KGI）を選択</label>
+        <select class="fs" id="exec-tm-chart" onchange="onExecTmChartSel()"><option value="">チャートを選択</option></select></div>
+      <div class="fg" style="margin-bottom:8px"><label class="fl">② 紐付けるCSFを選択</label>
+        <select class="fs" id="exec-tm-csf" onchange="onExecTmCsfSel()"><option value="">（先にチャートを選択）</option></select>
+        <div id="exec-tm-csf-warn" style="display:none;font-size:10px;color:var(--red);font-weight:700;margin-top:4px"></div></div>
+      <div class="fg" style="margin-bottom:4px"><label class="fl">③ 紐付けるKPIを選択（任意）</label>
+        <select class="fs" id="exec-tm-kpi"><option value="">KPIに紐付けない（CSF直下）</option></select>
+        <div style="font-size:10px;color:var(--text2);margin-top:4px">未選択ならCSF直下のタスクになります。</div></div>
+      <div style="font-size:10px;color:var(--text2);margin-top:6px;line-height:1.5">※ 選択したCSFに紐づくタスクとして登録されます（同じCSFに何件でも作成できます）。</div>
+    </div>
+
+    <div class="fg"><label class="fl">タスク名 *</label>
+      <input class="fi" id="exec-tm-name" placeholder="例: 新規顧客 訪問アポ獲得"></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">開始日</label><input class="fi" id="exec-tm-start" type="date"></div>
+      <div class="fg"><label class="fl">期限</label><input class="fi" id="exec-tm-due" type="date"></div>
+    </div>
+    <div class="fg"><label class="fl">優先度</label>
+      <select class="fs" id="exec-tm-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select></div>
+    <div class="fg"><label class="fl">予定工数（h・任意）</label>
+      <input class="fi" id="exec-tm-planhours" type="number" min="0" step="0.5" placeholder="例: 8"></div>
+
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button class="f-submit" style="flex:1;background:#9CA3AF" onclick="closeExecTaskModal()">キャンセル</button>
+      <button class="f-submit" style="flex:1" id="exec-tm-create-btn" onclick="submitExecTask()">タスクを作成</button>
     </div>
   </div>
-  <div class="g2">
-    <div>
-      <div class="card">
-        <div class="card-hd"><div class="card-title">新規タスクを作成・割当</div></div>
-        <div class="card-body">
-          <div class="fg"><label class="fl">タスク名</label><input class="fi" id="task-asg-name" placeholder="例: Q3 提案書作成"></div>
-          <div class="fg"><label class="fl">割り当てるメンバー</label><select class="fs" id="task-asg-member"></select></div>
-          <div class="fg"><label class="fl">関連KPI（任意）</label><input class="fi" id="task-asg-kpi" placeholder="例: 訪問件数30件"></div>
-          <div class="fr" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div class="fg"><label class="fl">開始日</label><input class="fi" id="task-asg-start" type="date"></div>
-            <div class="fg"><label class="fl">期限</label><input class="fi" id="task-asg-due" type="date"></div>
-          </div>
-          <div class="fg"><label class="fl">予定工数（h・任意）</label><input class="fi" id="task-asg-planhours" type="number" min="0" step="0.5" placeholder="例: 8"></div>
-          <div class="fg"><label class="fl">優先度</label><select class="fs" id="task-asg-pri"><option value="hi">高</option><option value="md" selected>中</option><option value="lo">低</option></select></div>
-          <button class="f-submit" onclick="submitExecAssign()">タスクを割り当てる</button>
-          <span class="toast" id="task-asg-saved">✅ 保存しました</span>
-        </div>
+</div>
+
+<!-- 幹部 タスク編集モーダル -->
+<div id="exec-edit-modal" onclick="if(event.target===this)closeExecEditModal()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10001;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:22px;width:100%;max-width:440px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:800;color:var(--accent)">✏ タスクを編集</div>
+      <button onclick="closeExecEditModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+    </div>
+    <div id="exec-edit-meta" style="font-size:10px;color:var(--text3);margin-bottom:12px">—</div>
+    <div class="fg"><label class="fl">タスク名</label><input class="fi" id="exec-edit-name"></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">開始日</label><input class="fi" id="exec-edit-start" type="date"></div>
+      <div class="fg"><label class="fl">期限</label><input class="fi" id="exec-edit-due" type="date"></div>
+    </div>
+    <div class="fg"><label class="fl">優先度</label>
+      <select class="fs" id="exec-edit-pri"><option value="hi">高</option><option value="md">中</option><option value="lo">低</option></select></div>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button class="f-submit" style="flex:1;background:#9CA3AF" onclick="closeExecEditModal()">キャンセル</button>
+      <button class="f-submit" style="flex:1" onclick="saveExecEditTask()">保存</button>
+    </div>
+    <div id="exec-edit-del-confirm" style="display:none;margin-top:12px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:10px">
+      <div style="font-size:12px;color:#991B1B;font-weight:700;margin-bottom:8px" id="exec-edit-del-msg">このタスクを削除しますか？元に戻せません。</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="card-btn" onclick="document.getElementById('exec-edit-del-confirm').style.display='none'">キャンセル</button>
+        <button class="card-btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="doExecDeleteTask(this)">削除する</button>
       </div>
     </div>
-    <div>
-      <div class="card">
-        <div class="card-hd"><div><div class="card-title">割り当て済みタスク</div><div class="card-sub">チーム・メンバー・ステータス・期間で絞り込み</div></div></div>
-        <div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--border)">
-          <select class="fs" id="task-f-member" style="min-width:130px" onchange="renderExecTasks()"><option value="">全メンバー</option></select>
-          <select class="fs" id="task-f-status" onchange="renderExecTasks()"><option value="">全ステータス</option><option value="todo">未着手</option><option value="wip">進行中</option><option value="done">完了</option><option value="late">遅延</option></select>
-          <div><div class="fl" style="margin-bottom:4px">開始日</div><div id="exec-from-ymd"></div></div>
-          <span style="align-self:flex-end;padding-bottom:6px;color:var(--text3)">〜</span>
-          <div><div class="fl" style="margin-bottom:4px">期限</div><div id="exec-to-ymd"></div></div>
-          <button class="f-btn active" style="align-self:flex-end" onclick="renderExecTasks()">絞り込む</button>
-        </div>
-        <div class="card-body" id="exec-assigned-list" style="padding:0"></div>
-      </div>
+    <div style="margin-top:10px;border-top:1px dashed var(--border);padding-top:10px">
+      <button class="card-btn" style="width:100%;background:#FEE2E2;color:var(--red);border-color:#FCA5A5"
+              onclick="document.getElementById('exec-edit-del-confirm').style.display='block'">🗑 このタスクを削除</button>
     </div>
+  </div>
+</div>
+
+<!-- 受信ボックス（全社員対象） -->
+<div id="tc-inbox" class="tab-content">
+  <div class="sec-title">受信ボックス <span style="font-size:11px;font-weight:400;color:var(--text3)">全社員のタスク進捗・日報提出・評価提出の通知</span></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-hd"><div><div class="card-title">🔔 全社員からの記入・提出</div><div class="card-sub">タスクの進捗・完了、日報の提出、評価の提出がここに届きます</div></div><span id="exec-inbox-count" style="font-size:13px;font-weight:700;color:var(--accent)"></span></div>
+    <div class="card-body" id="exec-inbox-list" style="padding:0"><div style="padding:14px;text-align:center;color:var(--text3);font-size:12px">まだ通知はありません</div></div>
   </div>
 </div>
 
@@ -597,6 +684,20 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   </div>
 </div>
 
+<!-- 送信履歴管理モーダル -->
+<div id="sendhist-modal" onclick="if(event.target===this)closeSendHistoryModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:760px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+      <div style="font-size:16px;font-weight:800">送信履歴</div>
+      <div style="display:flex;gap:8px;align-items:center;flex:1;justify-content:flex-end">
+        <input class="fi" id="sendhist-search" style="max-width:300px" placeholder="チャート名・送信先名で検索" oninput="renderSendHistoryModal(this.value)">
+        <button onclick="closeSendHistoryModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1">✕</button>
+      </div>
+    </div>
+    <div id="sendhist-modal-list"></div>
+  </div>
+</div>
+
 <!-- テンプレート管理モーダル -->
 <div id="tpl-modal" onclick="if(event.target===this)closeTplManager()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;padding:24px;width:100%;max-width:560px;box-shadow:0 24px 60px rgba(0,0,0,.3)">
@@ -841,7 +942,7 @@ function inDateRange(targetIso, fromIso, toIso){
   return true;
 }
 /* ========== UI ========== */
-const TITLES={users:['アカウント管理','幹部コンソール / アカウント管理'],send:['チャート送信','幹部コンソール / チャート送信'],tasks:['タスク管理','幹部コンソール / タスク管理'],eval:['一覧・評価','幹部コンソール / 一覧・評価'],report:['日報','幹部コンソール / 日報'],dashboard:['ダッシュボード','幹部コンソール / ダッシュボード']};
+const TITLES={users:['アカウント管理','幹部コンソール / アカウント管理'],send:['チャート送信','幹部コンソール / チャート送信'],assign:['タスク割当','幹部コンソール / タスク割当'],inbox:['受信ボックス','幹部コンソール / 受信ボックス'],eval:['一覧・評価','幹部コンソール / 一覧・評価'],report:['日報','幹部コンソール / 日報'],dashboard:['ダッシュボード','幹部コンソール / ダッシュボード']};
 function swTab(id,btn){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.getElementById('tc-'+id).classList.add('active');
@@ -1849,6 +1950,92 @@ function viewSendChart(id){
   openMandala('__sendview__');
 }
 
+/* ===== 送信履歴管理モーダル（作成内容の検索・複製・削除） ===== */
+function sendHistoryEsc(v){
+  return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+async function openSendHistoryModal(){
+  const modal=document.getElementById('sendhist-modal'),con=document.getElementById('sendhist-modal-list');
+  if(!modal||!con)return;
+  modal.style.display='flex';
+  const search=document.getElementById('sendhist-search');if(search)search.value='';
+  con.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:28px">読み込み中...</div>';
+  const API=window.VexumAPI;
+  if(!(API&&API.ready)){con.innerHTML='<div style="text-align:center;color:var(--red);font-size:12px;padding:28px">送信履歴を読み込めませんでした</div>';return;}
+  try{
+    const rows=await API.loadSends();
+    SENDS=(rows||[]).sort((a,b)=>String(b.sent_at||'').localeCompare(String(a.sent_at||'')));
+    renderSendHistoryModal('');
+    renderSendHistory();
+  }catch(e){con.innerHTML='<div style="text-align:center;color:var(--red);font-size:12px;padding:28px">送信履歴を読み込めませんでした</div>';}
+}
+function closeSendHistoryModal(){
+  const modal=document.getElementById('sendhist-modal');if(modal)modal.style.display='none';
+}
+function renderSendHistoryModal(query){
+  const con=document.getElementById('sendhist-modal-list');if(!con)return;
+  const q=String(query==null?((document.getElementById('sendhist-search')||{}).value||''):query).trim().toLowerCase();
+  const rows=(SENDS||[]).filter(s=>[s.title,s.center,s.to_name].some(v=>String(v||'').toLowerCase().includes(q)));
+  if(!rows.length){
+    con.innerHTML=`<div style="text-align:center;color:var(--text3);font-size:12px;padding:32px">${q?'検索条件に一致する送信履歴はありません':'送信履歴はまだありません'}</div>`;
+    return;
+  }
+  con.innerHTML=rows.map(s=>{
+    const prog=Number(s.progress)||0;
+    const editors=s.edited_by?Object.values(s.edited_by).filter(Boolean):[];
+    const stLbl={sent:'送信済み',in_progress:'進行中',done:'完了'}[s.status]||'送信済み';
+    const sentAt=s.sent_at?new Date(s.sent_at).toLocaleString('ja-JP'):'—';
+    const csfs=(s.subs||[]).filter(Boolean).map(sendHistoryEsc);
+    const id=sendHistoryEsc(s.id);
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="card-hd" style="align-items:flex-start">
+        <div style="min-width:0"><div class="card-title">${sendHistoryEsc(s.title||s.center||'名称未設定')}</div>
+        <div class="card-sub" style="margin-top:4px">送信先: ${sendHistoryEsc(s.to_name||'—')} ／ 送信日時: ${sendHistoryEsc(sentAt)}<br>送信者: ${sendHistoryEsc(s.sent_by_name||'—')}</div></div>
+        <span class="chip ${s.status==='done'?'s-done':'s-wip'}">${stLbl}</span>
+      </div>
+      <div class="card-body">
+        <div style="font-size:11px;margin-bottom:8px"><strong>KGI:</strong> ${sendHistoryEsc(s.center||'—')}</div>
+        <div style="font-size:10px;color:var(--text3);line-height:1.7;margin-bottom:10px"><strong>CSF:</strong> ${csfs.length?csfs.join(' ／ '):'—'}</div>
+        <div class="pw" style="margin-bottom:8px"><div class="pt"><div class="pf" style="width:${Math.max(0,Math.min(100,prog))}%;background:var(--accent)"></div></div><div class="pp" style="color:var(--accent)">${prog}%</div></div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:12px">記入状況: ${editors.length?editors.map(sendHistoryEsc).join('、'):'まだ記入はありません'}</div>
+        <div style="display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap">
+          <button class="card-btn" onclick="duplicateSendToEdit('${id}')">📋 複製して編集</button>
+          <button class="card-btn" onclick="viewSendChart('${id}')">👁 内容を見る</button>
+          <button class="card-btn" style="background:#FEE2E2;color:var(--red)" onclick="deleteSendHistoryItem('${id}')">🗑 削除</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function duplicateSendToEdit(id){
+  const s=(SENDS||[]).find(x=>String(x.id)===String(id));if(!s)return;
+  closeSendHistoryModal();
+  SEND.center=s.center||s.title||'';
+  SEND.subs=Array.from({length:8},(_,i)=>(s.subs||[])[i]||'');
+  SEND.acts=Array.from({length:8},(_,i)=>Array.from({length:8},(_,j)=>((s.acts||[])[i]||[])[j]||''));
+  SEND.startDate=s.start_date||'';
+  SEND.endDate=s.end_date||'';
+  SEND.csfPeriods=JSON.parse(JSON.stringify(s.csf_periods||{}));
+  _sendToSelected={};
+  await initSendForm();
+  const formBtn=document.querySelector('.create-tabs .ctab');
+  swSendCreate('form',formBtn);
+  syncSendInputs();renderSendPreview();renderSendGrid();renderSendToList();
+  showToast('複製しました。送信先を選んで送信してください');
+}
+async function deleteSendHistoryItem(id){
+  if(!confirm('この送信履歴を削除しますか？取り消せません。'))return;
+  const API=window.VexumAPI;
+  if(!(API&&API.ready)){showToast('削除失敗: Supabase未接続');return;}
+  try{
+    const res=await API.deleteSend(id);
+    if(res&&res.error){showToast('削除失敗: '+res.error);return;}
+    SENDS=SENDS.filter(s=>String(s.id)!==String(id));
+    renderSendHistoryModal();renderSendHistory();
+    showToast('送信履歴を削除しました ✓');
+  }catch(e){showToast('送信履歴の削除に失敗しました');}
+}
+
 /* ========== タスク管理（全チーム横断） ========== */
 let EXEC_OV={MEMBERS:{},MEMBER_TASKS:{},DASH_IDS:[],EVAL_IDS:[],memberPid:{},teamsList:[]};
 function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
@@ -1865,88 +2052,407 @@ function effStatus(t){
 }
 
 function priChip(p){return {hi:['s-hi','高'],md:['s-md','中'],lo:['s-lo','低']}[p]||['s-md','中'];}
-async function initExecTasks(){
+function pidOfExec(id){return (EXEC_OV.MEMBERS[id]&&EXEC_OV.MEMBERS[id].pid)||EXEC_OV.memberPid[id]||id;}
+
+/* ===== タスク割当（全チーム・全従業員が対象。リーダー画面のタスク割当タブと同じ機能） ===== */
+async function initExecAssign(){
   const API=window.VexumAPI;
-  if(API&&API.ready){
-    if(!EXEC_OV.teamsList.length){const d=await API.loadExecOverview(null);if(d)EXEC_OV=d;}
-    const sel=document.getElementById('task-team-sel');
-    if(sel&&sel.dataset.n!==String(EXEC_OV.teamsList.length)){
-      const cur=sel.value;
-      sel.innerHTML='<option value="">全社員</option>'+EXEC_OV.teamsList.map(t=>`<option value="${t.uid}">${t.name}</option>`).join('');
-      sel.value=cur; sel.dataset.n=String(EXEC_OV.teamsList.length);
+  if(API&&API.ready&&!EXEC_OV.teamsList.length){const d=await API.loadExecOverview(null);if(d)EXEC_OV=d;}
+  const teamSel=document.getElementById('easg-team');
+  if(teamSel&&teamSel.dataset.n!==String(EXEC_OV.teamsList.length)){
+    const cur=teamSel.value;
+    teamSel.innerHTML='<option value="">全チーム</option>'+EXEC_OV.teamsList.map(t=>`<option value="${t.uid}">${t.name}</option>`).join('');
+    teamSel.value=cur;teamSel.dataset.n=String(EXEC_OV.teamsList.length);
+  }
+  populateEasgMemberSelect();
+  renderExecAssignedTasks();
+}
+function onEasgTeamChange(){populateEasgMemberSelect();renderExecAssignedTasks();}
+function populateEasgMemberSelect(){
+  const teamUuid=(document.getElementById('easg-team')||{}).value||'';
+  const ids=Object.keys(EXEC_OV.MEMBERS).filter(id=>!teamUuid||EXEC_OV.MEMBERS[id].teamUuid===teamUuid);
+  const mSel=document.getElementById('easg-member');
+  if(mSel){const cur=mSel.value;mSel.innerHTML='<option value="">全メンバー</option>'+ids.map(id=>`<option value="${id}">${EXEC_OV.MEMBERS[id].name}（${EXEC_OV.MEMBERS[id].team||'—'}）</option>`).join('');if(ids.indexOf(cur)>=0)mSel.value=cur;}
+}
+/* 割り当て済みタスクの期間フィルタ（リーダー画面 _ensureAsgDateFilter/applyAsgFilter と同じ方式） */
+let _easgFromFilter='',_easgToFilter='';
+function _ensureEasgDateFilter(){
+  const fw=document.getElementById('easg-from-ymd');if(fw&&!fw.children.length){fw.innerHTML=ymdHtml('easg-from','',false,'applyEasgFilter()');ymdSet('easg-from',_easgFromFilter);}
+  const tw=document.getElementById('easg-to-ymd');if(tw&&!tw.children.length){tw.innerHTML=ymdHtml('easg-to','',false,'applyEasgFilter()');ymdSet('easg-to',_easgToFilter);}
+}
+function applyEasgFilter(){
+  _easgFromFilter=ymdValue('easg-from')||'';_easgToFilter=ymdValue('easg-to')||'';
+  _xfSave({easgFrom:_easgFromFilter,easgTo:_easgToFilter});renderExecAssignedTasks();
+}
+function resetEasgFilter(){
+  _easgFromFilter='';_easgToFilter='';
+  ymdClear('easg-from');ymdClear('easg-to');
+  ['easg-team','easg-member','easg-status'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const sr=document.getElementById('easg-source');if(sr)sr.value='';
+  _xfSave({easgTeam:'',easgMember:'',easgStatus:'',easgSource:'',easgFrom:'',easgTo:''});
+  populateEasgMemberSelect();
+  renderExecAssignedTasks();
+}
+function renderExecAssignedTasks(){
+  _ensureEasgDateFilter();
+  if(!window._easgfRestored){
+    const f=_xfLoad();
+    const ts=document.getElementById('easg-team');
+    const teamOk=!f.easgTeam||(ts&&[...ts.options].some(o=>o.value===f.easgTeam));
+    // 保存されたチームがまだ選択肢に無い間（実データ読込前）は復元を保留してリトライ
+    if(teamOk){
+      window._easgfRestored=true;
+      if(f.easgTeam&&ts){ts.value=f.easgTeam;populateEasgMemberSelect();}
+      const ms=document.getElementById('easg-member');
+      if(f.easgMember&&ms&&[...ms.options].some(o=>o.value===f.easgMember))ms.value=f.easgMember;
+      const ss=document.getElementById('easg-status');if(f.easgStatus&&ss)ss.value=f.easgStatus;
+      const sr=document.getElementById('easg-source');if(f.easgSource!=null&&sr)sr.value=f.easgSource;
+      if(f.easgFrom||f.easgTo){_easgFromFilter=f.easgFrom||'';_easgToFilter=f.easgTo||'';ymdSet('easg-from',_easgFromFilter);ymdSet('easg-to',_easgToFilter);}
     }
   }
-  populateExecMemberSelects();
-  renderExecTasks();
-}
-function onTaskTeamChange(){initExecTasks();}
-function populateExecMemberSelects(){
-  const teamUuid=document.getElementById('task-team-sel').value||'';
-  const ids=Object.keys(EXEC_OV.MEMBERS).filter(id=>!teamUuid||EXEC_OV.MEMBERS[id].teamUuid===teamUuid);
-  const asgSel=document.getElementById('task-asg-member');
-  if(asgSel){const cur=asgSel.value;asgSel.innerHTML=ids.map(id=>`<option value="${id}">${EXEC_OV.MEMBERS[id].name}（${EXEC_OV.MEMBERS[id].team}）</option>`).join('');if(ids.indexOf(cur)>=0)asgSel.value=cur;}
-  const fSel=document.getElementById('task-f-member');
-  if(fSel){const cur=fSel.value;fSel.innerHTML='<option value="">全メンバー</option>'+ids.map(id=>`<option value="${id}">${EXEC_OV.MEMBERS[id].name}</option>`).join('');if(ids.indexOf(cur)>=0)fSel.value=cur;}
-}
-function pidOfExec(id){return (EXEC_OV.MEMBERS[id]&&EXEC_OV.MEMBERS[id].pid)||EXEC_OV.memberPid[id]||id;}
-async function submitExecAssign(){
-  const name=val('task-asg-name');if(!name){alert('タスク名を入力してください');return;}
-  const id=document.getElementById('task-asg-member').value;
-  if(!id){alert('メンバーを選択してください');return;}
-  const API=window.VexumAPI;
-  const pid=pidOfExec(id);
-  if(API&&API.ready&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pid)){
-    alert('データ読み込み中です。少し待ってから再度お試しください。');return;
-  }
-  const m=EXEC_OV.MEMBERS[id];
-  const o={title:name,kpi:val('task-asg-kpi')||'—',assigneePid:pid,teamUuid:(m&&m.teamUuid)||null,
-    start:fmtDate('task-asg-start'),due:fmtDate('task-asg-due'),priority:document.getElementById('task-asg-pri').value,
-    plannedHours:parseFloat(val('task-asg-planhours'))||null,source:'executive'};
-  if(API&&API.ready){
-    const res=await API.assignTask(o);
-    if(res&&res.error){alert('割当失敗: '+res.error);return;}
-  }
-  if(!EXEC_OV.MEMBER_TASKS[id])EXEC_OV.MEMBER_TASKS[id]=[];
-  EXEC_OV.MEMBER_TASKS[id].push({name:name,kpi:o.kpi,start:fmtDateDisp('task-asg-start'),due:fmtDateDisp('task-asg-due'),pri:o.priority,status:'todo',pct:0,hours:0,teamUuid:o.teamUuid});
-  document.getElementById('task-asg-name').value='';document.getElementById('task-asg-kpi').value='';document.getElementById('task-asg-planhours').value='';
-  renderExecTasks();
-  showToast('✅ タスクを割り当てました');
-}
-function renderExecTasks(){
-  // 期間（開始〜期限）YMDセレクトを初回生成
-  const efw=document.getElementById('exec-from-ymd');if(efw&&!efw.children.length)efw.innerHTML=ymdHtml('exec-from','',false,'renderExecTasks()');
-  const etw=document.getElementById('exec-to-ymd');if(etw&&!etw.children.length)etw.innerHTML=ymdHtml('exec-to','',false,'renderExecTasks()');
-  if(!window._extfRestored){const f=_xfLoad();
-    const ts=document.getElementById('task-team-sel');const ms=document.getElementById('task-f-member');
-    const teamOk=!f.tTeam||(ts&&[...ts.options].some(o=>o.value===f.tTeam));
-    // 保存されたチームがまだ選択肢に無い間（実データ読込前）は復元を保留してリトライ
-    if(teamOk){window._extfRestored=true;
-      if(f.tTeam&&ts){ts.value=f.tTeam;populateExecMemberSelects();}
-      if(f.tMember&&ms&&[...ms.options].some(o=>o.value===f.tMember))ms.value=f.tMember;
-      const ss=document.getElementById('task-f-status');if(f.tStatus&&ss)ss.value=f.tStatus;
-      if(f.tFrom)ymdSet('exec-from',f.tFrom);if(f.tTo)ymdSet('exec-to',f.tTo);}}
-  const teamUuid=document.getElementById('task-team-sel').value||'';
-  const fMem=(document.getElementById('task-f-member')||{}).value||'';
-  const fSt=(document.getElementById('task-f-status')||{}).value||'';
-  const fromD=ymdValue('exec-from')||'';const toD=ymdValue('exec-to')||'';
-  _xfSave({tTeam:teamUuid,tMember:fMem,tStatus:fSt,tFrom:fromD,tTo:toD});
-  const dateFiltered=!!(fromD||toD);
+  const teamUuid=(document.getElementById('easg-team')||{}).value||'';
+  const fMem=(document.getElementById('easg-member')||{}).value||'';
+  const fSt=(document.getElementById('easg-status')||{}).value||'';
+  const fSrc=(document.getElementById('easg-source')||{}).value||'';
+  _xfSave({easgTeam:teamUuid,easgMember:fMem,easgStatus:fSt,easgSource:fSrc,easgFrom:_easgFromFilter,easgTo:_easgToFilter});
   const ids=Object.keys(EXEC_OV.MEMBERS).filter(id=>!teamUuid||EXEC_OV.MEMBERS[id].teamUuid===teamUuid);
   let h='',shown=0;
   ids.filter(id=>!fMem||id===fMem).forEach(id=>{
     const m=EXEC_OV.MEMBERS[id];let tasks=EXEC_OV.MEMBER_TASKS[id]||[];
     if(fSt)tasks=tasks.filter(t=>(t.status||'todo')===fSt);
-    if(dateFiltered)tasks=tasks.filter(t=>inDateRange(t.dueRaw||t.startRaw,fromD,toD));
+    if(fSrc)tasks=tasks.filter(t=>fSrc==='self'?t.self:!t.self);
+    if(_easgFromFilter||_easgToFilter)tasks=tasks.filter(t=>inDateRange(t.dueRaw||t.startRaw,_easgFromFilter,_easgToFilter));
     h+=`<div style="padding:10px 16px;background:#FAFCFC;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);display:flex;align-items:center;gap:8px"><span class="tdot" style="background:${m.color||'#9CA3AF'}"></span>${m.name} <span style="font-weight:400;color:var(--text3)">（${m.team||'未所属'} ／ ${tasks.length}件）</span></div>`;
     if(!tasks.length)h+=`<div style="padding:10px 16px;font-size:11px;color:var(--text3)">該当なし</div>`;
     tasks.forEach(t=>{const sc=statusChip(effStatus(t)),pc=priChip(t.pri);shown++;
+      const chartChip=t.chart?`<span style="font-size:9px;background:#EDE9FE;color:#7C3AED;padding:1px 7px;border-radius:8px;font-weight:700">📊 ${t.chart}</span>`:'';
+      const srcChip=t.self?`<span style="font-size:9px;background:#DCFCE7;color:#166534;padding:1px 7px;border-radius:8px;font-weight:700">🙋 本人作成</span>`:'';
       const pct=t.pct!=null?t.pct:0;
-      const hrs=t.hours!=null?` ／ ${t.hours}h`:'';
-      h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px"><div style="min-width:0"><div style="font-size:12px;font-weight:600">${t.name}</div><div style="font-size:10px;color:var(--text3)">${t.kpi} ／ ${t.start}〜${t.due}${hrs}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${pct}%;background:${pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)'}"></div></div><div class="pp" style="font-size:10px">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;});
+      const hrs=t.pct!=null&&t.hours!=null?` ／ ${t.hours}h`:'';
+      const rawIdx=(EXEC_OV.MEMBER_TASKS[id]||[]).indexOf(t);
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #F3F4F6;gap:10px;cursor:pointer" onclick="openExecEditTask(${rawIdx},'${id}')"><div style="min-width:0"><div style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${t.name} ${chartChip}${srcChip}</div><div style="font-size:10px;color:var(--text3)">${t.kpi||'—'} ／ ${t.start}〜${t.due}${hrs}</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><div class="pw" style="min-width:90px"><div class="pt"><div class="pf" style="width:${pct}%;background:${pct>=80?'var(--green)':pct>=40?'var(--accent)':'var(--amber)'}"></div></div><div class="pp" style="font-size:10px">${pct}%</div></div><span class="chip ${pc[0]}">${pc[1]}</span><span class="chip ${sc[0]}">${sc[1]}</span></div></div>`;
+    });
   });
-  if(!shown&&(fMem||fSt||dateFiltered))h+='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">絞り込み条件に該当するタスクがありません</div>';
+  if(!shown&&(fMem||fSt||fSrc||_easgFromFilter||_easgToFilter||teamUuid))h+='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">絞り込み条件に該当するタスクがありません</div>';
   if(!ids.length)h='<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">対象メンバーがいません</div>';
-  document.getElementById('exec-assigned-list').innerHTML=h;
+  document.getElementById('easg-list').innerHTML=h;
+}
+
+/* ===== 新規タスク作成モーダル: ①チャート→②CSF→③KPI のカスケード（リーダー画面と同じ流れ） =====
+   全社員が対象で件数が多いため、リーダー画面のように全メンバーのチャートを事前一括取得はせず、
+   選択したメンバーのチャートだけをその場で取得する（個人DBモーダルと同じ_execChartsCacheを共有）。 */
+let _execTmKgiMode=true;
+let _execTmCharts=[];
+function openExecTaskModal(){
+  const teamUuid=(document.getElementById('easg-team')||{}).value||'';
+  const teamSel=document.getElementById('exec-tm-team');
+  if(teamSel){
+    teamSel.innerHTML='<option value="">全チーム</option>'+EXEC_OV.teamsList.map(t=>`<option value="${t.uid}">${t.name}</option>`).join('');
+    teamSel.value=teamUuid;
+  }
+  _populateExecTmMemberSelect(teamUuid);
+  _execTmKgiMode=true;
+  const box=document.getElementById('exec-tm-chart-link');if(box)box.style.display='block';
+  _updateExecTmLinkLabel();
+  ['exec-tm-name','exec-tm-start','exec-tm-due','exec-tm-planhours'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const pr=document.getElementById('exec-tm-pri');if(pr)pr.value='md';
+  onExecTmMemberSel();
+  document.getElementById('exec-task-modal').style.display='flex';
+}
+function closeExecTaskModal(){document.getElementById('exec-task-modal').style.display='none';}
+function _populateExecTmMemberSelect(teamUuid){
+  const sel=document.getElementById('exec-tm-member');if(!sel)return;
+  const cur=sel.value;
+  const ids=Object.keys(EXEC_OV.MEMBERS).filter(id=>!teamUuid||EXEC_OV.MEMBERS[id].teamUuid===teamUuid);
+  sel.innerHTML='<option value="">メンバーを選択</option>'+ids.map(id=>`<option value="${id}">${EXEC_OV.MEMBERS[id].name}（${EXEC_OV.MEMBERS[id].team||'—'}）</option>`).join('');
+  if(ids.includes(cur))sel.value=cur;
+}
+function onExecTmTeamSel(){
+  _populateExecTmMemberSelect((document.getElementById('exec-tm-team')||{}).value||'');
+  onExecTmMemberSel();
+}
+function toggleExecChartLink(){
+  _execTmKgiMode=!_execTmKgiMode;
+  const box=document.getElementById('exec-tm-chart-link');
+  if(box)box.style.display=_execTmKgiMode?'block':'none';
+  if(_execTmKgiMode)onExecTmMemberSel();
+  _updateExecTmLinkLabel();
+}
+function _updateExecTmLinkLabel(){
+  const sub=document.getElementById('exec-tm-sub-text');
+  const tg=document.getElementById('exec-tm-link-toggle');
+  if(sub)sub.textContent=_execTmKgiMode?'KGI紐付けでタスクを作成します　':'チャートに紐付けないタスクを作成します　';
+  if(tg)tg.textContent=_execTmKgiMode?'チャート以外のタスクはこちら →':'← KGI紐付けに戻す';
+}
+async function onExecTmMemberSel(){
+  const id=(document.getElementById('exec-tm-member')||{}).value||'';
+  const cs=document.getElementById('exec-tm-chart');
+  if(!cs)return;
+  if(!id){cs.innerHTML='<option value="">チャートを選択</option>';_execTmCharts=[];onExecTmChartSel();return;}
+  const pid=pidOfExec(id);
+  const API=window.VexumAPI;
+  let charts=_execChartsCache[pid];
+  if(!charts&&API&&API.ready&&pid){
+    try{charts=await API.loadChartsFor(pid);_execChartsCache[pid]=charts;}catch(e){charts=[];}
+  }
+  _execTmCharts=charts||[];
+  cs.innerHTML='<option value="">チャートを選択</option>'+_execTmCharts.map(c=>{
+    const kgi=(c.center||c.name||'').replace(/\n/g,' ').trim()||'チャート';
+    return `<option value="${c.id}">${kgi}</option>`;
+  }).join('');
+  onExecTmChartSel();
+}
+function onExecTmChartSel(){
+  const ck=(document.getElementById('exec-tm-chart')||{}).value||'';
+  const chart=_execTmCharts.find(c=>String(c.id)===String(ck));
+  const cf=document.getElementById('exec-tm-csf');
+  const warn=document.getElementById('exec-tm-csf-warn');
+  if(!cf)return;
+  if(!chart){cf.innerHTML='<option value="">（先にチャートを選択）</option>';if(warn)warn.style.display='none';onExecTmCsfSel();return;}
+  const opts=[];(chart.subs||[]).forEach((s,si)=>{const t=String(s||'').trim();if(t)opts.push({si,t});});
+  if(!opts.length){
+    cf.innerHTML='<option value="">CSFが設定されていません</option>';
+    if(warn){warn.style.display='block';warn.textContent='このチャートにCSFが設定されていません。';}
+  }else{
+    cf.innerHTML='<option value="">CSFを選択</option>'+opts.map(o=>`<option value="${o.si}">CSF${o.si+1} ${o.t}</option>`).join('');
+    if(warn)warn.style.display='none';
+  }
+  onExecTmCsfSel();
+}
+function onExecTmCsfSel(){
+  const ck=(document.getElementById('exec-tm-chart')||{}).value||'';
+  const siV=(document.getElementById('exec-tm-csf')||{}).value;
+  const sel=document.getElementById('exec-tm-kpi');
+  if(!sel)return;
+  const base='<option value="">KPIに紐付けない（CSF直下）</option>';
+  const chart=_execTmCharts.find(c=>String(c.id)===String(ck));
+  if(!chart||siV===''||siV==null){sel.innerHTML=base;return;}
+  const si=+siV;const acts=(chart.acts||[])[si]||[];
+  let opts='';
+  for(let ai=0;ai<8;ai++){
+    const txt=String(acts[ai]||'').trim();
+    if(!txt)continue;
+    opts+=`<option value="${ai}">KPI${si+1}-${ai+1} ${txt}</option>`;
+  }
+  sel.innerHTML=base+opts;
+}
+async function submitExecTask(){
+  const id=(document.getElementById('exec-tm-member')||{}).value||'';
+  if(!id){alert('メンバーを選択してください');return;}
+  const name=val('exec-tm-name');
+  if(!name){alert('タスク名を入力してください');return;}
+  const API=window.VexumAPI;
+  const pid=pidOfExec(id);
+  if(API&&API.ready&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pid)){
+    alert('データ読み込み中です。少し待ってから再度お試しください。');return;
+  }
+  const startV=val('exec-tm-start')||null,dueV=val('exec-tm-due')||null;
+  const pri=(document.getElementById('exec-tm-pri')||{}).value||'md';
+  const planHours=parseFloat(val('exec-tm-planhours'))||null;
+  const m=EXEC_OV.MEMBERS[id];
+
+  let chartName=null,csfIdx=null,csfText='',kpiIdx=null;
+  if(_execTmKgiMode){
+    const ck=(document.getElementById('exec-tm-chart')||{}).value||'';
+    if(ck){
+      const chart=_execTmCharts.find(c=>String(c.id)===String(ck));
+      if(chart){
+        chartName=(chart.center||chart.name||'').split('\n')[0].trim()||chart.name;
+        const siV=(document.getElementById('exec-tm-csf')||{}).value;
+        if(siV===''||siV==null){alert('紐付けるCSFを選択してください');return;}
+        csfIdx=+siV;
+        csfText=(chart.subs||[])[csfIdx]||('CSF'+(csfIdx+1));
+        const kpiV=(document.getElementById('exec-tm-kpi')||{}).value;
+        if(kpiV!==''&&kpiV!=null)kpiIdx=+kpiV;
+      }
+    }
+  }
+  const cellStr=(csfIdx!=null)?(kpiIdx!=null?(csfIdx+'-'+kpiIdx):String(csfIdx)):null;
+
+  let newId=null;
+  if(API&&API.ready){
+    const res=await API.assignTask({title:name,kpi:chartName?csfText:'—',assigneePid:pid,teamUuid:(m&&m.teamUuid)||null,
+      start:startV,due:dueV,priority:pri,plannedHours:planHours,chartTitle:chartName,cell:cellStr,source:'executive'});
+    if(res&&res.error){alert('割当失敗: '+res.error);return;}
+    if(res&&res.data)newId=res.data.id;
+  }
+  if(!EXEC_OV.MEMBER_TASKS[id])EXEC_OV.MEMBER_TASKS[id]=[];
+  EXEC_OV.MEMBER_TASKS[id].push({id:newId,name,kpi:chartName?csfText:'—',start:fmtDateDisp('exec-tm-start'),due:fmtDateDisp('exec-tm-due'),startRaw:startV,dueRaw:dueV,
+    pri,status:'todo',pct:0,hours:0,planned:planHours,chart:chartName,cell:cellStr,
+    csfIdx:csfIdx!=null?csfIdx:null,kpiIdx:kpiIdx!=null?kpiIdx:null,self:false,assignerId:(window._meProfile&&window._meProfile.id)||null,teamUuid:(m&&m.teamUuid)||null});
+  renderExecAssignedTasks();
+  closeExecTaskModal();
+  showToast('✅ タスクを割り当てました');
+}
+
+/* ===== タスク編集・削除（リーダー画面と同じ行クリック→モーダル方式） ===== */
+let _execEditingTask=null;
+function _findExecTask(ctx){
+  if(!ctx)return null;
+  const tasks=EXEC_OV.MEMBER_TASKS[ctx.memberId]||[];
+  if(ctx.id!=null){const byId=tasks.find(x=>String(x.id)===String(ctx.id));if(byId)return byId;}
+  return tasks[ctx.idx]||null;
+}
+function openExecEditTask(idx,memberId){
+  const tasks=EXEC_OV.MEMBER_TASKS[memberId]||[];
+  const t=tasks[idx];
+  if(!t){alert('タスクが見つかりません');return;}
+  _execEditingTask={id:(t.id!=null?t.id:null),idx,memberId};
+  const m=EXEC_OV.MEMBERS[memberId];
+  document.getElementById('exec-edit-name').value=t.name||'';
+  document.getElementById('exec-edit-start').value=t.startRaw||'';
+  document.getElementById('exec-edit-due').value=t.dueRaw||'';
+  document.getElementById('exec-edit-pri').value=t.pri||'md';
+  const who=t.self?'🙋 本人作成':'リーダー・幹部からの割当';
+  document.getElementById('exec-edit-meta').textContent=
+    (m?m.name:'')+' ／ '+(t.kpi||'—')+' ／ 期限 '+(t.due||'—')+' ／ 作成: '+who;
+  const delConfirm=document.getElementById('exec-edit-del-confirm');if(delConfirm)delConfirm.style.display='none';
+  const delMsg=document.getElementById('exec-edit-del-msg');
+  if(delMsg)delMsg.textContent=t.self
+    ?'このタスクは本人が作成したものです。削除しますか？元に戻せません。'
+    :'このタスクを削除しますか？元に戻せません。';
+  document.getElementById('exec-edit-modal').style.display='flex';
+}
+function closeExecEditModal(){document.getElementById('exec-edit-modal').style.display='none';_execEditingTask=null;}
+async function saveExecEditTask(){
+  const ctx=_execEditingTask;if(!ctx)return;
+  const t=_findExecTask(ctx);if(!t){alert('タスクが見つかりません（更新済みの可能性があります）');closeExecEditModal();renderExecAssignedTasks();return;}
+  const name=val('exec-edit-name');if(!name){alert('タスク名を入力してください');return;}
+  const startV=val('exec-edit-start')||null,dueV=val('exec-edit-due')||null;
+  const pri=(document.getElementById('exec-edit-pri')||{}).value||'md';
+  const API=window.VexumAPI;
+  if(API&&API.ready&&t.id){
+    const res=await API.updateTask(t.id,{title:name,start:startV,due:dueV,priority:pri});
+    if(res&&res.error){alert('更新失敗: '+res.error);return;}
+  }
+  t.name=name;t.startRaw=startV;t.dueRaw=dueV;t.pri=pri;
+  t.start=startV?fmtDateDisp('exec-edit-start'):'-';t.due=dueV?fmtDateDisp('exec-edit-due'):'-';
+  closeExecEditModal();
+  renderExecAssignedTasks();
+}
+async function doExecDeleteTask(btn){
+  const ctx=_execEditingTask;if(!ctx)return;
+  const t=_findExecTask(ctx);if(!t){closeExecEditModal();renderExecAssignedTasks();return;}
+  const memberId=ctx.memberId;
+  if(btn){btn.disabled=true;btn.textContent='削除中…';}
+  const API=window.VexumAPI;
+  if(API&&API.ready&&t.id){
+    const res=await API.deleteTask(t.id);
+    if(res&&res.error){
+      alert('削除失敗: '+res.error);
+      if(btn){btn.disabled=false;btn.textContent='削除する';}
+      return;
+    }
+  }
+  const arr=EXEC_OV.MEMBER_TASKS[memberId]||[];
+  const idx=arr.indexOf(t);
+  if(idx>=0)arr.splice(idx,1);
+  closeExecEditModal();
+  renderExecAssignedTasks();
+}
+
+/* ===== 受信ボックス（全社員対象。リーダー画面の受信ボックスタブと同じ通知機能。
+   違いは対象範囲のみ：リーダーは自チーム、幹部は全チーム・全従業員）。
+   ★受信チャート（幹部・統括からの受信チャートの振り分け）はリーダー画面固有の機能で、
+   幹部自身が誰かからチャートを受信することは無い（幹部は送信する側）ため対象外とした。 */
+const EXEC_NOTIF_TYPES=['report_submitted','report_started','task_progress','task_done','task_assigned','evaluation_submitted','evaluation_received'];
+window._execNotifs=[];
+// notifications.read列は「自分(to_user_id)宛て」の行しかRLS上更新できない。幹部が見るのは
+// ほぼ全て他人宛ての通知のため、既読状態はこの画面専用にlocalStorageで管理する。
+function _execReadSet(){try{return new Set(JSON.parse(localStorage.getItem('vexum_exec_read_notifs')||'[]'));}catch(e){return new Set();}}
+function _execMarkRead(id){
+  if(id==null)return;
+  try{
+    const s=_execReadSet();s.add(String(id));
+    localStorage.setItem('vexum_exec_read_notifs',JSON.stringify([...s]));
+  }catch(e){}
+}
+// 連続する同一種類・同一本人・同一対象の通知を1件にまとめる（リーダー画面 _ldDedupConsecutiveNotifs と同じ）
+function _execDedupConsecutiveNotifs(list){
+  const out=[];let prevKey=null;
+  (list||[]).forEach(n=>{
+    const key=n.type+'|'+(n.actor_id||'')+'|'+(n.ref_id||'');
+    if(key===prevKey)return;
+    out.push(n);prevKey=key;
+  });
+  return out;
+}
+function updateExecInboxBadge(){
+  const b=document.getElementById('exec-inbox-badge');if(!b)return;
+  const rs=_execReadSet();
+  const deduped=_execDedupConsecutiveNotifs((window._execNotifs||[]).filter(x=>EXEC_NOTIF_TYPES.includes(x.type)));
+  const n=deduped.filter(x=>!rs.has(String(x.id))).length;
+  b.textContent=n;b.style.display=n?'':'none';
+}
+// notifications.actor_id（profile_id）→ EXEC_OV.MEMBERSのキーへの逆引き（リーダー画面 _ldKeyForPid と同じ）
+function _execKeyForPid(pid){
+  if(!pid)return null;
+  if(EXEC_OV.pidToKey&&EXEC_OV.pidToKey[pid])return EXEC_OV.pidToKey[pid];
+  const ks=Object.keys(EXEC_OV.MEMBERS||{});
+  return ks.find(k=>(EXEC_OV.MEMBERS[k]||{}).pid===pid)||null;
+}
+async function initExecInbox(){
+  const API=window.VexumAPI;
+  if(API&&API.ready&&!EXEC_OV.teamsList.length){const d=await API.loadExecOverview(null);if(d)EXEC_OV=d;}
+  if(API&&API.ready&&API.loadAllNotifications){
+    try{window._execNotifs=await API.loadAllNotifications();}catch(e){window._execNotifs=[];}
+  }
+  renderExecNotifs();
+  updateExecInboxBadge();
+}
+// 通知クリックで該当メンバー・該当日・該当タスク・該当の評価対象へ直接遷移する
+async function _execGotoNotif(n){
+  if(!n)return;
+  _execMarkRead(n.id);updateExecInboxBadge();renderExecNotifs();
+  const mk=_execKeyForPid(n.actor_id);
+  if(n.type==='report_submitted'||n.type==='report_started'){
+    const m=(n.body||'').match(/^(\d{4}-\d{2}-\d{2})/);
+    swTab('report',null);
+    await initExecReports();
+    if(mk&&m&&EXEC_REP.members.find(x=>x.key===mk)){
+      _execRepKey=mk;
+      const p=m[1].split('-');_execRepYear=+p[0];_execRepMonth=+p[1]-1;
+      renderExecReportMembers();renderExecReportCalendar();
+      if(typeof showExecReportDetail==='function')showExecReportDetail(m[1]);
+    }
+    return;
+  }
+  if(n.type==='task_progress'||n.type==='task_done'||n.type==='task_assigned'){
+    swTab('assign',null);
+    await initExecAssign();
+    if(mk&&n.ref_id){
+      setTimeout(()=>{
+        const idx=(EXEC_OV.MEMBER_TASKS[mk]||[]).findIndex(t=>t.id===n.ref_id);
+        if(idx>=0&&typeof openExecEditTask==='function')openExecEditTask(idx,mk);
+      },150);
+    }
+    return;
+  }
+  if(n.type==='evaluation_received'||n.type==='evaluation_submitted'){
+    swTab('eval',null);
+    const evalBtns=document.querySelectorAll('.esw');
+    swEval('member',evalBtns[1]||null);
+    if(typeof renderMemberEval==='function')renderMemberEval();
+    return;
+  }
+  swTab('dashboard',null);
+}
+function renderExecNotifs(){
+  const con=document.getElementById('exec-inbox-list');if(!con)return;
+  const rs=_execReadSet();
+  const ns=_execDedupConsecutiveNotifs((window._execNotifs||[]).filter(n=>EXEC_NOTIF_TYPES.includes(n.type)));
+  window._einFiltered=ns;
+  const cnt=document.getElementById('exec-inbox-count');if(cnt)cnt.textContent=ns.length?ns.length+'件':'';
+  if(!ns.length){con.innerHTML='<div style="padding:14px;text-align:center;color:var(--text3);font-size:12px">まだ通知はありません</div>';return;}
+  const meta={task_done:['✅','#D1FAE5','var(--green)'],task_progress:['📈','#DBEAFE','#1D4ED8'],task_assigned:['📋','#DBEAFE','#1D4ED8'],report_submitted:['📓','#EDE9FE','#7C3AED'],report_started:['🌅','#FFF7ED','#C2410C'],evaluation_received:['⭐','#FDF4FF','#7E22CE'],evaluation_submitted:['📝','#ECFDF5','#059669']};
+  con.innerHTML=ns.slice(0,50).map((n,i)=>{
+    const mt=meta[n.type]||['🔔','#F3F4F6','var(--text3)'];
+    const unread=!rs.has(String(n.id));
+    return `<div onclick="_execGotoNotif(window._einFiltered[${i}])" style="display:flex;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border);cursor:pointer;${unread?'background:#F0F9FF':''}" onmouseover="this.style.background='#FAFCFC'" onmouseout="this.style.background='${unread?'#F0F9FF':''}'">
+      <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;background:${mt[1]};color:${mt[2]};flex-shrink:0">${mt[0]}</div>
+      <div style="min-width:0"><div style="font-size:12px;color:var(--text)">${n.actor_name?'<b>'+n.actor_name+'</b>：':''}${n.body||n.title||'通知'}${unread?' <span style="font-size:8px;background:var(--red);color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px">未読</span>':''}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">${(n.created_at||'').slice(0,16).replace('T',' ')}</div></div></div>`;
+  }).join('');
 }
 
 /* ========== 日報（全社員） ========== */
@@ -3050,7 +3556,8 @@ try{
     const _btn=[...document.querySelectorAll('.sb-item')].find(b=>b.getAttribute('onclick')&&b.getAttribute('onclick').includes("'"+_lt+"'"));
     swTab(_lt,_btn||null);
     if(_lt==='send'){if(typeof initSendForm==='function')initSendForm();if(typeof renderSendHistory==='function')renderSendHistory();}
-    else if(_lt==='tasks'&&typeof initExecTasks==='function')initExecTasks();
+    else if(_lt==='assign'&&typeof initExecAssign==='function')initExecAssign();
+    else if(_lt==='inbox'&&typeof initExecInbox==='function')initExecInbox();
     else if(_lt==='eval'){if(typeof renderTeamEval==='function')renderTeamEval();if(typeof renderMemberEval==='function')renderMemberEval();}
     else if(_lt==='report'&&typeof initExecReports==='function')initExecReports();
   }
@@ -3157,7 +3664,7 @@ function vexumLogout(){
     if(typeof renderSendHistory==='function')renderSendHistory();
     if(window.VexumUI)VexumUI.refresh();
   }).catch(function(){});
-  // リアルタイム反映: リーダーの振り分け・メンバーの記入を送信履歴へ自動反映
+  // リアルタイム反映: リーダーの振り分け・メンバーの記入を送信履歴・タスク割当タブへ自動反映
   if(API.subscribeLive){
     API.subscribeLive(['chart_sends','tasks'],function(){
       API.loadSends().then(function(rows){
@@ -3165,8 +3672,8 @@ function vexumLogout(){
         if(typeof renderSendHistory==='function')renderSendHistory();
         if(window.VexumUI)VexumUI.refresh();
       }).catch(function(){});
-      var tasksTab=document.getElementById('tc-tasks');
-      if(tasksTab&&tasksTab.classList.contains('active')&&typeof initExecTasks==='function')initExecTasks();
+      var assignTab=document.getElementById('tc-assign');
+      if(assignTab&&assignTab.classList.contains('active')&&typeof initExecAssign==='function')initExecAssign();
     });
   }
   // 評価履歴読込
@@ -3176,6 +3683,20 @@ function vexumLogout(){
   }).catch(function(){});
   // 自己評価マーカー
   if(typeof updateSelfEvalMarkers==='function')updateSelfEvalMarkers();
+  // 受信ボックス: 全社員の通知を取得（リーダー画面と同じ機能・対象範囲は全社員）
+  if(API.loadAllNotifications){
+    function reloadExecNotifs(){
+      API.loadAllNotifications().then(function(rows){
+        window._execNotifs=rows||[];
+        if(typeof renderExecNotifs==='function')renderExecNotifs();
+        if(typeof updateExecInboxBadge==='function')updateExecInboxBadge();
+      }).catch(function(){});
+    }
+    reloadExecNotifs();
+    if(API.subscribeLive){
+      API.subscribeLive(['notifications','tasks','daily_reports','evaluations'],function(){ reloadExecNotifs(); });
+    }
+  }
 })();
 </script>
 <!-- ===== プロフィール編集モーダル（サイドバー氏名クリックで開く・3画面共通） ===== -->
