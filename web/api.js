@@ -177,6 +177,7 @@
       var tm = tmByProfile[person.primaryPid];
       MEMBERS[key] = {
         pid: p.id,
+        pids: person.pids.slice(),
         name: p.full_name,
         email: p.email,
         role: person.isLeader ? 'リーダー' : roleJPFull(p.role),
@@ -190,7 +191,7 @@
       var key = memKey(p.id);
       if (pidToKey[p.id] || MEMBERS[key]) return; // 既に人物単位で処理済み
       pidToKey[p.id] = key;
-      MEMBERS[key] = { pid: p.id, name: p.full_name, email: p.email, role: roleJPFull(p.role), roleEnum: p.role, team: '', rate: 50 };
+      MEMBERS[key] = { pid: p.id, pids: [p.id], name: p.full_name, email: p.email, role: roleJPFull(p.role), roleEnum: p.role, team: '', rate: 50 };
     });
 
     var MND = {}, EMP = {};

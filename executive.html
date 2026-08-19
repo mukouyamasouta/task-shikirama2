@@ -2684,6 +2684,26 @@ function _mdKgiPct(c, tasks){
   if(!cs.length)return 0;
   return Math.round(cs.reduce((s,x)=>s+_mdCsfPct(c,tasks,x.si),0)/cs.length);
 }
+// CSF単位の工数（leader.html _mdCsfKpiHours/_mdCsfHours と同じ）
+function _mdCsfKpiHours(c, tasks, si){
+  let sum=_mdChartTasks(c,tasks).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si).reduce((s,t)=>s+(+t.hours||0),0);
+  const ed=_mdEdits(c);
+  sum+=(+((ed['csf-'+si]||{}).hoursTotal)||0);
+  for(let ai=0;ai<8;ai++)sum+=(+((ed[si+'-'+ai]||{}).hoursTotal)||0);
+  return Math.round(sum*10)/10;
+}
+function _mdCsfHours(c, tasks, si){
+  const ov=(_mdEdits(c).csf_hours_override||{});
+  if(ov[si]!=null&&ov[si]!=='')return Math.round((+ov[si])*10)/10;
+  return _mdCsfKpiHours(c,tasks,si);
+}
+// KGI単位の工数（leader.html _mdKgiHours と同じ: 全CSF工数の総和＋KGIセル自身のhoursTotal）
+function _mdKgiHours(c, tasks){
+  let s=0;for(let si=0;si<8;si++)s+=_mdCsfHours(c,tasks,si);
+  const ed=_mdEdits(c);
+  s+=(+((ed['center']||{}).hoursTotal)||0);
+  return Math.round(s*10)/10;
+}
 // CSFの期限解決（従業員・リーダー画面と同じ優先順位: 紐付けタスクの期限→明示的なセル期間→チャート全体の終了日）
 function _ldCsfDue(m,tasks,si,chartEnd){
   const linked=_mdChartTasks(m,tasks).filter(t=>t.csfIdx!=null&&+t.csfIdx===+si);
@@ -2720,6 +2740,27 @@ function _execCellItemsForCharts(charts,tasks){
     });
   });
   return items;
+}
+// メンバー複数人分（全社ダッシュボード用。leader.html _ldDashCellItems と同じ）
+function _execDashCellItems(ids){
+  const items=[];
+  (ids||[]).forEach(id=>{
+    const m=(EXEC_OV.MEMBERS||{})[id];if(!m)return;
+    const tasks=(EXEC_OV.MEMBER_TASKS||{})[id]||[];
+    _execCellItemsForCharts(_execMemberCharts(id),tasks).forEach(it=>items.push(Object.assign({id},it)));
+  });
+  return items;
+}
+// メンバー1人分の合計作業時間（leader.html _ldMemberTotalHours と同じ方式）
+function _execMemberTotalHours(id,allTasks,filteredTasks){
+  let sum=0;
+  const counted=new Set();
+  _execMemberCharts(id).forEach(c=>{
+    sum+=_mdKgiHours(c,allTasks||[]);
+    _mdChartTasks(c,allTasks||[]).forEach(t=>{if(t.csfIdx!=null&&!isNaN(t.csfIdx))counted.add(t);});
+  });
+  (filteredTasks||[]).forEach(t=>{if(!counted.has(t))sum+=(+t.hours||0);});
+  return Math.round(sum*10)/10;
 }
 // 個人DBを一度も開いていないメンバーは主チャート1件分の近似値しか使えない。
 // バックグラウンドで全チャートを取得し、揃ったらダッシュボードを再描画して正確な値に切り替える。
@@ -3089,7 +3130,7 @@ function renderTeamEval(){
     }else{
       h+=evalBlock(tk,'kgi',-1,'総合','#0D9488','チーム総合評価');
     }
-    h+=`<button class="f-submit" style="margin-top:4px;padding:8px 20px;font-size:12px" onclick="saveMemberEvalExec('${tk}','${t.name}')">評価を保存</button>
+    h+=`<button class="f-submit" style="margin-top:4px;padding:8px 20px;font-size:12px" onclick="saveTeamEvalExec('${t.id}','${t.name}')">評価を保存</button>
       </div>
     </div>`;
   });
@@ -3201,6 +3242,30 @@ function execEvalHasInput(id){
   if(e.kgi.stars>0||(e.kgi.comment||'').trim())return true;
   return e.csf.some(c=>c.stars>0||(c.comment||'').trim());
 }
+function execEvalPeriod(now){
+  const d=now||new Date();return d.getFullYear()+' Q'+(Math.floor(d.getMonth()/3)+1);
+}
+function execEvalCsfAverage(e){
+  return Math.round(e.csf.reduce((sum,c)=>sum+(Number(c.stars)||0),0)/8*10)/10;
+}
+function upsertExecEvalHistory(name,period,e){
+  const rec={name,evaluator:(document.getElementById('sb-uname')||{}).textContent||'幹部',period,
+    kgi:e.kgi.stars,csf:execEvalCsfAverage(e),task:0,comment:e.kgi.comment||'',status:'done'};
+  const idx=EVAL_HISTORY.findIndex(r=>r.name===name&&r.period===period&&r.evaluator===rec.evaluator);
+  if(idx>=0)EVAL_HISTORY[idx]=rec;else EVAL_HISTORY.unshift(rec);
+  return rec;
+}
+// チーム評価は個人宛ての evaluations ではなく、従来どおり評価履歴へ保存する。
+// 個人評価用関数へ team-* を渡すと MEMBERS に対象が無く、必ず「未接続」扱いになるため分離する。
+async function saveTeamEvalExec(teamId,name){
+  const id='team-'+teamId,e=_mev(id),API=window.VexumAPI,period=execEvalPeriod();
+  if(!(API&&API.ready&&API.saveEvalRecord)){showToast('Supabase未接続のため保存できません');return {error:'未接続'};}
+  const res=await API.saveEvalRecord({evaluateePid:null,evaluateeName:name,period,kgi:e.kgi.stars,
+    csf:execEvalCsfAverage(e),task:0,comment:e.kgi.comment||''});
+  if(res&&res.error){showToast('保存に失敗しました: '+res.error);return {error:res.error};}
+  upsertExecEvalHistory(name,period,e);renderEvalHistory();
+  showToast(`💾 ${name} の評価を保存しました ✓`);return {ok:true};
+}
 // isSubmit=false: 保存（下書き。従業員・リーダーには出さない）
 // isSubmit=true : 提出（submitted=true → 従業員画面の「上長・幹部からの評価」と
 //                 リーダー画面の評価記録に反映され、対象者へ通知も飛ぶ）
@@ -3208,7 +3273,7 @@ function execEvalHasInput(id){
 async function saveMemberEvalExec(id,name,isSubmit,opts){
   opts=opts||{};
   const e=_mev(id);
-  const avg=Math.round(e.csf.reduce((a,c)=>a+c.stars,0)/8*10)/10;
+  const avg=execEvalCsfAverage(e);
   const API=window.VexumAPI;
   const m=MEMBERS[id];
   // チャート選択がまだ非同期解決前でも、そのメンバーの先頭チャートにフォールバック
@@ -3216,7 +3281,7 @@ async function saveMemberEvalExec(id,name,isSubmit,opts){
   let chartId=(window._execChartChoice&&window._execChartChoice[id])||null;
   if(!chartId){const cc=(window._execChartsCache&&window._execChartsCache[id])||[];if(cc.length)chartId=cc[0].id;}
   // 評価期間は保存日から自動算出（旧: '2025 Q2' 固定のデモ実装の名残を是正）
-  const _pd=new Date();const period=_pd.getFullYear()+' Q'+(Math.floor(_pd.getMonth()/3)+1);
+  const period=execEvalPeriod();
   if(!(API&&API.ready&&m&&m.pid)){
     if(!opts.silent)showToast('Supabase未接続のため保存できません');
     return {error:'未接続'};
@@ -3232,9 +3297,7 @@ async function saveMemberEvalExec(id,name,isSubmit,opts){
   // 評価記録・履歴は「提出」時のみ残す（下書きが履歴に混ざらないようにする）
   if(isSubmit){
     API.saveEvalRecord({evaluateePid:m.pid,evaluateeName:name,period,kgi:e.kgi.stars,csf:avg,task:0,comment:e.kgi.comment||''});
-    const rec={name,evaluator:(document.getElementById('sb-uname')||{}).textContent||'幹部',period,kgi:e.kgi.stars,csf:avg,task:0,comment:e.kgi.comment||'',status:'done'};
-    const idx=EVAL_HISTORY.findIndex(r=>r.name===name&&r.period===rec.period);
-    if(idx>=0)EVAL_HISTORY[idx]=rec;else EVAL_HISTORY.unshift(rec);
+    upsertExecEvalHistory(name,period,e);
     if(!opts.silent)renderEvalHistory();
   }
   if(!opts.silent){
@@ -3463,21 +3526,33 @@ function onExecChartChange(memberId,chartId){
 // 個人評価タブのチーム絞り込みを実データ（TEAMS）から再構築（新規チームも選べる）
 function populateMemberTeamFilter(){
   const sel=document.getElementById('member-team-filter');if(!sel)return;
-  const cur=sel.value||'';
-  sel.innerHTML='<option value="">全チーム</option>'+Object.values(TEAMS).map(t=>`<option value="${t.id}"${t.id===cur?' selected':''}>${t.name}</option>`).join('');
+  const cur=execEvalTeamKey(sel.value||'');
+  sel.innerHTML='<option value="">全チーム</option>'+Object.entries(TEAMS).map(([key,t])=>`<option value="${key}"${key===cur?' selected':''}>${t.name}</option>`).join('');
+}
+// DB世代やデモデータにより team は短縮キー・UUID・表示名のいずれにもなり得る。
+// 評価フィルター内では TEAMS のオブジェクトキーへ統一して比較する。
+function execEvalTeamKey(value){
+  const v=String(value||'');if(!v)return '';
+  const found=Object.entries(TEAMS).find(([key,t])=>[key,t.id,t.uid,t.name].some(x=>String(x||'')===v));
+  return found?found[0]:v;
+}
+function execEvalHasSelfEvaluation(m){
+  const map=window._selfEvalMembers||{};
+  const pids=Array.isArray(m.pids)&&m.pids.length?m.pids:[m.pid];
+  return pids.some(pid=>pid&&map[pid]);
 }
 // 個人評価タブで現在表示中（検索・チーム・自己評価フィルタ適用後）のメンバー[id,m]配列。
 // 一括保存／一括提出は必ずこの関数を使い、画面の表示内容と操作対象を完全に一致させる
 // （別々に絞り込み条件を書くと「見えていない人にも提出されてしまう」事故になる）。
 function execEvalFilteredMembers(){
-  const q=(document.getElementById('member-search')||{}).value||'';
-  const tf=(document.getElementById('member-team-filter')||{}).value||'';
+  const q=String((document.getElementById('member-search')||{}).value||'').trim().toLocaleLowerCase('ja-JP');
+  const tf=execEvalTeamKey((document.getElementById('member-team-filter')||{}).value||'');
   const sf=(document.getElementById('member-self-filter')||{}).value||'';
   return Object.entries(MEMBERS).filter(([id,m])=>{
     if(m.roleEnum==='admin'||m.roleEnum==='executive')return false;
-    if(tf&&m.team!==tf)return false;
-    if(q&&!m.name.includes(q))return false;
-    if(sf==='hasSelf'&&!(m.pid&&window._selfEvalMembers&&window._selfEvalMembers[m.pid]))return false;
+    if(tf&&execEvalTeamKey(m.team)!==tf)return false;
+    if(q&&!String(m.name||'').toLocaleLowerCase('ja-JP').includes(q))return false;
+    if(sf==='hasSelf'&&!execEvalHasSelfEvaluation(m))return false;
     return true;
   });
 }
