@@ -2999,6 +2999,7 @@ function vexumLogout(){
       location.replace(a.dest||'./index.html'); return;
     }
     try{ localStorage.setItem('vexum_last_role','leader'); }catch(e){}
+    if(typeof _updateSwitchBtn==='function')_updateSwitchBtn(a.roles);
     if(typeof _updateSwitchExecBtn==='function')_updateSwitchExecBtn(a.roles);
   });
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
@@ -3038,7 +3039,12 @@ function vexumLogout(){
       if(currentEmail)localStorage.setItem('vexum_last_profile_email',currentEmail);
     }catch(e){}
   }
-  API.currentProfile().then(function(p){ if(!p)return; clearOtherUserData(p.id,p.email); window._meProfile=p; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; if(typeof LEADER==='object'){LEADER.name=p.full_name;LEADER.email=p.email;} if(typeof _updateSwitchBtn==='function')_updateSwitchBtn(); }).catch(function(){});
+  // ★_updateSwitchBtn()をここで引数なしで呼ばないこと。checkRoleAccess('leader').then(...)側で
+  //   DBのロール情報付きで既に呼んでいるが、この2つの非同期処理はどちらが先に解決するか
+  //   保証が無く、後から解決した方が勝つ。ここで引数なし（localStorageのみで判定）を呼ぶと、
+  //   DBには従業員/幹部ロールが実在するのにボタンを誤って隠してしまう競合が起きていた
+  //   （紐付け済みなのに毎回「紐付ける」をやり直す不具合の原因）。
+  API.currentProfile().then(function(p){ if(!p)return; clearOtherUserData(p.id,p.email); window._meProfile=p; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; if(typeof LEADER==='object'){LEADER.name=p.full_name;LEADER.email=p.email;} }).catch(function(){});
   API.loadLeaderData().then(function(d){
     if(!d) return;
     repl(MEMBERS,d.MEMBERS); repl(MEMBER_TASKS,d.MEMBER_TASKS); repl(REPORTS,d.REPORTS); repl(AVAILABLE,d.AVAILABLE);
@@ -3208,7 +3214,16 @@ function openProfileEdit(){
 function _isLinked(){return !!localStorage.getItem('vexum_linked_employee_id');}
 function _saveLink(empId){localStorage.setItem('vexum_linked_employee_id',empId||'');}
 function switchToEmployee(){localStorage.setItem('vexum_current_role','employee');window.location.href='employee.html';}
-function _updateSwitchBtn(){var b=document.getElementById('sb-switch-btn');if(b)b.style.display=_isLinked()?'':'none';}
+// ★以前はlocalStorageの紐付けフラグのみで表示判定していたため、紐付け後にclearOtherUserData等で
+//   このフラグが消える（あるいは別ブラウザ/別端末で開く）と、DB上は既に従業員アカウントが
+//   実在するにもかかわらずボタンが消え、毎回プロフィール編集を開いて「紐付ける」を
+//   押し直す必要があった。DB上のロール保有（checkRoleAccessのroles配列）でも判定することで、
+//   一度紐付けたあとはフラグが消えてもワンクリックで切り替えられるようにする。
+function _updateSwitchBtn(roles){
+  var b=document.getElementById('sb-switch-btn');if(!b)return;
+  var hasMemberRole=Array.isArray(roles)&&roles.indexOf('member')>=0;
+  b.style.display=(_isLinked()||hasMemberRole)?'':'none';
+}
 async function _refreshLinkSection(){
   var sec=document.getElementById('pe-link-section');if(!sec)return;sec.style.display='';
   var msg=document.getElementById('pe-link-msg'),actions=document.getElementById('pe-link-actions');

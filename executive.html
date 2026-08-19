@@ -3609,6 +3609,7 @@ function vexumLogout(){
       location.replace(a.dest||'./index.html'); return;
     }
     try{ localStorage.setItem('vexum_last_role','executive'); }catch(e){}
+    if(typeof _updateSwitchBtns==='function')_updateSwitchBtns(a.roles);
   });
   function repl(target, src){ Object.keys(target).forEach(function(k){ delete target[k]; }); Object.assign(target, src); }
   API.loadAdminData().then(function(d){
@@ -3653,7 +3654,9 @@ function vexumLogout(){
     window._meProfile=p;
     var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name;
     var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email;
-    if(typeof _updateSwitchBtns==='function')_updateSwitchBtns();
+    // ボタンの表示判定はDBのロール情報を持つ checkRoleAccess('executive').then(...) 側で行う
+    // （ここで引数なしのまま呼ぶと、後から解決した場合にDB上のロール保有を無視して
+    //   ボタンを誤って隠してしまう競合が起きうるため）。
   }).catch(function(){});
   // テンプレート読込
   API.loadTemplates().then(function(rows){
@@ -3767,9 +3770,16 @@ function _isLinkedTo(target){return !!localStorage.getItem(PE_LINK_TARGETS[targe
 function _saveLinkTo(target,pid){localStorage.setItem(PE_LINK_TARGETS[target].storageKey,pid||'');}
 function switchToLeader(){localStorage.setItem('vexum_current_role','leader');window.location.href='leader.html';}
 function switchToEmployee(){localStorage.setItem('vexum_current_role','employee');window.location.href='employee.html';}
-function _updateSwitchBtns(){
-  var bl=document.getElementById('sb-switch-leader-btn');if(bl)bl.style.display=_isLinkedTo('leader')?'':'none';
-  var be=document.getElementById('sb-switch-employee-btn');if(be)be.style.display=_isLinkedTo('member')?'':'none';
+// ★localStorageの紐付けフラグだけで判定すると、clearOtherUserData等でフラグが消えたり
+//   別ブラウザ/別端末で開いた場合に、DB上は既にリーダー・従業員アカウントが実在するのに
+//   ボタンが消え、毎回プロフィール編集を開いて紐付け直す必要があった。DB上のロール保有
+//   （checkRoleAccessのroles配列）でも判定し、一度紐付けたあとは常にワンクリックで
+//   切り替えられるようにする。
+function _updateSwitchBtns(roles){
+  var hasLeaderRole=Array.isArray(roles)&&roles.indexOf('leader')>=0;
+  var hasMemberRole=Array.isArray(roles)&&roles.indexOf('member')>=0;
+  var bl=document.getElementById('sb-switch-leader-btn');if(bl)bl.style.display=(_isLinkedTo('leader')||hasLeaderRole)?'':'none';
+  var be=document.getElementById('sb-switch-employee-btn');if(be)be.style.display=(_isLinkedTo('member')||hasMemberRole)?'':'none';
 }
 async function _refreshLinkSectionFor(target){
   var cfg=PE_LINK_TARGETS[target];var sfx=cfg.suffix;
