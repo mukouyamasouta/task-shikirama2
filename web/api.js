@@ -893,6 +893,17 @@
     if (r.error) { err('notifications', r.error); return []; }
     return r.data || [];
   }
+  // 幹部画面の受信ボックス用: 全社員・全チームの通知を取得する（範囲を絞らない）。
+  // loadNotifications() は「自分宛て」または「自分がリーダーのチーム宛て」に絞るため、
+  // 幹部の「全従業員に対応する受信ボックス」には使えない。notifications テーブルのRLS
+  // （ntf_select_own）は is_admin_or_exec() を許可しているため、幹部アカウントで呼べば
+  // 全件が返る（一般アカウントから呼ばれてもRLSにより自分の分しか返らない）。
+  async function loadAllNotifications() {
+    if (!sb) return [];
+    var r = await sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(100);
+    if (r.error) { err('allNotifications', r.error); return []; }
+    return r.data || [];
+  }
   async function markNotificationsRead(ids) {
     if (!sb || !ids || !ids.length) return { ok: true };
     var r = await sb.from('notifications').update({ read: true }).in('id', ids);
@@ -2312,6 +2323,7 @@
     loadTaskTimeLogs: loadTaskTimeLogs,
     loadMemberTimeLogs: loadMemberTimeLogs,
     loadNotifications: loadNotifications,
+    loadAllNotifications: loadAllNotifications,
     loadMyNotifications: loadMyNotifications,
     markNotificationsRead: markNotificationsRead,
     saveDailyReport: saveDailyReport,
