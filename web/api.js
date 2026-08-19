@@ -1515,7 +1515,42 @@
       rate: o.rate, department: o.department, color: o.color, password: o.password
     });
   }
-  // ===== リーダー⇄従業員 紐付け =====
+  // ===== 任意ロール間の紐付け（幹部⇄リーダー・幹部⇄従業員・リーダー⇄従業員の「検索」に共通利用） =====
+  // ログイン中ユーザーと同じメールの「targetRoleJP（日本語ロール名）」プロフィールを検索（自分自身は除外）。
+  // findLinkedEmployee はこの汎用版の role='メンバー'固定版として below で後方互換のまま残す。
+  async function findLinkedAccountByRole(email, targetRoleJP, selfPid) {
+    if (!sb || !email) return null;
+    var roleEnumVal = roleToEnum(targetRoleJP);
+    var r = await sb.from('profiles').select('id,full_name,email,role').ilike('email', email).eq('role', roleEnumVal);
+    if (r.error) { err('findLinkedAccountByRole', r.error); return null; }
+    var rows = (r.data || []).filter(function (p) { return p.id !== selfPid; });
+    return rows[0] || null;
+  }
+  // 紐付け用の指定ロールのアカウントを作成（findLinkedAccountByRoleで見つからなかった場合の新規作成）。
+  //  ・同じ(email, role)の既存プロフィールがあればそれを紐付け対象として返す（重複作成しない）
+  //  ・profiles.email は一意制約のため、衝突時は派生メール(local+role@domain)で作成
+  //  ・RLS上、role='leader'/'executive'/'admin' の新規作成はis_admin_or_exec()（幹部・管理者）のみ許可される
+  //    （p_leader_create_member ポリシーは role='member' のみを許可）。リーダー・従業員画面からは
+  //    このロールでは呼ばれない想定（検索のみ）。
+  async function createLinkedAccountByRole(o) {
+    if (!sb) return { error: 'Supabase未接続' };
+    var name = (o.fullName || o.name || '').trim();
+    var email = (o.email || '').trim();
+    var roleEnumVal = roleToEnum(o.role || 'メンバー');
+    if (email) {
+      var ex = await sb.from('profiles').select('id,role').ilike('email', email).eq('role', roleEnumVal).limit(1);
+      if (!ex.error && ex.data && ex.data.length) return { pid: ex.data[0].id, linkedExisting: true };
+    }
+    var res = await createOrLinkAccount({ fullName: name, email: email, role: o.role, teamId: o.teamId, password: o.password, color: o.color || '#06B6D4' });
+    if (res && res.error && /duplicate|unique|23505|already|組み合わせは既に/i.test(res.error)) {
+      var i = email.indexOf('@');
+      var variantEmail = i < 0 ? (email + '+' + roleEnumVal) : (email.slice(0, i) + '+' + roleEnumVal + email.slice(i));
+      res = await createOrLinkAccount({ fullName: name, email: variantEmail, role: o.role, teamId: o.teamId, password: o.password, color: o.color || '#06B6D4' });
+    }
+    if (res && res.error) return { error: res.error };
+    return { pid: res.pid, email: res.data ? res.data.email : email };
+  }
+  // ===== リーダー⇄従業員 紐付け（従来どおり。findLinkedAccountByRoleのrole='メンバー'固定版） =====
   // ログイン中ユーザーと同じメールの「従業員(role=member)」プロフィールを検索（自分自身は除外）
   async function findLinkedEmployee(email, selfPid) {
     if (!sb || !email) return null;
@@ -2346,6 +2381,8 @@
     createOrLinkAccount: createOrLinkAccount,
     findLinkedEmployee: findLinkedEmployee,
     createLinkedEmployeeAccount: createLinkedEmployeeAccount,
+    findLinkedAccountByRole: findLinkedAccountByRole,
+    createLinkedAccountByRole: createLinkedAccountByRole,
     loadProfile: loadProfile,
     myRoles: myRoles,
     checkRoleAccess: checkRoleAccess,

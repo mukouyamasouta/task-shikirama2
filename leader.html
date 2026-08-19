@@ -140,7 +140,7 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
 <aside class="sidebar">
   <div class="sb-logo"><div class="sb-brand">VEXUM</div><div class="sb-brand-sub">TASK MANAGEMENT SYSTEM</div></div>
   <div class="sb-role"><span class="sb-role-dot"></span><span class="sb-role-lbl">★ LEADER / チーム管理</span></div>
-  <div class="sb-user"><div class="sb-uname" id="sb-uname" onclick="openProfileEdit()" style="cursor:pointer;text-decoration:underline" title="クリックでプロフィール編集">（読み込み中）</div><div class="sb-uemail" id="sb-uemail">—</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button onclick="vexumLogout()" style="font-size:10px;color:var(--text3);background:none;border:1px solid var(--sb-border);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit">⎋ ログアウト</button><button id="sb-switch-btn" onclick="switchToEmployee()" style="display:none;font-size:10px;color:var(--accent);background:var(--accent-l);border:1px solid var(--accent);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit;font-weight:700">⇄ 従業員画面に切り替え</button></div></div>
+  <div class="sb-user"><div class="sb-uname" id="sb-uname" onclick="openProfileEdit()" style="cursor:pointer;text-decoration:underline" title="クリックでプロフィール編集">（読み込み中）</div><div class="sb-uemail" id="sb-uemail">—</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button onclick="vexumLogout()" style="font-size:10px;color:var(--text3);background:none;border:1px solid var(--sb-border);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit">⎋ ログアウト</button><button id="sb-switch-btn" onclick="switchToEmployee()" style="display:none;font-size:10px;color:var(--accent);background:var(--accent-l);border:1px solid var(--accent);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit;font-weight:700">⇄ 従業員画面に切り替え</button><button id="sb-switch-exec-btn" onclick="switchToExecutive()" style="display:none;font-size:10px;color:var(--accent);background:var(--accent-l);border:1px solid var(--accent);border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit;font-weight:700">⇄ 幹部画面に切り替え</button></div></div>
   <div class="sb-team">▣ 営業チームA ／ メンバー 4名</div>
   <div class="sb-nav">
     <div class="sb-sec">チームリーダーメニュー</div>
@@ -2999,6 +2999,7 @@ function vexumLogout(){
       location.replace(a.dest||'./index.html'); return;
     }
     try{ localStorage.setItem('vexum_last_role','leader'); }catch(e){}
+    if(typeof _updateSwitchExecBtn==='function')_updateSwitchExecBtn(a.roles);
   });
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}
@@ -3146,10 +3147,50 @@ function vexumLogout(){
       <div id="pe-switch-wrap" style="display:none">
         <button class="f-submit" style="width:100%" onclick="switchToEmployee()">→ 従業員画面に切り替え</button>
       </div>
+      <!-- 幹部紐付け（検索のみ・作成不可。role='executive'の新規作成はRLS上リーダーには許可されていないため） -->
+      <div style="border-top:1px dashed var(--border);margin-top:16px;padding-top:14px">
+        <div style="font-size:13px;font-weight:800;margin-bottom:8px">幹部紐付け</div>
+        <div id="pe-link-msg-exec" style="font-size:12px;color:var(--text2);margin-bottom:10px">検索中…</div>
+        <div id="pe-link-actions-exec"></div>
+        <div id="pe-switch-wrap-exec" style="display:none">
+          <button class="f-submit" style="width:100%" onclick="switchToExecutive()">→ 幹部画面に切り替え</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 <script>
+/* ===== リーダー⇄幹部 紐付け・切り替え（検索のみ。幹部アカウントの新規作成はできない） ===== */
+function _isLinkedExec(){return !!localStorage.getItem('vexum_linked_executive_id');}
+function _saveLinkExec(pid){localStorage.setItem('vexum_linked_executive_id',pid||'');}
+function switchToExecutive(){localStorage.setItem('vexum_current_role','executive');window.location.href='executive.html';}
+function _updateSwitchExecBtn(roles){
+  var b=document.getElementById('sb-switch-exec-btn');if(!b)return;
+  var hasExecRole=Array.isArray(roles)&&roles.indexOf('executive')>=0;
+  b.style.display=(_isLinkedExec()||hasExecRole)?'':'none';
+}
+async function _refreshExecLinkSection(){
+  var msg=document.getElementById('pe-link-msg-exec'),actions=document.getElementById('pe-link-actions-exec');
+  var switchWrap=document.getElementById('pe-switch-wrap-exec');
+  if(!msg)return;
+  if(_isLinkedExec()){
+    msg.textContent='この管理アカウントは幹部アカウントと紐付け済みです。';
+    actions.innerHTML='';switchWrap.style.display='';return;
+  }
+  switchWrap.style.display='none';msg.textContent='検索中…';actions.innerHTML='';
+  var API=window.VexumAPI;
+  var me=window._meProfile||(API&&API.ready?await API.currentProfile():null);if(me)window._meProfile=me;
+  var email=(me&&me.email)||(document.getElementById('profile-edit-email').value||'');
+  var found=null;
+  if(API&&API.ready&&API.findLinkedAccountByRole&&email){try{found=await API.findLinkedAccountByRole(email,'幹部',me&&me.id);}catch(e){found=null;}}
+  if(found){
+    msg.innerHTML='同じメールの幹部アカウントが見つかりました：<b>'+(found.full_name||'')+'（幹部）</b>';
+    actions.innerHTML='<button class="f-submit" style="width:100%" onclick="peLinkExec(\''+found.id+'\')">幹部アカウントと紐付ける</button>';
+  }else{
+    msg.textContent='同じメールの幹部アカウントは見つかりませんでした。幹部アカウントの新規作成は幹部・管理者のみ行えます。';
+  }
+}
+function peLinkExec(pid){_saveLinkExec(pid);_profileToast('幹部アカウントと紐付けました');_updateSwitchExecBtn();_refreshExecLinkSection();}
 /* ===== プロフィール編集（サイドバー氏名クリック・3画面共通） ===== */
 function openProfileEdit(){
   var n=(document.getElementById('sb-uname')||{}).textContent||'';
@@ -3161,6 +3202,7 @@ function openProfileEdit(){
   _profileEditErr('');
   document.getElementById('profile-edit-modal').style.display='flex';
   if(typeof _refreshLinkSection==='function')_refreshLinkSection();
+  if(typeof _refreshExecLinkSection==='function')_refreshExecLinkSection();
 }
 /* ===== リーダー⇄従業員 紐付け・切り替え ===== */
 function _isLinked(){return !!localStorage.getItem('vexum_linked_employee_id');}
@@ -3254,6 +3296,7 @@ async function saveProfile(){
 }
 // 紐付け済みならサイドバーの切り替えボタンを表示（接続有無に関わらず）
 try{_updateSwitchBtn();}catch(e){}
+try{_updateSwitchExecBtn();}catch(e){}
 </script>
 </body>
 
