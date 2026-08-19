@@ -331,7 +331,10 @@
         chartStartDate: c.start_date || '', chartEndDate: c.end_date || ''
       };
       DASH_IDS.push(key);
-      if (person.roles.indexOf('従業員') >= 0) EVAL_IDS.push(key);   // 従業員ロールを持つ人物は評価対象
+      // 評価対象は「従業員ロールを持つ人物」だが、リーダー自身の紐付け済み従業員行（同一メールで
+      // role_in_team='member'の行）が混入して自分自身が評価対象に出てしまうのを防ぐため、
+      // リーダー本人（person.isLeader）は除外する（loadExecOverviewと同じ考え方）。
+      if (!person.isLeader && person.roles.indexOf('従業員') >= 0) EVAL_IDS.push(key);
     });
 
     var MEMBER_TASKS = {};
