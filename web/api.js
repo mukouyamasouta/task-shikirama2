@@ -208,7 +208,7 @@
         role: person.isLeader ? 'リーダー' : roleJPFull(p.role),
         roleEnum: p.role,
         team: tm ? (TEAM_KEY[tm.team_id] || tm.team_id) : '',
-        rate: person.rate || (tm ? (tm.achievement_rate || 0) : 50)
+        rate: person.rate || (tm ? (tm.achievement_rate || 0) : 0)
       };
     });
     // team_membersに行を持たないプロフィール（未所属・新規作成直後等）も個別に含める
@@ -216,7 +216,7 @@
       var key = memKey(p.id);
       if (pidToKey[p.id] || MEMBERS[key]) return; // 既に人物単位で処理済み
       pidToKey[p.id] = key;
-      MEMBERS[key] = { pid: p.id, pids: [p.id], name: p.full_name, email: p.email, role: roleJPFull(p.role), roleEnum: p.role, team: '', rate: 50 };
+      MEMBERS[key] = { pid: p.id, pids: [p.id], name: p.full_name, email: p.email, role: roleJPFull(p.role), roleEnum: p.role, team: '', rate: 0 };
     });
 
     var MND = {}, EMP = {};
@@ -428,7 +428,7 @@
       var key = memKey(p.id); if (!key) return;
       AVAILABLE[key] = {
         pid: p.id,
-        name: p.full_name, role: '従業員', team: '（未所属）', email: p.email, color: p.color, bg: '#F3F4F6', rate: 50,
+        name: p.full_name, role: '従業員', team: '（未所属）', email: p.email, color: p.color, bg: '#F3F4F6', rate: 0,
         kpis: [{ n: '重点目標1', p: 50 }, { n: '重点目標2', p: 40 }, { n: '重点目標3', p: 58 }, { n: '重点目標4', p: 50 }],
         stats: { done: 0, wip: 0, late: 0 }, center: p.full_name + '\n個人目標',
         subs: Array.from({ length: 8 }, function (_, i) { return '重点目標' + (i + 1); }),
@@ -460,7 +460,7 @@
     var r = await sb.from('team_members').upsert({
       team_id: teamUuid, profile_id: pid,
       role_in_team: (isLeader ? 'leader' : 'member'),
-      achievement_rate: (rate != null ? rate : 50)
+      achievement_rate: (rate != null ? rate : 0)
     }, { onConflict: 'team_id,profile_id' }).select('team_id');
     if (r.error) return { error: friendlyErr(r.error.message) };
     if (isLeader) await _syncTeamLeader(teamUuid, pid);
@@ -534,7 +534,7 @@
     var toAdd = want.filter(function (id) { return existing.indexOf(id) < 0; });
     var toDel = existing.filter(function (id) { return want.indexOf(id) < 0; });
     if (toAdd.length) {
-      var rows = toAdd.map(function (id) { return { team_id: teamId, profile_id: id, role_in_team: 'member', achievement_rate: 50 }; });
+      var rows = toAdd.map(function (id) { return { team_id: teamId, profile_id: id, role_in_team: 'member', achievement_rate: 0 }; });
       var a = await sb.from('team_members').upsert(rows, { onConflict: 'team_id,profile_id' });
       if (a.error) return { error: friendlyErr(a.error.message) };
     }
@@ -1502,7 +1502,7 @@
           await sb.from('team_members').upsert({
             team_id: teamUuidR, profile_id: pidR,
             role_in_team: (roleEnumVal === 'leader') ? 'leader' : 'member',
-            achievement_rate: (o.rate != null ? o.rate : 50)
+            achievement_rate: (o.rate != null ? o.rate : 0)
           }, { onConflict: 'team_id,profile_id' });
         } catch (e) {}
         if (roleEnumVal === 'leader') await _syncTeamLeader(teamUuidR, pidR);
@@ -1523,7 +1523,7 @@
         await sb.from('team_members').upsert({
           team_id: teamUuid, profile_id: pid,
           role_in_team: (roleEnumVal === 'leader') ? 'leader' : 'member',
-          achievement_rate: (o.rate != null ? o.rate : 50)
+          achievement_rate: (o.rate != null ? o.rate : 0)
         }, { onConflict: 'team_id,profile_id' });
       } catch (e) {}
       if (roleEnumVal === 'leader') await _syncTeamLeader(teamUuid, pid);
@@ -1717,7 +1717,7 @@
     if (t.error) return { error: t.error.message };
     var tid = t.data.id;
     var rows = (o.members || []).map(function (mm) {
-      return { team_id: tid, profile_id: mm.pid, role_in_team: (mm.pid === o.leaderPid ? 'leader' : 'member'), achievement_rate: (mm.rate != null ? mm.rate : 50) };
+      return { team_id: tid, profile_id: mm.pid, role_in_team: (mm.pid === o.leaderPid ? 'leader' : 'member'), achievement_rate: (mm.rate != null ? mm.rate : 0) };
     });
     if (rows.length) { var r = await sb.from('team_members').upsert(rows, { onConflict: 'team_id,profile_id' }); if (r.error) return { error: r.error.message }; }
     return { data: t.data, uid: tid };

@@ -1037,7 +1037,7 @@ async function submitAddRole(key){
     if(res.error){showToast('追加失敗: '+res.error);return;}
   }
   const nid=res.pid||('m'+Date.now().toString(36));
-  MEMBERS[nid]={pid:nid,name:m.name,email:m.email,role,roleEnum:roleToEnumJP(role),team:teamKey||'',rate:50};
+  MEMBERS[nid]={pid:nid,name:m.name,email:m.email,role,roleEnum:roleToEnumJP(role),team:teamKey||'',rate:0};
   if(teamKey&&TEAMS[teamKey]&&!TEAMS[teamKey].members.includes(nid))TEAMS[teamKey].members.push(nid);
   renderAccount();
   showToast(`${m.name} に「${role}」権限を追加しました ✓`);
@@ -1191,13 +1191,13 @@ async function submitAccount(){
   const teamUuid=(teamId&&TEAMS[teamId]&&TEAMS[teamId].uid)?TEAMS[teamId].uid:null;
   let id,res={};
   if(API&&API.ready){
-    res=await API.createAccount({name,email,role:role||'メンバー',teamUuid:teamUuid,teamLetter:teamId||null,rate:50})||{};
+    res=await API.createAccount({name,email,role:role||'メンバー',teamUuid:teamUuid,teamLetter:teamId||null,rate:0})||{};
     if(res.error){showToast('作成失敗: '+res.error);return;}
     id=res.pid;
   }else{
     id=makeId(name);
   }
-  MEMBERS[id]={pid:id,name,email:email||'—',role:role||'メンバー',roleEnum:roleToEnumJP(role),team:teamId||'',rate:50};
+  MEMBERS[id]={pid:id,name,email:email||'—',role:role||'メンバー',roleEnum:roleToEnumJP(role),team:teamId||'',rate:0};
   if(teamId&&TEAMS[teamId]&&!TEAMS[teamId].members.includes(id))TEAMS[teamId].members.push(id);
   closeAccModal();
   renderAccount();
@@ -1288,7 +1288,7 @@ async function submitAccAddRoles(){
     if(s.status==='fulfilled'&&s.value.r&&!s.value.r.error){
       const role=s.value.role,r=s.value.r,tk=s.value.teamKey;
       const nid=r.pid||('m'+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
-      MEMBERS[nid]={pid:nid,name:m.name,email:m.email,role,roleEnum:roleToEnumJP(role),team:tk||'',rate:50};
+      MEMBERS[nid]={pid:nid,name:m.name,email:m.email,role,roleEnum:roleToEnumJP(role),team:tk||'',rate:0};
       if(tk&&TEAMS[tk]&&!TEAMS[tk].members.includes(nid))TEAMS[tk].members.push(nid);
       ok++;
     }else{
@@ -1401,7 +1401,7 @@ async function submitTeam(){
   const API=window.VexumAPI;
   if(API&&API.ready){
     const leaderPid=leaderId&&MEMBERS[leaderId]?MEMBERS[leaderId].pid:null;
-    const members=memberIds.map(id=>({pid:MEMBERS[id]?MEMBERS[id].pid:id,rate:MEMBERS[id]?MEMBERS[id].rate:50}));
+    const members=memberIds.map(id=>({pid:MEMBERS[id]?MEMBERS[id].pid:id,rate:MEMBERS[id]?MEMBERS[id].rate:0}));
     const res=await API.createTeamRemote({name,color,leaderPid,members});
     if(res&&res.error){showToast('作成失敗: '+res.error);return;}
     if(res&&res.uid)tid=res.uid;
