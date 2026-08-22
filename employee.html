@@ -352,14 +352,10 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
   <div class="eval-select-bar">
     <div style="flex:1;min-width:220px">
       <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:5px">チャートを選択</div>
+      <!-- ★この<select>の中身はJS側のpopulateEvalChartSel()が本人の実チャートから毎回再構築する
+           （チームチャート機能は廃止済み）。以下は初回描画までの一瞬だけ見えるプレースホルダ。 -->
       <select class="fs" id="eval-chart-sel" onchange="onEvalChartChange()" style="font-size:12px;padding:7px 10px;font-weight:600">
-        <optgroup label="個人チャート">
-          <option value="self_q3">中村 健太 — 個人 Q3（売上¥15M達成）</option>
-          <option value="self_q2">中村 健太 — 個人 Q2（スキルアップ目標）</option>
-        </optgroup>
-        <optgroup label="チームチャート">
-          <option value="team_A">営業チームA — チーム目標（売上¥50M達成）</option>
-        </optgroup>
+        <option value="">読み込み中…</option>
       </select>
     </div>
     <div>
@@ -423,7 +419,6 @@ body{font-family:'Inter','Noto Sans JP',sans-serif;color:var(--text);display:fle
               <select class="fs" onchange="applyMndTemplate(this.value)">
                 <option value="">— 空白から作成 —</option>
                 <option value="self_q3">個人Q3チャートを複製</option>
-                <option value="team_A">チームチャートから引用</option>
               </select>
             </div>
             <div class="fg"><label class="fl">CSF（サブ目標 · 8項目）</label>

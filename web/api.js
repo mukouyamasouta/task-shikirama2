@@ -1309,7 +1309,6 @@
     var tm = raw.team_members.filter(function (m) { return m.profile_id === uid; })[0];
     // 自分の所属チームID。未所属(新規従業員)は null（'A'にフォールバックしない＝他チームのチャート混入を防ぐ）
     var myTeamId = tm ? tm.team_id : null;
-    var teamLetter = myTeamId ? (TEAM_KEY[myTeamId] || myTeamId) : null;
     var teamRow = raw.teams.filter(function (t) { return myTeamId && t.id === myTeamId; })[0];
     function chartObj(c) {
       return { dbId: c.id, name: c.name, scopeLabel: c.scope_label, period: c.period, startDate: c.start_date ? fmtYMD(c.start_date) : '',
@@ -1317,16 +1316,16 @@
         team: teamRow ? teamRow.name : '', color: c.color, bg: c.bg, center: c.center, subs: c.subs, acts: c.acts,
         memberKpiEdits: c.member_kpi_edits || {} };
     }
+    // ★チームチャート（owner_type==='team'の共有チャート）は廃止した。
+    //   以前はここで所属チームのチームチャートを CHARTS['team_'+teamLetter] として
+    //   自動的に注入していたため、そのチームに所属させただけの新規従業員でも
+    //   自分が作成していないチャートがチャート管理タブに最初から表示されてしまっていた
+    //   （「チャート未作成なら空にする」という仕様と矛盾するバグの原因）。
+    //   個人のチャート（本人が作成したもの）のみを CHARTS に含める。
     var CHARTS = {};
     raw.mandala_charts.forEach(function (c) {
       if (c.id === 'user_' + memberKey) CHARTS['self_q3'] = chartObj(c);
       else if (c.id === 'user_' + memberKey + '_q2') CHARTS['self_q2'] = chartObj(c);
-      else if (c.owner_type === 'team' && myTeamId && c.owner_team_id === myTeamId) {
-        // 自分の所属チームのチャートのみ（team_id で厳密一致）。読み取り専用の目標定義。
-        // 内容(KGI/CSF/KPI文言)はリーダー・幹部が管理し、メンバーは編集不可
-        // （進捗・工数は tasks 側＝割り当て/タスク管理から記入する）。
-        CHARTS['team_' + teamLetter] = Object.assign(chartObj(c), { readonly: true });
-      }
     });
     // 本人所有の追加チャート（個人画面の新規作成分）も含める
     raw.mandala_charts.forEach(function (c) {
@@ -1355,7 +1354,6 @@
              ? chartKeyByDbId[ev.chart_id]
              : ev.chart_id === 'user_' + memberKey ? 'self_q3'
              : ev.chart_id === 'user_' + memberKey + '_q2' ? 'self_q2'
-             : ev.chart_id === 'team_' + teamLetter ? 'team_' + teamLetter
              : (ev.target_user_id === uid ? 'self_q3' : null);  // チャート特定不能の本人宛て評価は self_q3 に集約
       if (!ck) return;
       if (!FEEDBACK[ck]) FEEDBACK[ck] = { period: ev.period, evals: [] };
