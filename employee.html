@@ -2452,8 +2452,13 @@ function changePReportMonth(d){prepMonth+=d;if(prepMonth<0){prepMonth=11;prepYea
 function renderPReportCalendar(){
   const con=document.getElementById('prep-calendar');if(!con)return;
   const monthList=PREPORTS.filter(r=>{const p=r.date.split('-');return +p[0]===prepYear&&(+p[1]-1)===prepMonth;});
-  const sub=document.getElementById('prep-cal-sub');if(sub)sub.textContent=`当月 ${monthList.length}件の提出履歴`;
+  const sub=document.getElementById('prep-cal-sub');if(sub)sub.textContent=PREPORTS.length?`当月 ${monthList.length}件の提出履歴`:'日報はまだありません';
   document.getElementById('prep-cal-month').textContent=`${prepYear}年 ${prepMonth+1}月`;
+  if(!PREPORTS.length){
+    con.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:28px">保存・提出済みの日報はありません。</div>';
+    const detail=document.getElementById('prep-detail');if(detail)detail.innerHTML='';
+    return;
+  }
   const first=new Date(prepYear,prepMonth,1).getDay();
   const days=new Date(prepYear,prepMonth+1,0).getDate();
   const DOW=['日','月','火','水','木','金','土'];
@@ -2603,7 +2608,17 @@ function onCmChartChange(){
   if(typeof cmCancelDeleteChart==='function')cmCancelDeleteChart();
   const perEl=document.getElementById('cm-chart-period');
   const mndPerEl=document.getElementById('cm-mnd-period');
-  if(!k||!CHARTS[k]){if(perEl)perEl.textContent='';if(mndPerEl)mndPerEl.textContent='';return;}
+  if(!k||!CHARTS[k]){
+    if(perEl)perEl.textContent='';if(mndPerEl)mndPerEl.textContent='';
+    const simple=document.getElementById('cm-kpi-grid-simple');
+    const full=document.getElementById('cm-kpi-grid');
+    if(simple){simple.style.display='';simple.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:28px">管理するチャートはありません。</div>';}
+    if(full){full.style.display='none';full.innerHTML='';}
+    const toggle=document.getElementById('cm-kpi-toggle');if(toggle)toggle.style.display='none';
+    const count=document.getElementById('cm-edit-count');if(count)count.textContent='—';
+    return;
+  }
+  const toggle=document.getElementById('cm-kpi-toggle');if(toggle)toggle.style.display='';
   {
     const c=CHARTS[k];
     const txt=(c.startDate||c.endDate)?`📅 ${c.startDate||'?'}〜${c.endDate||'?'}`:'';
@@ -4338,6 +4353,7 @@ function renderKgiProgress(){
     const dates=(d.startDate||d.endDate)?`📅 ${d.startDate||'—'}〜${d.endDate||'—'}`:'';
     return {k,name:d.name||k,period:dates||d.period||d.scopeLabel||'',kgi:_chartKgiText(k),pct:_chartKgiPct(k)};
   }).filter(x=>x.pct<100);
+  if(!keys.length){kr.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">担当しているチャートはありません。</div>';return;}
   if(!list.length){kr.innerHTML='<div style="text-align:center;color:var(--green);font-size:12px;padding:20px">未達成のKGIはありません 🎉</div>';return;}
   kr.innerHTML=list.map(x=>{
     const col=x.pct>=80?'var(--green)':x.pct>=40?'var(--accent)':'var(--amber)';
@@ -4704,6 +4720,8 @@ function renderProgressDash(){
   const filteredAll=_dashFilteredTasks([...ASSIGNMENTS,...ASSIGN_HISTORY]);
   // チャートのKGI/CSF（チャート管理で設定した期間・達成率）も統計に含める
   const cells=(typeof _dashCellItems==='function')?_dashCellItems():[];
+  const chartKeys=Object.keys(CHARTS).filter(k=>!k.startsWith('__'));
+  const hasProgressData=filteredAll.length>0||chartKeys.length>0;
   const cellLate=cells.filter(c=>c.due<today&&c.pct<100).length;
   const cellDue=cells.filter(c=>c.due===today&&c.pct<100).length;
   const cellPassed=cells.filter(c=>c.due<=today);
@@ -4729,11 +4747,17 @@ function renderProgressDash(){
     const hasAny=(st.taskCount!=null)?st.taskCount>0:(filteredAll.length>0);
     set('ep-d-todayrate-sub',hasAny?'期限到来タスクがまだありません':'タスクがまだありません');
   }
-  set('ep-d-due',st.dueToday!=null?st.dueToday:'0');
-  set('ep-d-late',st.late!=null?st.late:'0');
-  set('ep-d-hours',(st.totalHours!=null?st.totalHours:0)+'h');
+  set('ep-d-due',hasProgressData?(st.dueToday!=null?st.dueToday:'0'):'—');
+  set('ep-d-late',hasProgressData?(st.late!=null?st.late:'0'):'—');
+  set('ep-d-hours',hasProgressData?((st.totalHours!=null?st.totalHours:0)+'h'):'—');
   // タスク一覧（フィルター適用済み、KGI/CSF行を含む）
   _epRenderTaskLists(filtered,cells);
+  if(!hasProgressData){
+    set('ep-d-todayrate-sub','タスク・チャートがありません');
+    const empty='<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">表示するタスク・チャートはありません。</div>';
+    const todayList=document.getElementById('ep-d-today-list');if(todayList)todayList.innerHTML=empty;
+    const lateList=document.getElementById('ep-d-late-list');if(lateList)lateList.innerHTML=empty;
+  }
   // CSF内訳（KGI絞り込み時のみ）
   _renderCsfBreakdown(filteredAll);
   // KGI進捗カード（全チャートのKGI・達成率100%未満）を描画
@@ -4755,6 +4779,14 @@ function renderProgressDash(){
       const col=m.rate>=80?'var(--green)':'var(--accent)';
       return `<div class="rank-row${m.isMe?' me':''}"><div class="rank-n"${i>2?' style="color:var(--text3);font-size:11px"':''}>${medals[i]||i+1}</div><div class="rank-name">${m.name}${m.isMe?' <span style="font-size:9px;color:var(--accent);font-weight:700">あなた</span>':''}</div><div class="rank-team">${team.name}</div><span class="badge ${m.role==='上長'?'b-manager':'b-employee'}">${m.role}</span><div class="pw" style="min-width:180px;margin-left:12px"><div class="pt"><div class="pf" style="width:${m.rate}%;background:${col}"></div></div><div class="pp" style="color:${col}">${m.rate}%</div></div></div>`;
     }).join('');
+  }else{
+    // 旧描画のチーム名・0%・ランキング行を残さない。
+    // 現行レイアウトで対応要素が無い場合は set/querySelector が no-op になる。
+    const assigned=!!(team&&(team.isAssigned||team.id||team.name));
+    set('ep-team-name',assigned?(team.name+' メンバー'):'未所属');set('ep-team-pct','—');
+    const tr=document.getElementById('ep-team-rows');if(tr)tr.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">'+(assigned?'チームデータがありません。':'所属チームはありません。')+'</div>';
+    set('ep-rank-sub',assigned?(team.name+' · データなし'):'未所属');
+    const rr=document.getElementById('ep-rank-rows');if(rr)rr.innerHTML='';
   }
 }
 // 初期描画（この関数群はこのブロックで定義されるため、ここで初回描画する。
@@ -4820,6 +4852,22 @@ function vexumLogout(){
   var DEST={admin:'./admin.html',executive:'./executive.html',leader:'./leader.html',member:'./employee.html'};
   function repl(t,s){Object.keys(t).forEach(function(k){delete t[k];});Object.assign(t,s);}
   function replArr(a,s){a.length=0;Array.prototype.push.apply(a,s);}
+  // Supabase接続時は、ページ内蔵のデモseedを読み込み完了まで表示しない。
+  // 未所属・データ0件のアカウントで、デモタスク・チャート・日報・受信チャートが
+  // API応答前に一瞬表示されることも防ぐ。実データは _applyPersonal() で再描画する。
+  repl(CHARTS,{});repl(FEEDBACK,{});
+  replArr(ASSIGNMENTS,[]);replArr(ASSIGN_HISTORY,[]);replArr(PREPORTS,[]);replArr(INBOX,[]);
+  window._epTeam={id:null,isAssigned:false,name:'',myRate:null,rate:null,members:[]};
+  window._epKpis=[];window._epStats={rate:null,done:0,wip:0,late:0,open:0,dueToday:0,todayRate:null,taskCount:0,totalHours:0};
+  if(typeof renderProgressDash==='function')renderProgressDash();
+  if(typeof renderTaskTable==='function')renderTaskTable();
+  if(typeof renderEval==='function')renderEval();
+  if(typeof renderAssign==='function')renderAssign();
+  if(typeof updateAssignBadge==='function')updateAssignBadge();
+  if(typeof renderPReportCalendar==='function')renderPReportCalendar();
+  if(typeof renderInbox==='function')renderInbox();
+  if(typeof updateInboxBadge==='function')updateInboxBadge();
+  if(typeof initChartMgr==='function')initChartMgr();
   // 別ユーザーでログインしたら前ユーザーの localStorage（vexum_*）を一掃する
   // → 新規アカウントに前任者のタスク・進捗・未送信キューが残らない（バグ2対策）
   // ★ マルチロール対応: currentProfile()は画面ごと(window.VEXUM_PAGE_ROLE)に
@@ -4893,6 +4941,7 @@ function vexumLogout(){
     if(typeof renderPReportCalendar==='function') renderPReportCalendar();
     if(typeof _prepUpdateMorningStatus==='function') _prepUpdateMorningStatus();
     if(typeof _prepUpdateEveningStatus==='function') _prepUpdateEveningStatus();
+    if(typeof initChartMgr==='function') initChartMgr();
     if(window.VexumUI)VexumUI.refresh();
     console.log('[VEXUM] Supabaseデータを反映しました'+(window._actingEmpId?'（従業員として代理表示）':''));
     if(typeof flushPendingCharts==='function'){flushPendingCharts();if(typeof flushPendingTasks==='function')flushPendingTasks();}

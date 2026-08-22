@@ -3186,9 +3186,35 @@ async function peShowCreateForm(){
   document.getElementById('pe-emp-email').value=(document.getElementById('profile-edit-email').value||me.email||'');
   document.getElementById('pe-emp-pw').value='';
   var sel=document.getElementById('pe-emp-team');var API=window.VexumAPI;var teams=[];
-  if(API&&API.ready&&API.listTeams){try{teams=await API.listTeams();}catch(e){teams=[];}}
+  // チーム取得中も、前回開いたときの選択値やブラウザの先頭optionを使わせない。
+  // 自チームが確定するまでは必ず安全側の「未所属」を既定値にする。
+  sel.innerHTML='<option value="" selected>（未所属）</option>';
+  var btn=document.getElementById('pe-create-btn');
+  if(btn){btn.disabled=true;btn.textContent='チーム確認中…';}
   var myTeam=(typeof teamMeta!=='undefined'&&teamMeta&&teamMeta.uid)||'';
-  sel.innerHTML=teams.length?teams.map(function(t){return '<option value="'+t.id+'"'+(t.id===myTeam?' selected':'')+'>'+t.name+'</option>';}).join(''):'<option value="">（チームなし）</option>';
+  if(API&&API.ready){
+    try{
+      // teamMeta.uid は起動時の loadLeaderData() と競合し得る。未確定なら、
+      // フォームを開いた時点で同じAPIを呼び、ログイン中リーダーの所属を再解決する。
+      // loadLeaderData側は teams.leader_id → 同メールprofile →
+      // team_members(role_in_team='leader') の順で判定し、他チームへは倒れない。
+      var results=await Promise.all([
+        API.listTeams?API.listTeams().catch(function(){return [];}):Promise.resolve([]),
+        (!myTeam&&API.loadLeaderData)?API.loadLeaderData().catch(function(){return null;}):Promise.resolve(null)
+      ]);
+      teams=Array.isArray(results[0])?results[0]:[];
+      var leaderData=results[1];
+      if(!myTeam&&leaderData&&leaderData.teamUuid){
+        myTeam=leaderData.teamUuid;
+        if(typeof teamMeta!=='undefined'&&teamMeta){teamMeta.uid=myTeam;if(leaderData.teamName)teamMeta.name=leaderData.teamName;}
+      }
+    }catch(e){teams=[];myTeam='';}
+  }
+  // APIが返した一覧に自チームが実際に存在する場合だけ選択する。
+  // 未確定・削除済み・取得失敗時は「未所属」選択を維持する。
+  var hasMyTeam=!!myTeam&&teams.some(function(t){return t.id===myTeam;});
+  sel.innerHTML='<option value=""'+(hasMyTeam?'':' selected')+'>（未所属）</option>'+teams.map(function(t){return '<option value="'+t.id+'"'+(hasMyTeam&&t.id===myTeam?' selected':'')+'>'+t.name+'</option>';}).join('');
+  if(btn){btn.disabled=false;btn.textContent='作成して紐付ける';}
 }
 function peCancelCreate(){document.getElementById('pe-create-form').style.display='none';_refreshLinkSection();}
 async function peCreateLinked(){

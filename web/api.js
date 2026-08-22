@@ -1389,14 +1389,17 @@
 
     // 進捗ダッシュボード用: 自分の達成率・所属チームメンバー一覧
     var myTm = tm || {};
-    var TEAM = { name: teamRow ? teamRow.name : '', myRate: myTm.achievement_rate || 0, members: [] };
-    if (tm) {
+    // 未所属を名前の空文字や達成率0%だけから推測させず、画面側が
+    // 「データなし」を明示できるよう所属有無とチームIDを返す。
+    var TEAM = { id: teamRow ? teamRow.id : null, isAssigned: !!teamRow, name: teamRow ? teamRow.name : '',
+      myRate: teamRow ? (myTm.achievement_rate || 0) : null, rate: null, members: [] };
+    if (tm && teamRow) {
       raw.team_members.filter(function (m) { return m.team_id === tm.team_id; }).forEach(function (m) {
         var p = prof[m.profile_id]; if (!p) return;
         TEAM.members.push({ name: p.full_name, role: m.role_in_team === 'leader' ? '上長' : '従業員', rate: m.achievement_rate || 0, isMe: m.profile_id === uid });
       });
       TEAM.members.sort(function (a, b) { return b.rate - a.rate; });
-      TEAM.rate = TEAM.members.length ? Math.round(TEAM.members.reduce(function (a, m) { return a + m.rate; }, 0) / TEAM.members.length) : 0;
+      TEAM.rate = TEAM.members.length ? Math.round(TEAM.members.reduce(function (a, m) { return a + m.rate; }, 0) / TEAM.members.length) : null;
     }
     // 自分のCSF別KPI進捗（タスク平均 → 無ければ達成率）
     var myTasks = raw.tasks.filter(function (t) { return t.assignee_id === uid; });
@@ -1413,7 +1416,7 @@
     var doneTasks = myTasks.filter(function (t) { return t.status === 'done' || (t.progress || 0) >= 100; });
     var totalHours = myTasks.reduce(function (a, t) { return a + (t.total_hours != null ? +t.total_hours : 0); }, 0);
     var STATS = {
-      rate: myTm.achievement_rate || 0,
+      rate: teamRow ? (myTm.achievement_rate || 0) : null,
       done: doneTasks.length,
       wip: myTasks.filter(function (t) { return t.status === 'wip'; }).length,
       late: lateTasks.length,
