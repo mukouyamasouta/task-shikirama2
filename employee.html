@@ -3997,6 +3997,17 @@ function showToast(msg){
   t.textContent=msg;t.style.opacity='1';
   clearTimeout(t._timer);t._timer=setTimeout(()=>{t.style.opacity='0';},2000);
 }
+// 個人データ（チャート・タスク・評価等）の取得に失敗した場合の明示エラー表示。
+// 古いデモデータや空のまま黙って表示し続けると、他人のデータと誤認されるリスクが
+// あるため、再読み込みを促す常時表示バナーを出す（トーストのように自動で消さない）
+function _showPersonalLoadError(){
+  if(document.getElementById('vx-load-error'))return;
+  var b=document.createElement('div');
+  b.id='vx-load-error';
+  b.style.cssText='position:fixed;top:0;left:0;right:0;background:#B91C1C;color:#fff;padding:10px 16px;font-size:13px;font-weight:700;z-index:999999;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.3)';
+  b.innerHTML='⚠️ データの取得に失敗しました。再読み込みしてください。 <a href="javascript:location.reload()" style="color:#fff;text-decoration:underline;font-weight:800">今すぐ再読み込み</a>';
+  document.body.appendChild(b);
+}
 
 /* ===== 進捗ダッシュボード（実データ描画・Supabase接続時のみ） ===== */
 // タスク行HTML生成（今日/遅延共通）
@@ -4886,14 +4897,23 @@ function vexumLogout(){
     console.log('[VEXUM] Supabaseデータを反映しました'+(window._actingEmpId?'（従業員として代理表示）':''));
     if(typeof flushPendingCharts==='function'){flushPendingCharts();if(typeof flushPendingTasks==='function')flushPendingTasks();}
   }
-  function _bootLoad(actingId){
+  function _bootLoad(actingId,myId){
     window._actingEmpId=actingId||null;
     if(actingId&&API.loadProfile){
       API.loadProfile(actingId).then(function(ep){ if(!ep)return; var un=document.getElementById('sb-uname');if(un)un.textContent=ep.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=ep.email; }).catch(function(){});
     }else{
-      API.currentProfile().then(function(p){ if(!p)return; var un=document.getElementById('sb-uname');if(un)un.textContent=p.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=p.email; }).catch(function(){});
+      // 通常ログイン時はブートゲートで既に取得済みの自分のプロフィール(window._meAuthProfile)を
+      // そのまま使う。ここで currentProfile() を再度呼ぶと、その呼び出しだけがネットワーク瞬断や
+      // Supabaseのレート制限で失敗した場合にuidを再解決できなくなる余分な失敗ポイントになるため
+      var mp=window._meAuthProfile;
+      if(mp){ var un=document.getElementById('sb-uname');if(un)un.textContent=mp.full_name; var ue=document.getElementById('sb-uemail');if(ue)ue.textContent=mp.email; }
     }
-    API.loadPersonalData(actingId||undefined).then(_applyPersonal).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗。内蔵デモを使用:',e); });
+    // 通常ログイン時は既に解決済みの自分のpid(myId)をそのまま渡し、loadPersonalData内部で
+    // currentProfile()を再度呼び直す（＝失敗しうる余分なネットワーク往復）を発生させない
+    API.loadPersonalData(actingId||myId||undefined).then(function(d){
+      if(!d){ console.warn('[VEXUM] Supabase個人データの読込に失敗しました（uid未解決）'); _showPersonalLoadError(); return; }
+      _applyPersonal(d);
+    }).catch(function(e){ console.warn('[VEXUM] Supabase読込失敗:',e); _showPersonalLoadError(); });
   }
   API.currentProfile().then(function(p){
     if(!p){ try{API.sb.auth.signOut();}catch(e){} location.replace('./index.html'); return; }
@@ -4912,7 +4932,7 @@ function vexumLogout(){
       }
       if(typeof _updateSwitchBtn==='function')_updateSwitchBtn(a&&a.roles);
       if(typeof _updateSwitchExecBtn==='function')_updateSwitchExecBtn(a&&a.roles);
-      _bootLoad(acting?_linkedEmp:null);
+      _bootLoad(acting?_linkedEmp:null,p.id);
     });
   });
   // オンライン復帰時・定期（60秒）に未送信を再送
@@ -4933,8 +4953,8 @@ function vexumLogout(){
   // リアルタイム反映: リーダーの振り分け・チャート更新・通知を自動で再描画
   if(API.subscribeLive){
     API.subscribeLive(['tasks','chart_sends','notifications'],function(){
-      API.loadPersonalData(window._actingEmpId||undefined).then(function(d){
-        if(!d)return;
+      API.loadPersonalData(window._actingEmpId||(window._meAuthProfile&&window._meAuthProfile.id)||undefined).then(function(d){
+        if(!d){ _showPersonalLoadError(); return; }
         repl(CHARTS,d.CHARTS);repl(FEEDBACK,d.FEEDBACK);
         replArr(ASSIGNMENTS,d.ASSIGNMENTS);replArr(ASSIGN_HISTORY,d.ASSIGN_HISTORY);
         window._epTeam=d.TEAM;window._epKpis=d.KPIS;window._epStats=d.STATS;
@@ -4943,7 +4963,7 @@ function vexumLogout(){
         if(typeof renderAssign==='function')renderAssign();
         if(typeof updateAssignBadge==='function')updateAssignBadge();
         if(typeof renderCmTasks==='function')renderCmTasks();
-      }).catch(function(){});
+      }).catch(function(){ _showPersonalLoadError(); });
       API.loadMyInbox().then(function(rows){
         if(!rows)return;
         replArr(INBOX,rows);

@@ -1304,7 +1304,10 @@
       var me = await currentProfile();
       if (me && me.id) uid = me.id;
     }
-    if (!uid) uid = 'a0000000-0000-4000-8000-000000000004'; // デモ用フォールバック(中村)
+    // uidが解決できない場合（currentProfile()の失敗等）は他人（例:中村健太）の
+    // 固定UUIDにフォールバックしない。誤って他人のチャート・タスク・評価が
+    // 表示されるバグの原因になっていたため、他の失敗パターンと同様にnullを返す
+    if (!uid) return null;
     var memberKey = MEMBER_KEY[uid] || uid;  // 既存=短縮キー / 新規=UUID（チャートidと一致）
     var tm = raw.team_members.filter(function (m) { return m.profile_id === uid; })[0];
     // 自分の所属チームID。未所属(新規従業員)は null（'A'にフォールバックしない＝他チームのチャート混入を防ぐ）
